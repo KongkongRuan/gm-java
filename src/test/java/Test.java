@@ -3,15 +3,9 @@
 import com.kms.jca.UseKey;
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
 import com.yxj.gm.SM2.Key.SM2;
-import com.yxj.gm.SM2.Key.SM2PrivateKey;
-import com.yxj.gm.SM2.Key.SM2PublicKey;
 import com.yxj.gm.SM2.Signature.SM2Signature;
-import com.yxj.gm.constant.SM2Constant;
 import org.bouncycastle.util.encoders.Hex;
-
 import java.security.KeyPair;
-import java.sql.SQLOutput;
-
 public class Test {
     public static void main(String[] args) {
         String msg = "message digest";
