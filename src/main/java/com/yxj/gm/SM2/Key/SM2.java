@@ -42,7 +42,7 @@ public class SM2 {
             //倍点运算
             bytes = MultiplePointOperation(SM2Constant.getXG(), SM2Constant.getYG(), random, SM2Constant.getA(), SM2Constant.getP());
             if(checkPubKey(bytes)){
-                random=DataConvertUtil.byteTo32(random);
+                random=DataConvertUtil.byteToN(random,32);
                 result[0]=random;
                 result[1]=bytes[0];
                 result[2]=bytes[1];
@@ -127,7 +127,7 @@ public class SM2 {
         byte[] random = keyPairBytes[0];
         bytes[0]=keyPairBytes[1];
         bytes[1]=keyPairBytes[2];
-        random= DataConvertUtil.byteTo32(random);
+        random= DataConvertUtil.byteToN(random,32);
 
         //计算后的点组成公钥
         byte[] pubkey = new byte[64];
@@ -159,7 +159,7 @@ public class SM2 {
     public static byte[][] MultiplePointOperation(byte[] XG, byte[] YG, byte[] k,byte[] a,byte[] p) {
         //第一个字节补0
         //Biginteger会转换成有符号数造成精度丢失
-        k=DataConvertUtil.byteTo32(k);
+        k=DataConvertUtil.byteToN(k,32);
         k=DataConvertUtil.oneAdd(k);
         byte[] XQ = new byte[32];
         byte[] YQ = new byte[32];
@@ -177,8 +177,8 @@ public class SM2 {
                 YQ=Q2bytes[1];
             }
         }
-        XQ=DataConvertUtil.byteTo32(XQ);
-        YQ=DataConvertUtil.byteTo32(YQ);
+        XQ=DataConvertUtil.byteToN(XQ,32);
+        YQ=DataConvertUtil.byteToN(YQ,32);
 
         byte[][] Q = new byte[2][32];
         Q[0]=XQ;
@@ -199,10 +199,10 @@ public class SM2 {
      */
     public static byte[][] PointAdditionOperation(byte[] X1, byte[] Y1, byte[] X2, byte[] Y2, byte[] a, byte[] p) {
         addCount++;
-        X1=DataConvertUtil.byteTo32(X1);
-        Y1=DataConvertUtil.byteTo32(Y1);
-        X2=DataConvertUtil.byteTo32(X2);
-        Y2=DataConvertUtil.byteTo32(Y2);
+        X1=DataConvertUtil.byteToN(X1,32);
+        Y1=DataConvertUtil.byteToN(Y1,32);
+        X2=DataConvertUtil.byteToN(X2,32);
+        Y2=DataConvertUtil.byteToN(Y2,32);
         X1=DataConvertUtil.oneAdd(X1);
         Y1=DataConvertUtil.oneAdd(Y1);
         X2=DataConvertUtil.oneAdd(X2);
@@ -280,8 +280,8 @@ public class SM2 {
             byte[] Y3 = bigIntegerY3.toByteArray();
 //            System.out.println("点加长度X："+X3.length);
 //            System.out.println("点加长度Y："+Y3.length);
-            X3=DataConvertUtil.byteTo32(X3);
-            Y3=DataConvertUtil.byteTo32(Y3);
+            X3=DataConvertUtil.byteToN(X3,32);
+            Y3=DataConvertUtil.byteToN(Y3,32);
             bytes[0] = X3;
             bytes[1] = Y3;
         }

@@ -1,13 +1,28 @@
 package com.yxj.gm.SM4;
 
+import com.kms.jca.UseKey;
+import com.kms.provider.key.ZyxxSecretKey;
 import com.yxj.gm.constant.SM4Constant;
+import com.yxj.gm.enums.ModeEnum;
+import com.yxj.gm.enums.PaddingEnum;
 import com.yxj.gm.util.DataConvertUtil;
 import org.bouncycastle.util.encoders.Hex;
 
+import javax.jws.soap.SOAPBinding;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
+import static com.yxj.gm.enums.ModeEnum.CTR;
+
+/**
+ * 国密SM4对称加密算法
+ *      默认为CTR模式
+ *      PKCS7填充
+ */
 public class SM4 {
+
+    int core = Runtime.getRuntime().availableProcessors();
     /**Mode
      * 0 ECB
      * 1 CBC
@@ -15,29 +30,163 @@ public class SM4 {
      * 3 OFB
      * 4 CTR
      */
-    private int Mode =0;
+    private ModeEnum Mode = CTR;
 
     /**Padding
      * 0 Pkcs7
      * 1 Pkcs5
      */
-    private int Padding =0;
-
-    public static void main(String[] args) {
-        byte[] msg = new byte[]{(byte)0x01,(byte)0x23,(byte)0x45,(byte)0x67,(byte)0x89,(byte)0xAB,(byte)0xCD,(byte)0xEF,(byte)0xFE,(byte)0xDC,(byte)0xBA,(byte)0x98,(byte)0x76,(byte)0x54,(byte)0x32,(byte)0x10};
-        byte[] key = new byte[]{(byte)0x01,(byte)0x23,(byte)0x45,(byte)0x67,(byte)0x89,(byte)0xAB,(byte)0xCD,(byte)0xEF,(byte)0xFE,(byte)0xDC,(byte)0xBA,(byte)0x98,(byte)0x76,(byte)0x54,(byte)0x32,(byte)0x10};
-        SM4 sm4 = new SM4();
-        byte[][] rks = sm4.ext_key_L(key);
-        for (int i = 0; i < rks.length; i++) {
-            System.out.println("rks["+i+"]:"+Hex.toHexString(rks[i]));
-        }
-        byte[] mi = sm4.cipher(msg, rks);
-        System.out.println("密文："+Hex.toHexString(mi));
-
-        byte[] ming = sm4.decrypt(mi, rks);
-        System.out.println("明文: "+Hex.toHexString(ming));
+    private PaddingEnum Padding =PaddingEnum.Pkcs7;
+    public SM4(){};
+    public SM4(PaddingEnum padding,ModeEnum mode){
+        this.Padding=padding;
+        this.Mode=mode;
     }
-    public byte[] cipher(byte[] in,byte[][] rks){
+    public SM4(PaddingEnum padding){
+        this.Padding=padding;
+    }
+    public SM4(ModeEnum mode){
+        this.Mode=mode;
+    }
+    public byte[] cipherEncrypt(byte [] key,byte[] ming,byte[] iv){
+        //生成轮密钥
+        byte[][] rks = ext_key_L(key);
+        byte[] result=null;
+        switch (Mode){
+            case ECB:
+                result = blockEncryptECB(ming,rks);
+                break;
+            case CBC:
+                result = blockEncryptCBC(ming,iv,rks);
+                break;
+            case CFB:
+                break;
+            case OFB:
+                break;
+            case CTR:
+                result= blockEncryptCTR(ming,iv,rks);
+                break;
+            default:
+                throw new RuntimeException("加密模式错误："+Mode);
+        }
+        return result;
+    }
+    public byte[] cipherDecrypt(byte [] key,byte[] mi,byte[] iv){
+        //生成轮密钥
+        byte[][] rks = ext_key_L(key);
+
+        byte[] result=null;
+        switch (Mode){
+            case ECB:
+                result = blockDecryptECB(mi,rks);
+                break;
+            case CBC:
+                result = blockDecryptCBC(mi,iv,rks);
+                break;
+            case CFB:
+                break;
+            case OFB:
+                break;
+            case CTR:
+                result= blockEncryptCTR(mi,iv,rks);
+                break;
+            default:
+                throw new RuntimeException("解密模式错误："+Mode);
+        }
+        return result;
+    }
+    //1.填充
+    private byte[] padding(byte[] m){
+        int SM4length = 16;
+        int Pkcs5length = 8;
+        int blockLength;
+        //PKCS7
+        if(Padding==PaddingEnum.Pkcs7){
+            blockLength=SM4length;
+        }else if(Padding==PaddingEnum.Pkcs5){
+            //PKCS5
+            blockLength=Pkcs5length;
+        }else {
+            throw new RuntimeException("未识别的填充算法");
+        }
+        int y=m.length%blockLength;
+        int t=blockLength-y;
+        byte[] padding = new byte[t];
+        for (int i = 0; i < t; i++) {
+            padding[i]= (byte) t;
+        }
+        byte[] result = new byte[m.length+t];
+        System.arraycopy(m,0,result,0,m.length);
+        System.arraycopy(padding,0,result,m.length,padding.length);
+        return result;
+    }
+    private byte[] unPadding(byte[] m){
+        int count = m[m.length-1];
+        byte[] result = new byte[m.length-count];
+        System.arraycopy(m,0,result,0,result.length);
+        return result;
+    }
+    //2. 分组然后根据模式并行加密
+    //ECB
+    private byte[] blockEncryptECB(byte[] m,byte[][] rks){
+        //1 填充
+        m=padding(m);
+        //2 分块
+        byte[][] block = block(m);
+        //3 加密
+        byte[][] result = new byte[block.length][16];
+        for (int i = 0; i < block.length; i++) {
+            result[i]=cipher(block[i], rks);
+        }
+        //4 合并
+        byte[] merge = merge(result);
+        //5 去除填充
+        return merge;
+    }
+    //CBC
+    private byte[] blockEncryptCBC(byte[] m,byte[] iv,byte[][] rks){
+        //1 填充
+        m=padding(m);
+        //2 分块
+        byte[][] block = block(m);
+        //3 加密
+        byte[][] result = new byte[block.length][16];
+        byte[] xorTemp = iv;
+        for (int i = 0; i < block.length; i++) {
+            //明文先和中间变量XOR再加密
+            result[i]=cipher(DataConvertUtil.byteArrayXOR(block[i],xorTemp), rks);
+            //第一次的中间变量为iv，后面的中间变量为上次加密的密文
+            xorTemp=result[i];
+        }
+        //4 合并
+        return merge(result);
+    }
+    //CRT
+    private byte[] blockEncryptCTR(byte[] m,byte[] iv,byte[][] rks){
+        if(iv.length!=16){
+            throw new RuntimeException("iv 长度错误 iv len="+iv.length);
+        }
+        byte[][] blocks = block(m);
+        byte[][] mis = new byte[blocks.length][16];
+        for (int i = 0; i < blocks.length; i++) {
+            byte[] cipher = cipher(iv, rks);
+            if(blocks[i].length!=cipher.length){
+                byte[] tempCipher = new byte[blocks[i].length];
+                System.arraycopy(cipher,0,tempCipher,0,blocks[i].length);
+                cipher=tempCipher;
+            }
+            mis[i]=DataConvertUtil.byteArrayXOR(blocks[i],cipher);
+            iv=byteArrAdd(iv);
+        }
+        return merge(mis);
+    }
+    private byte[] byteArrAdd(byte[] iv){
+        iv = DataConvertUtil.oneAdd(iv);
+        BigInteger temp  = new BigInteger(iv);
+        temp=temp.add(new BigInteger("1"));
+        return DataConvertUtil.byteToN(temp.toByteArray(),16);
+    }
+    private byte[] cipher(byte[] in,byte[][] rks){
         byte[] x0 = new byte[4];
         byte[] x1 = new byte[4];
         byte[] x2 = new byte[4];
@@ -53,11 +202,42 @@ public class SM4 {
         Xs[3]=x3;
         for (int i = 0; i < 32; i++) {
             Xs[i+4]=F(Xs[i],Xs[i+1],Xs[i+2],Xs[i+3],rks[i]);
-//            System.out.println("X["+(i+4)+"]:"+Hex.toHexString(Xs[i+4]));
         }
         return R(Xs[32],Xs[33],Xs[34],Xs[35]);
     }
-    public byte[] decrypt(byte[] in,byte[][] rks){
+
+    //解密
+    //ECB
+    private byte[] blockDecryptECB(byte[] m,byte[][] rks){
+        //1 分块
+        byte[][] block = block(m);
+        //2 解密
+        byte[][] result = new byte[block.length][16];
+        for (int i = 0; i < block.length; i++) {
+            result[i]=decrypt(block[i], rks);
+        }
+        //3 合并
+        byte[] merge = merge(result);
+        //4 去除填充
+        return unPadding(merge);
+    }
+    //CBC
+    private byte[] blockDecryptCBC(byte[] m,byte[] iv,byte[][] rks){
+        //1 分块
+        byte[][] block = block(m);
+        //2 解密
+        byte[][] result = new byte[block.length][16];
+        byte[] xorTemp = iv;
+        for (int i = 0; i < block.length; i++) {
+            result[i]=DataConvertUtil.byteArrayXOR(decrypt(block[i], rks),xorTemp);
+            xorTemp=block[i];
+        }
+        //3 合并
+        byte[] merge = merge(result);
+        //4 去除填充
+        return unPadding(merge);
+    }
+    private byte[] decrypt(byte[] in,byte[][] rks){
         byte[] x0 = new byte[4];
         byte[] x1 = new byte[4];
         byte[] x2 = new byte[4];
@@ -73,11 +253,38 @@ public class SM4 {
         Xs[3]=x3;
         for (int i = 0; i < 32; i++) {
             Xs[i+4]=F(Xs[i],Xs[i+1],Xs[i+2],Xs[i+3],rks[31-i]);
-//            System.out.println("X["+(i+4)+"]:"+Hex.toHexString(Xs[i+4]));
         }
         return R(Xs[32],Xs[33],Xs[34],Xs[35]);
     }
-    public byte[] R(byte[] b1,byte[] b2,byte[] b3,byte[] b4){
+
+    //分组
+    private  byte[][] block(byte[] m){
+        int count = m.length/16;
+        int last = m.length%16;
+        if(last!=0)count++;
+        byte[][] result = new byte[count][16];
+        for (int i = 0; i < count; i++) {
+            byte[] temp;
+            if(i==count-1&&last!=0){
+                 temp= new byte[last];
+            }else {
+                 temp = new byte[16];
+            }
+            System.arraycopy(m,i*16,temp,0,temp.length);
+            result[i]=temp;
+        }
+        return result;
+    }
+    //合并
+    private byte[] merge(byte[][] ms){
+        int len = (ms.length-1)*16+ms[ms.length-1].length;
+        byte[] result = new byte[len];
+        for (int i = 0; i < ms.length; i++) {
+            System.arraycopy(ms[i],0,result,i*16,ms[i].length);
+        }
+        return result;
+    }
+    private byte[] R(byte[] b1,byte[] b2,byte[] b3,byte[] b4){
         byte[] out = new byte[4*b1.length];
         System.arraycopy(b4,0,out,0,4);
         System.arraycopy(b3,0,out,4,4);
@@ -85,9 +292,8 @@ public class SM4 {
         System.arraycopy(b1,0,out,12,4);
         return out;
     }
-
     //轮密钥扩展
-    public byte[][] ext_key_L(byte[] in){
+    private byte[][] ext_key_L(byte[] in){
         byte[] MK0 = new byte[4];
         byte[] MK1 = new byte[4];
         byte[] MK2 = new byte[4];
@@ -121,50 +327,41 @@ public class SM4 {
         return rks;
     }
     //轮函数
-    public byte[] F(byte[] x0,byte[] x1,byte[] x2,byte[] x3,byte[] rk){
+    private byte[] F(byte[] x0,byte[] x1,byte[] x2,byte[] x3,byte[] rk){
         return DataConvertUtil.byteArrayXOR(x0,T(DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(x1,x2),x3),rk)));
     }
-    public byte[] T(byte[] in){
+    private byte[] T(byte[] in){
         return L(tau(in));
     }
-    public byte[] T_(byte[] in){
+    private byte[] T_(byte[] in){
         return L_(tau(in));
     }
-    public byte[] L(byte[] in){
+    private byte[] L(byte[] in){
         byte[] t1=DataConvertUtil.bitCycleLeft(in,2);
         byte[] t2=DataConvertUtil.bitCycleLeft(in,10);
         byte[] t3=DataConvertUtil.bitCycleLeft(in,18);
         byte[] t4=DataConvertUtil.bitCycleLeft(in,24);
         return DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(in,t1),t2),t3),t4);
     }
-    public byte[] L_(byte[] in){
+    private byte[] L_(byte[] in){
         byte[] t1=DataConvertUtil.bitCycleLeft(in,13);
         byte[] t2=DataConvertUtil.bitCycleLeft(in,23);
         return DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(in,t1),t2);
     }
-    public byte[] tau(byte[] in){
+    private byte[] tau(byte[] in){
 
         if(in.length!=4){
             //TODO error
             System.err.println("tau err");
         }
 
-//        byte[] b0 = Sbox(a0);
-//        byte[] b1 = Sbox(a1);
-//        byte[] b2 = Sbox(a2);
-//        byte[] b3 = Sbox(a3);
-//        byte[] out = new byte[16];
-//        System.arraycopy(b0,0,out,0,4);
-//        System.arraycopy(b1,0,out,4,4);
-//        System.arraycopy(b2,0,out,8,4);
-//        System.arraycopy(b3,0,out,12,4);
         byte[] out = new byte[in.length];
         for (int j = 0; j < in.length; j++) {
             out[j]=Sbox(in[j]);
         }
         return out;
     }
-    public byte Sbox(byte in){
+    private byte Sbox(byte in){
         byte out ;
         byte[] bs = new byte[] {(byte) 0x0,in};
         int i=new BigInteger(bs).intValue();
@@ -172,19 +369,19 @@ public class SM4 {
         return out;
     }
 
-    public int getPadding() {
+    public PaddingEnum getPadding() {
         return Padding;
     }
 
-    public void setPadding(int padding) {
+    public void setPadding(PaddingEnum padding) {
         Padding = padding;
     }
 
-    public int getMode() {
+    public ModeEnum getMode() {
         return Mode;
     }
 
-    public void setMode(int mode) {
+    public void setMode(ModeEnum mode) {
         Mode = mode;
     }
 

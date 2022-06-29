@@ -132,8 +132,8 @@ public class SM2Signature {
         // System.out.println(Hex.toHexString(s.toByteArray()));
         byte[] rbytes = r.toByteArray();
         byte[] sbytes = s.toByteArray();
-        rbytes=DataConvertUtil.byteTo32(rbytes);
-        sbytes=DataConvertUtil.byteTo32(sbytes);
+        rbytes=DataConvertUtil.byteToN(rbytes,32);
+        sbytes=DataConvertUtil.byteToN(sbytes,32);
         byte[][] rs = new byte[][]{rbytes,sbytes};
         this.sr=rbytes;
         return rs;
@@ -186,7 +186,7 @@ public class SM2Signature {
         // System.out.println(Hex.toHexString(y2));
 
         byte[][] temp3 = PointAdditionOperation(x1, y1, x2, y2, SM2Constant.getA(), SM2Constant.getP());
-        byte[] x1_=DataConvertUtil.oneAdd(DataConvertUtil.byteTo32(temp3[0]));
+        byte[] x1_=DataConvertUtil.oneAdd(DataConvertUtil.byteToN(temp3[0],32));
         // System.out.println("验签 x1相加");
         // System.out.println(Hex.toHexString(x1_));
 

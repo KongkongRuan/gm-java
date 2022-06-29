@@ -217,16 +217,30 @@ public class DataConvertUtil {
         }
         return x;
     }
-    public static byte[] byteTo32(byte[] src){
-        byte[] x=new byte[32];
+//    public static byte[] byteTo32(byte[] src){
+//        byte[] x=new byte[32];
+//        //计算结束后对计算结果进处理
+//        if(src.length==33){
+//            //如果头部带有00则去出头部的00
+//            System.arraycopy(src,1,x,0,32);
+//        }else if(src.length<32){
+//            //如果计算结束后不足32字节则补齐
+//            System.arraycopy(src,0,x,32-src.length,src.length);
+//        }else if(src.length==32) {
+//            x=src;
+//        }
+//        return x;
+//    }
+    public static byte[] byteToN(byte[] src,int n){
+        byte[] x=new byte[n];
         //计算结束后对计算结果进处理
-        if(src.length==33){
+        if(src.length==n+1){
             //如果头部带有00则去出头部的00
-            System.arraycopy(src,1,x,0,32);
-        }else if(src.length<32){
+            System.arraycopy(src,1,x,0,n);
+        }else if(src.length<n){
             //如果计算结束后不足32字节则补齐
-            System.arraycopy(src,0,x,32-src.length,src.length);
-        }else if(src.length==32) {
+            System.arraycopy(src,0,x,n-src.length,src.length);
+        }else if(src.length==n) {
             x=src;
         }
         return x;
