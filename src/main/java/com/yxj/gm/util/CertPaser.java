@@ -10,6 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -35,6 +36,11 @@ public class CertPaser {
         } else {
             throw new Exception("证书格式错误、无法解析");
         }
+        System.out.println("开始计算指纹");
+        MessageDigest mdTemp = MessageDigest.getInstance("SHA1");
+        mdTemp.update(asn1Bytes);
+        byte[] md = mdTemp.digest();
+        System.out.println("SHA1:"+Hex.toHexString(md));
         bis = new ByteArrayInputStream(asn1Bytes);
         ais = new ASN1InputStream(bis);
         ASN1Primitive primitive = null;
@@ -63,6 +69,7 @@ public class CertPaser {
                                     if (primitive instanceof ASN1Integer) {
                                         ASN1Integer integer = (ASN1Integer) primitive;
                                         System.out.println("DERTaggedObject-Context->4ASN1Integer->CertVersion->" + integer.getValue());
+                                        System.out.println(Hex.toHexString(integer.getValue().toByteArray()));
                                     }
                                 } else if (primitive instanceof ASN1Sequence) {
                                     ASN1Sequence sequence3 = (ASN1Sequence) primitive;
@@ -127,16 +134,43 @@ public class CertPaser {
                                             } catch (ParseException e) {
                                                 e.printStackTrace();
                                             }
-                                        } else if (primitive instanceof DLSequence) {
+                                        }else if (primitive instanceof ASN1Sequence) {
+                                            ASN1Sequence sequence5 = (ASN1Sequence) primitive;
+                                            ASN1SequenceParser parser5 = sequence5.parser();
+                                            ASN1Encodable encodable5 = null;
+                                            while ((encodable5 = parser5.readObject()) != null) {
+                                                primitive = encodable5.toASN1Primitive();
+                                                if (primitive instanceof ASN1ObjectIdentifier) {
+                                                    ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
+                                                    String name = x500Namestyle.oidToDisplayName(objectIdentifier);
+                                                    if (name == null && ("1.2.840.10045.2.1").equals(objectIdentifier.getId())) {
+                                                        name = "ECC公钥参数";
+                                                    }
+                                                    if ((encodable5 = parser5.readObject()) != null) {
+                                                        primitive = encodable5.toASN1Primitive();
+                                                        if (primitive instanceof ASN1ObjectIdentifier) {
+                                                            ASN1ObjectIdentifier objectIdentifier2 = (ASN1ObjectIdentifier) primitive;
+                                                            System.out.println(objectIdentifier.getId() + "->" + name + ":" + objectIdentifier2.getId());
 
-                                        } else if (primitive instanceof DERBitString) {
-
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else if (primitive instanceof DERBitString ) {
+                                            DERBitString derBitString = (DERBitString) primitive;
+                                            System.out.println("公钥："+Hex.toHexString(derBitString.getBytes()));
                                         }
+//                                        else if (primitive instanceof DLSequence) {
+//
+//                                        }
                                     }
                                 }
                             }
                         }
                     }
+                } else if (primitive instanceof DERBitString) {
+                    DERBitString derBitString = (DERBitString) primitive;
+                    System.out.println("签名值："+Hex.toHexString(derBitString.getBytes()));
                 }
             }
         }catch (IOException e){
