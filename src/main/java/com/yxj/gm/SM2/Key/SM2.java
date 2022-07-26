@@ -20,12 +20,13 @@ public class SM2 {
     public static byte[][] generatePubKey(){
         byte[][] bytes =null;
         byte[][] result =new byte[3][32];
-        byte[] random = new byte[32];
         SecureRandom secureRandom = new SecureRandom();
+        byte[] random = new byte[32];
 //        UseKey useKey = new UseKey();
         while (true){
 //            SecretKey secretKey = useKey.secureRandom(32);
 //            random=secretKey.getEncoded();
+            random = new byte[32];
             secureRandom.nextBytes(random);
             random=DataConvertUtil.oneAdd(random);
             //判断D是否在1到N-2之间
@@ -48,39 +49,7 @@ public class SM2 {
                 result[2]=bytes[1];
                 return result;
             }
-//            byte[] txa=DataConvertUtil.oneAdd(bytes[0]);
-//            byte[] tya=DataConvertUtil.oneAdd(bytes[1]);
-//            BigInteger bigTxa = new BigInteger(txa);
-//            BigInteger bigTya = new BigInteger(tya);
-//            BigInteger tempP1 = new BigInteger(SM2Constant.getP()).subtract(new BigInteger("1"));
-//            if(bigTxa.compareTo(tempP1)>0||bigTya.compareTo(tempP1)>0){
-//                System.err.println("XY大于P-1"+Hex.toHexString(random));
-//                continue;
-//            }
-//            BigInteger bigP = new BigInteger(SM2Constant.getP());
-//            BigInteger bigA = new BigInteger(SM2Constant.getA());
-//            BigInteger bigB = new BigInteger(SM2Constant.getB());
-//            BigInteger bigYp2 = bigTya.multiply(bigTya);
-//            bigYp2=bigYp2.mod(bigP);
-//            BigInteger bigXp2 = bigTxa.multiply(bigTxa);
-//            bigXp2=bigXp2.mod(bigP);
-//            BigInteger bigXp3 = bigXp2.multiply(bigTxa);
-//            bigXp3=bigXp3.mod(bigP);
-//            BigInteger bigAxP = bigA.multiply(bigTxa);
-//            bigAxP=bigAxP.mod(bigP);
-//            bigB=bigB.mod(bigP);
-//            BigInteger bigxp3_axp = bigXp3.add(bigAxP);
-//            bigxp3_axp=bigxp3_axp.mod(bigP);
-//            BigInteger bigxp3_axp_b = bigxp3_axp.add(bigB);
-//            bigxp3_axp_b=bigxp3_axp_b.mod(bigP);
-//            if(bigYp2.compareTo(bigxp3_axp_b)==0){
-//                random=DataConvertUtil.byteTo32(random);
-//                result[0]=random;
-//                result[1]=bytes[0];
-//                result[2]=bytes[1];
-//                return result;
-//            }
-            System.err.println(Hex.toHexString(random));
+            System.err.println("公钥验证失败："+Hex.toHexString(random));
         }
     }
     public static boolean checkPubKey(byte[][] pubKey){
@@ -156,7 +125,7 @@ public class SM2 {
      * @param p  有限域大小
      * @return 公钥坐标
      */
-    public static byte[][] MultiplePointOperation(byte[] XG, byte[] YG, byte[] k,byte[] a,byte[] p) {
+    public  static byte[][] MultiplePointOperation(byte[] XG, byte[] YG, byte[] k,byte[] a,byte[] p) {
         //第一个字节补0
         //Biginteger会转换成有符号数造成精度丢失
         k=DataConvertUtil.byteToN(k,32);
@@ -197,8 +166,10 @@ public class SM2 {
      * @param p 有限域大小
      * @return 结果点坐标
      */
-    public static byte[][] PointAdditionOperation(byte[] X1, byte[] Y1, byte[] X2, byte[] Y2, byte[] a, byte[] p) {
+    public  static byte[][] PointAdditionOperation(byte[] X1, byte[] Y1, byte[] X2, byte[] Y2, byte[] a, byte[] p) {
         addCount++;
+
+
         X1=DataConvertUtil.byteToN(X1,32);
         Y1=DataConvertUtil.byteToN(Y1,32);
         X2=DataConvertUtil.byteToN(X2,32);
@@ -214,81 +185,85 @@ public class SM2 {
         BigInteger bigIntegera = new BigInteger(a);
         BigInteger bigIntegerp = new BigInteger(p);
         BigInteger bigIntegerzero = new BigInteger("0");
-        //判断是否是0，0
-        if(bigIntegerX1.equals(bigIntegerzero)&&bigIntegerY1.equals(bigIntegerzero)){
-            byte[][] bytes = new byte[2][33];
-            bytes[0] = X2;
-            bytes[1] = Y2;
-            return bytes;
-        }
-        if(bigIntegerX2.equals(bigIntegerzero)&&bigIntegerY2.equals(bigIntegerzero)){
-            byte[][] bytes = new byte[2][33];
-            bytes[0] = X1;
-            bytes[1] = Y1;
-            return bytes;
-        }
-        BigInteger k = null;
-        //计算k
-        if (!bigIntegerX1.equals(bigIntegerX2)) {
-            // 所有中间运算都要进行模运算
-            BigInteger tk1= bigIntegerY2.subtract(bigIntegerY1);
-            tk1=mod(tk1,bigIntegerp);
-            BigInteger tk2= bigIntegerX2.subtract(bigIntegerX1);
-            tk2=mod(tk2,bigIntegerp);
-            /**
-             * 群里面没有除法运算
-             * 除以一个数相当于乘以这个数的逆元
-             * 逆元使用扩展欧几里得算法计算
-             */
-            BigInteger tk3= tk1.multiply(DataConvertUtil.ex_gcd_ny(tk2,bigIntegerp));
-            k=mod(tk3,bigIntegerp);
-            //TODO P2 != -P1
-        } else if (bigIntegerX1.equals(bigIntegerX2)) {
-            // 所有中间运算都要进行模运算
-            BigInteger tk4= bigIntegerX1.multiply(bigIntegerX1);
-            tk4=mod(tk4,bigIntegerp);
-            BigInteger tk5= new BigInteger("3").multiply(tk4);
-            tk5=mod(tk5,bigIntegerp);
-            BigInteger tk6= tk5.add(bigIntegera);
-            tk6=mod(tk6,bigIntegerp);
-            BigInteger tk7= new BigInteger("2").multiply(bigIntegerY1);
-            tk7=mod(tk7,bigIntegerp);
-            BigInteger tk8= tk6.multiply(DataConvertUtil.ex_gcd_ny(tk7,bigIntegerp));
-            k=mod(tk8,bigIntegerp);
-        }
-        BigInteger bigIntegerX3 = null;
-        BigInteger bigIntegerY3 = null;
-        if (k != null) {
-            // 所有中间运算都要进行模运算（计算X）
-            BigInteger tx1= k.multiply(k);
-            tx1=mod(tx1,bigIntegerp);
-            BigInteger tx2= tx1.subtract(bigIntegerX1);
-            tx2=mod(tx2,bigIntegerp);
-            BigInteger tx3= tx2.subtract(bigIntegerX2);
-            bigIntegerX3=mod(tx3,bigIntegerp);
-            //所有中间运算都要进行模运算（计算Y）
-            BigInteger ty1= bigIntegerX1.subtract(bigIntegerX3);
-            ty1=mod(ty1,bigIntegerp);
-            BigInteger ty2= k.multiply(ty1);
-            ty2=mod(ty2,bigIntegerp);
-            BigInteger ty3= ty2.subtract(bigIntegerY1);
-            bigIntegerY3=mod(ty3,bigIntegerp);
-        }
-        byte[][] bytes = new byte[2][32];
-        if (bigIntegerX3 != null && bigIntegerY3 != null) {
-            byte[] X3 = bigIntegerX3.toByteArray();
-            byte[] Y3 = bigIntegerY3.toByteArray();
+
+            //判断是否是0，0
+            if (bigIntegerX1.equals(bigIntegerzero) && bigIntegerY1.equals(bigIntegerzero)) {
+                byte[][] bytes = new byte[2][33];
+                bytes[0] = X2;
+                bytes[1] = Y2;
+                return bytes;
+            }
+            if (bigIntegerX2.equals(bigIntegerzero) && bigIntegerY2.equals(bigIntegerzero)) {
+                byte[][] bytes = new byte[2][33];
+                bytes[0] = X1;
+                bytes[1] = Y1;
+                return bytes;
+            }
+
+            BigInteger k = null;
+            //计算k
+            if (!bigIntegerX1.equals(bigIntegerX2)) {
+                // 所有中间运算都要进行模运算
+                BigInteger tk1 = bigIntegerY2.subtract(bigIntegerY1);
+                tk1 = mod(tk1, bigIntegerp);
+                BigInteger tk2 = bigIntegerX2.subtract(bigIntegerX1);
+                tk2 = mod(tk2, bigIntegerp);
+                /**
+                 * 群里面没有除法运算
+                 * 除以一个数相当于乘以这个数的逆元
+                 * 逆元使用扩展欧几里得算法计算
+                 */
+                BigInteger tk3 = tk1.multiply(DataConvertUtil.ex_gcd_ny(tk2, bigIntegerp));
+                k = mod(tk3, bigIntegerp);
+                //TODO P2 != -P1
+            } else if (bigIntegerX1.equals(bigIntegerX2)) {
+                // 所有中间运算都要进行模运算
+                BigInteger tk4 = bigIntegerX1.multiply(bigIntegerX1);
+                tk4 = mod(tk4, bigIntegerp);
+                BigInteger tk5 = new BigInteger("3").multiply(tk4);
+                tk5 = mod(tk5, bigIntegerp);
+                BigInteger tk6 = tk5.add(bigIntegera);
+                tk6 = mod(tk6, bigIntegerp);
+                BigInteger tk7 = new BigInteger("2").multiply(bigIntegerY1);
+                tk7 = mod(tk7, bigIntegerp);
+                BigInteger tk8 = tk6.multiply(DataConvertUtil.ex_gcd_ny(tk7, bigIntegerp));
+                k = mod(tk8, bigIntegerp);
+            }
+
+            BigInteger bigIntegerX3 = null;
+            BigInteger bigIntegerY3 = null;
+            if (k != null) {
+                // 所有中间运算都要进行模运算（计算X）
+                BigInteger tx1 = k.multiply(k);
+                tx1 = mod(tx1, bigIntegerp);
+                BigInteger tx2 = tx1.subtract(bigIntegerX1);
+                tx2 = mod(tx2, bigIntegerp);
+                BigInteger tx3 = tx2.subtract(bigIntegerX2);
+                bigIntegerX3 = mod(tx3, bigIntegerp);
+                //所有中间运算都要进行模运算（计算Y）
+                BigInteger ty1 = bigIntegerX1.subtract(bigIntegerX3);
+                ty1 = mod(ty1, bigIntegerp);
+                BigInteger ty2 = k.multiply(ty1);
+                ty2 = mod(ty2, bigIntegerp);
+                BigInteger ty3 = ty2.subtract(bigIntegerY1);
+                bigIntegerY3 = mod(ty3, bigIntegerp);
+            }
+            byte[][] bytes = new byte[2][32];
+            if (bigIntegerX3 != null && bigIntegerY3 != null) {
+                byte[] X3 = bigIntegerX3.toByteArray();
+                byte[] Y3 = bigIntegerY3.toByteArray();
 //            System.out.println("点加长度X："+X3.length);
 //            System.out.println("点加长度Y："+Y3.length);
-            X3=DataConvertUtil.byteToN(X3,32);
-            Y3=DataConvertUtil.byteToN(Y3,32);
-            bytes[0] = X3;
-            bytes[1] = Y3;
-        }
+                X3 = DataConvertUtil.byteToN(X3, 32);
+                Y3 = DataConvertUtil.byteToN(Y3, 32);
+                bytes[0] = X3;
+                bytes[1] = Y3;
+            }
         return bytes;
+
     }
 
-    private static BigInteger mod(BigInteger value,BigInteger mod){
+    private  static BigInteger mod(BigInteger value,BigInteger mod){
         return value.mod(mod);
     }
 

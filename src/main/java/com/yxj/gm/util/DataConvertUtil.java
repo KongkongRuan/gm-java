@@ -5,6 +5,7 @@ import org.bouncycastle.util.encoders.Hex;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class DataConvertUtil {
 
@@ -191,7 +192,7 @@ public class DataConvertUtil {
     static BigInteger x,y;
     static BigInteger zero = new BigInteger("0");
     //扩展欧几里得算法求逆元
-    private static BigInteger ex_gcd(BigInteger a,BigInteger b){
+    private static  BigInteger ex_gcd(BigInteger a,BigInteger b){
         if(b.equals(zero)){
             x=new BigInteger("1");
             y=zero;
@@ -205,7 +206,7 @@ public class DataConvertUtil {
         return ans;
     }
     //对计算结果进行处理
-    public static BigInteger ex_gcd_ny(BigInteger a,BigInteger b){
+    public static synchronized  BigInteger ex_gcd_ny(BigInteger a,BigInteger b){
         BigInteger d =ex_gcd(a,b);
         BigInteger t = b.divide(d);
         BigInteger[] bigIntegers = x.divideAndRemainder(t);
@@ -217,20 +218,23 @@ public class DataConvertUtil {
         }
         return x;
     }
-//    public static byte[] byteTo32(byte[] src){
-//        byte[] x=new byte[32];
-//        //计算结束后对计算结果进处理
-//        if(src.length==33){
-//            //如果头部带有00则去出头部的00
-//            System.arraycopy(src,1,x,0,32);
-//        }else if(src.length<32){
-//            //如果计算结束后不足32字节则补齐
-//            System.arraycopy(src,0,x,32-src.length,src.length);
-//        }else if(src.length==32) {
-//            x=src;
-//        }
-//        return x;
-//    }
+
+
+
+    public static byte[] byteTo32(byte[] src){
+        byte[] x=new byte[32];
+        //计算结束后对计算结果进处理
+        if(src.length==33){
+            //如果头部带有00则去出头部的00
+            System.arraycopy(src,1,x,0,32);
+        }else if(src.length<32){
+            //如果计算结束后不足32字节则补齐
+            System.arraycopy(src,0,x,32-src.length,src.length);
+        }else if(src.length==32) {
+            x=src;
+        }
+        return x;
+    }
     public static byte[] byteToN(byte[] src,int n){
         byte[] x=new byte[n];
         //计算结束后对计算结果进处理
