@@ -189,35 +189,78 @@ public class DataConvertUtil {
         return ByteBuffer.allocate(Integer.SIZE / Byte.SIZE).putInt(value).array();
     }
 
-    static BigInteger x,y;
-    static BigInteger zero = new BigInteger("0");
+//    static BigInteger x,y;
+//    static BigInteger zero = new BigInteger("0");
+//    //扩展欧几里得算法求逆元
+//    private static  BigInteger ex_gcd(BigInteger a,BigInteger b){
+//        if(b.equals(zero)){
+//            x=new BigInteger("1");
+//            y=zero;
+//            return a;
+//        }
+//        BigInteger[] bigIntegers = a.divideAndRemainder(b);
+//        BigInteger ans = ex_gcd(b,bigIntegers[1]);
+//        BigInteger tem = y;
+//        y=x.subtract(a.divide(b).multiply(y));
+//        x=tem;
+//        return ans;
+//    }
+//    //对计算结果进行处理
+//    public static synchronized  BigInteger ex_gcd_ny(BigInteger a,BigInteger b){
+//        BigInteger d =ex_gcd(a,b);
+//        BigInteger t = b.divide(d);
+//        BigInteger[] bigIntegers = x.divideAndRemainder(t);
+//        x=(bigIntegers[1].add(t)).divideAndRemainder(t)[1];
+//        //部分计算结果是真实结果的相反数，此处只是简单的判断是否为负值
+//        //如果是则取相反数
+//        if(x.compareTo(zero) < 0){
+//            x=x.multiply(new BigInteger("-1"));
+//        }
+//        return x;
+//    }
+
     //扩展欧几里得算法求逆元
-    private static  BigInteger ex_gcd(BigInteger a,BigInteger b){
-        if(b.equals(zero)){
+    private static  BigInteger[] ex_gcd(BigInteger a,BigInteger b,BigInteger x,BigInteger y){
+        BigInteger[] bigArr = new BigInteger[3];
+        if(b.equals(BigInteger.ZERO)){
             x=new BigInteger("1");
-            y=zero;
-            return a;
+            y=BigInteger.ZERO;
+            bigArr[0]=a;
+            bigArr[1]=x;
+            bigArr[2]=y;
+            return bigArr;
         }
         BigInteger[] bigIntegers = a.divideAndRemainder(b);
-        BigInteger ans = ex_gcd(b,bigIntegers[1]);
+        BigInteger[] bigArrDg = ex_gcd(b, bigIntegers[1], x, y);
+        BigInteger ans = bigArrDg[0];
+        y=bigArrDg[2];
+        x=bigArrDg[1];
         BigInteger tem = y;
         y=x.subtract(a.divide(b).multiply(y));
         x=tem;
-        return ans;
+        bigArr[0]=ans;
+        bigArr[1]=x;
+        bigArr[2]=y;
+        return bigArr;
     }
     //对计算结果进行处理
-    public static synchronized  BigInteger ex_gcd_ny(BigInteger a,BigInteger b){
-        BigInteger d =ex_gcd(a,b);
+    public static   BigInteger ex_gcd_ny(BigInteger a,BigInteger b){
+        BigInteger x = null,y = null;
+        BigInteger[] bigArr = ex_gcd(a, b, x, y);
+        BigInteger d =bigArr[0];
+        x=bigArr[1];
+//        y=bigArr[2];
         BigInteger t = b.divide(d);
         BigInteger[] bigIntegers = x.divideAndRemainder(t);
         x=(bigIntegers[1].add(t)).divideAndRemainder(t)[1];
         //部分计算结果是真实结果的相反数，此处只是简单的判断是否为负值
         //如果是则取相反数
-        if(x.compareTo(zero) < 0){
+        if(x.compareTo(BigInteger.ZERO) < 0){
             x=x.multiply(new BigInteger("-1"));
         }
         return x;
     }
+
 
 
 
