@@ -1,17 +1,11 @@
 package com.yxj.gm.SM4;
 
-import com.kms.jca.UseKey;
-import com.kms.provider.key.ZyxxSecretKey;
 import com.yxj.gm.constant.SM4Constant;
 import com.yxj.gm.enums.ModeEnum;
 import com.yxj.gm.enums.PaddingEnum;
 import com.yxj.gm.util.DataConvertUtil;
-import org.bouncycastle.util.encoders.Hex;
 
-import javax.jws.soap.SOAPBinding;
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
 
 import static com.yxj.gm.enums.ModeEnum.CTR;
 

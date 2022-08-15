@@ -25,7 +25,7 @@ public class CertPaser {
         ASN1InputStream ais = null;
         byte[] asn1Bytes;
 //        bytell asn1Bytes=pemTOASN18yteArrary(FileutilsreadFileToByteArray(newFile("D:\\d20b06ef-a4dd-40e2-343a-7924d6b54944.crt"))); bytell filebytes =Fileutils.readfileToByteArray(newFile("D;l\pkcs7.p7b"))
-        byte[] fileBytes = FileUtils.readFileToByteArray(new File("D:\\设备0004_SM2_20210909133722.crt"));
+        byte[] fileBytes = FileUtils.readFileToByteArray(new File("D:\\设备0004_SM2_20220801144024.crt"));
         InputStream targInputstreame = new ByteArrayInputStream(fileBytes);
         int targ = targInputstreame.read();
         System.out.println("oppptang:" + targ);
@@ -125,6 +125,7 @@ public class CertPaser {
                                             try {
                                                 DateFormat df = new SimpleDateFormat("yyy年MM月dd日 HH:mm:ss");
                                                 String date = df.format(time.getDate());
+                                                System.out.println(Hex.toHexString(time.getEncoded()));
                                                 if (startTime) {
                                                     System.out.println("startTime:" + date);
                                                     startTime = false;

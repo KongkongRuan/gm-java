@@ -19,9 +19,8 @@ public class SM3 {
 
     private static long n = 0l;
     private static String strM = "61626364616263646162636461626364616263646162636461626364616263646162636461626364616263646162636461626364616263646162636461626364";
-    private static String strM1024 = strM+strM+strM+strM+strM+strM+strM+strM;
 //    static String strM = "616263";
-    private static byte[] append;
+    private static byte[] msgAll=null;
     
 
     //0-15
@@ -49,9 +48,9 @@ public class SM3 {
     }
 
     //1.填充
-    private void append(byte[] m){
+    private static byte[] append(byte[] m){
         //System.out.println("ivlen:"+IVbyte.length);
-        long l = m.length*8;
+        long l = m.length* 8L;
         //System.out.println("l:"+l);
         //计算k
         long k = 448-((l+1)%512);
@@ -67,7 +66,12 @@ public class SM3 {
         //填充64位bit 长度是l的二进制表达式
         byte[] array = ByteBuffer.allocate(Long.SIZE / Byte.SIZE).putLong(l).array();
         System.arraycopy(array,0,append,(int)length-array.length,array.length);
-        this.append=append;
+        return append;
+//        if(SM3.append ==null){
+//            SM3.append =append;
+//        }else {
+//            SM3.append =DataConvertUtil.byteArrAdd(SM3.append,append);
+//        }
     }
 
 
@@ -81,11 +85,11 @@ public class SM3 {
         }
         expand(BI);
         byte[] SS1,SS2,TT1,TT2,T;
-        byte[] VIABC=new byte[V.length];
+        byte[] VIABC;
         byte[] A=new byte[4];
-        System.arraycopy(V, 4*0, A, 0, 4);
+        System.arraycopy(V, 0, A, 0, 4);
         byte[] B=new byte[4];
-        System.arraycopy(V, 4*1, B, 0, 4);
+        System.arraycopy(V, 4, B, 0, 4);
         byte[] C=new byte[4];
         System.arraycopy(V, 4*2, C, 0, 4);
         byte[] D=new byte[4];
@@ -170,18 +174,12 @@ public class SM3 {
             //System.out.println(j+"G:"+Hex.toHexString(G));
             //System.out.println(j+"H:"+Hex.toHexString(H));
         }
-        System.arraycopy(A, 0, VIABC, 0*4, 4);
-        System.arraycopy(B, 0, VIABC, 1*4, 4);
-        System.arraycopy(C, 0, VIABC, 2*4, 4);
-        System.arraycopy(D, 0, VIABC, 3*4, 4);
-        System.arraycopy(E, 0, VIABC, 4*4, 4);
-        System.arraycopy(F, 0, VIABC, 5*4, 4);
-        System.arraycopy(G, 0, VIABC, 6*4, 4);
-        System.arraycopy(H, 0, VIABC, 7*4, 4);
+        VIABC=DataConvertUtil.byteArrAdd(A,B,C,D,E,F,G,H);
+
 
         return DataConvertUtil.byteArrayXOR(VIABC, V);
     }
-    //扩展
+    //扩展(压缩函数需要调用扩展)
     private static void expand(byte[] BI){
         //第一步将消息分组B划分为16个字
         for (int i = 0; i <16 ; i++) {
@@ -211,6 +209,10 @@ public class SM3 {
 
     //2.迭代
     private static byte[] iteration(){
+        if(msgAll==null){
+            throw new RuntimeException("请添加要计算的值");
+        }
+        byte[] append = append(msgAll);
         byte[] sm3Hash=null;
         n = append.length/64;
         //System.out.println("n:"+n);
@@ -221,11 +223,16 @@ public class SM3 {
             //压缩函数
             sm3Hash=CF(sm3Hash,BArray[i]);
         }
-
+        //计算完成后清空上次的消息值
+        msgAll=null;
         return sm3Hash;
     }
     public void update(byte[] msg){
-        append(msg);
+        if(msgAll==null){
+            msgAll=msg;
+        }else {
+            msgAll=DataConvertUtil.byteArrAdd(msgAll,msg);
+        }
     }
     public byte[] doFinal(){
         return iteration();

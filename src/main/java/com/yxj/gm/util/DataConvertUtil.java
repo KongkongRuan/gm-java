@@ -11,6 +11,20 @@ public class DataConvertUtil {
 
 
 
+    public static byte[] byteArrAdd(byte[]... bytesArr){
+        int allLength=0;
+        for (byte[] value : bytesArr) {
+            allLength += value.length;
+        }
+        byte[] resultBytes = new byte[allLength];
+        int count =0;
+        for (byte[] bytes : bytesArr) {
+            System.arraycopy(bytes, 0, resultBytes, count, bytes.length);
+            count += bytes.length;
+        }
+        return resultBytes;
+    }
+
     //byte[] 循环左移
     public static byte[] bitCycleLeft(byte[] tmp, int bitLen)
     {
@@ -330,13 +344,14 @@ public class DataConvertUtil {
 //        int i = ia << 2;
 //        System.out.println(i);
 
-        String ss1 = "abcd";
-        byte[] bytes = ss1.getBytes();
+        String str1 = "123";
+        System.out.println(Hex.toHexString(str1.getBytes()));
 
-        byte[] bytes1 = bitCycleLeft(bytes, 2);
-        System.out.println(Hex.toHexString(bytes1));
+        String str2 = "456";
+        System.out.println(Hex.toHexString(str2.getBytes()));
 
-        System.out.println(15/8);
+        byte[] bytes = byteArrAdd(str1.getBytes(), str2.getBytes());
+        System.out.println(Hex.toHexString(bytes));
 
     }
 

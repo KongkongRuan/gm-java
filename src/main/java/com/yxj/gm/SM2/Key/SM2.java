@@ -167,9 +167,6 @@ public class SM2 {
      * @return 结果点坐标
      */
     public  static byte[][] PointAdditionOperation(byte[] X1, byte[] Y1, byte[] X2, byte[] Y2, byte[] a, byte[] p) {
-        addCount++;
-
-
         X1=DataConvertUtil.byteToN(X1,32);
         Y1=DataConvertUtil.byteToN(Y1,32);
         X2=DataConvertUtil.byteToN(X2,32);
