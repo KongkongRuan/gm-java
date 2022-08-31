@@ -63,11 +63,6 @@ public class SM3 {
         byte[] array = ByteBuffer.allocate(Long.SIZE / Byte.SIZE).putLong(l).array();
         System.arraycopy(array,0,append,(int)length-array.length,array.length);
         return append;
-//        if(SM3.append ==null){
-//            SM3.append =append;
-//        }else {
-//            SM3.append =DataConvertUtil.byteArrAdd(SM3.append,append);
-//        }
     }
 
 
@@ -99,22 +94,6 @@ public class SM3 {
         byte[] H=new byte[4];
         System.arraycopy(V, 4*7, H, 0, 4);
 
-
-        //System.out.println("A:"+Hex.toHexString(A));
-        //System.out.println("B:"+Hex.toHexString(B));
-        //System.out.println("C:"+Hex.toHexString(C));
-        //System.out.println("D:"+Hex.toHexString(D));
-        //System.out.println("E:"+Hex.toHexString(E));
-        //System.out.println("F:"+Hex.toHexString(F));
-        //System.out.println("G:"+Hex.toHexString(G));
-        //System.out.println("H:"+Hex.toHexString(H));
-
-
-
-
-//        //System.out.println(Hex.toHexString(G));
-//        //System.out.println(Hex.toHexString(H));
-//        //System.out.println(Hex.toHexString(result));
         for (int j = 0; j < 64; j++) {
 
                 int l1,l2,l3;
@@ -127,9 +106,6 @@ public class SM3 {
                 }
                 l3=DataConvertUtil.bytesToInt(DataConvertUtil.bitCycleLeft(T,(j%32)),0,false);
                 SS1 = DataConvertUtil.bitCycleLeft(DataConvertUtil.intToBytes(l1+l2+l3), 7);
-                //System.out.println("SS1 len:"+SS1.length);
-                //System.out.println("A len:"+A.length);
-                //System.out.println("要异或的长度："+com.yxj.gm.other.util.DataConvertUtil.bitCycleLeft(A,12).length);
                 SS2=DataConvertUtil.byteArrayXOR(SS1, DataConvertUtil.bitCycleLeft(A,12));
 
                 int l4,l5,l6,l7;
@@ -161,14 +137,6 @@ public class SM3 {
                 G=DataConvertUtil.bitCycleLeft(F,19);
                 F=E;
                 E=P0(TT2);
-            //System.out.println(j+"A:"+Hex.toHexString(A));
-            //System.out.println(j+"B:"+Hex.toHexString(B));
-            //System.out.println(j+"C:"+Hex.toHexString(C));
-            //System.out.println(j+"D:"+Hex.toHexString(D));
-            //System.out.println(j+"E:"+Hex.toHexString(E));
-            //System.out.println(j+"F:"+Hex.toHexString(F));
-            //System.out.println(j+"G:"+Hex.toHexString(G));
-            //System.out.println(j+"H:"+Hex.toHexString(H));
         }
         VIABC=DataConvertUtil.byteArrAdd(A,B,C,D,E,F,G,H);
 
