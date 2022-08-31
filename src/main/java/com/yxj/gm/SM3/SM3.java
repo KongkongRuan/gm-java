@@ -1,24 +1,20 @@
 package com.yxj.gm.SM3;//import com.kms.jca.UseKey;
-import org.bouncycastle.util.encoders.Hex;
 import com.yxj.gm.util.DataConvertUtil;
 
 import java.nio.ByteBuffer;
 
 public class SM3 {
 
-    private static byte[] IVbyte =new byte[]{(byte) 0x73,(byte) 0x80,(byte) 0x16,(byte) 0x6f,(byte) 0x49,(byte) 0x14,(byte) 0xb2,(byte) 0xb9,(byte) 0x17
+    private static final byte[] IVbyte =new byte[]{(byte) 0x73,(byte) 0x80,(byte) 0x16,(byte) 0x6f,(byte) 0x49,(byte) 0x14,(byte) 0xb2,(byte) 0xb9,(byte) 0x17
             ,(byte) 0x24,(byte) 0x42,(byte) 0xd7,(byte) 0xda,(byte) 0x8a,(byte) 0x06,(byte) 0x00,(byte) 0xa9,(byte) 0x6f,(byte) 0x30,(byte) 0xbc
             ,(byte) 0x16,(byte) 0x31,(byte) 0x38,(byte) 0xaa,(byte) 0xe3,(byte) 0x8d,(byte) 0xee,(byte) 0x4d,(byte) 0xb0,(byte) 0xfb,(byte) 0x0e,(byte) 0x4e};
 
-    private static byte[] T1byte =new byte[]{(byte) 0x79,(byte) 0xcc,(byte) 0x45,(byte) 0x19};
-    private static byte[] T2byte = new byte[]{(byte) 0x7a,(byte) 0x87,(byte) 0x9d,(byte) 0x8a};
+    private static final byte[] T1byte =new byte[]{(byte) 0x79,(byte) 0xcc,(byte) 0x45,(byte) 0x19};
+    private static final byte[] T2byte = new byte[]{(byte) 0x7a,(byte) 0x87,(byte) 0x9d,(byte) 0x8a};
 
-    private static byte[][] BArray  = null;
-    private static byte[][] WAArray= new byte[68][4];
-    private static byte[][] WBArray= new byte[64][4];
+    private static final byte[][] WAArray= new byte[68][4];
+    private static final byte[][] WBArray= new byte[64][4];
 
-    private static long n = 0l;
-    private static String strM = "61626364616263646162636461626364616263646162636461626364616263646162636461626364616263646162636461626364616263646162636461626364";
 //    static String strM = "616263";
     private static byte[] msgAll=null;
     
@@ -194,15 +190,6 @@ public class SM3 {
         for (int j = 0; j <64 ; j++) {
             WBArray[j]=DataConvertUtil.byteArrayXOR(WAArray[j], WAArray[j+4]);
         }
-        //System.out.println("扩展结束");
-        //System.out.println("W:");
-        for (int i = 0; i <WAArray.length ; i++) {
-            //System.out.println(i+":"+Hex.toHexString(WAArray[i]));
-        }
-        //System.out.println("W撇:");
-        for (int i = 0; i <WBArray.length ; i++) {
-            //System.out.println(i+":"+Hex.toHexString(WBArray[i]));
-        }
     }
 
 
@@ -214,14 +201,14 @@ public class SM3 {
         }
         byte[] append = append(msgAll);
         byte[] sm3Hash=null;
-        n = append.length/64;
+        long n = append.length / 64;
         //System.out.println("n:"+n);
-        BArray = new byte [(int)n][64];
-        for (int i = 0; i <n ; i++) {
+        byte[][] BArray = new byte[(int) n][64];
+        for (int i = 0; i < n; i++) {
             System.arraycopy(append, i*64, BArray[i],0,64);
             //System.out.println("第"+i+"轮压缩");
             //压缩函数
-            sm3Hash=CF(sm3Hash,BArray[i]);
+            sm3Hash=CF(sm3Hash, BArray[i]);
         }
         //计算完成后清空上次的消息值
         msgAll=null;
@@ -240,85 +227,7 @@ public class SM3 {
 
 
 
-    public static void main(String[] args) {
-//        UseKey useKey = new UseKey();
-//
-//
-//
-//        long lcsf = System.currentTimeMillis();
-//        byte[] sm3Hashcsf=null;
-////        byte[] mcsf = Hex.decode(strM1024);
-//        for (int i = 0; i < 1024*1024; i++) {
-////            byte[] append = append(m);
-////            sm3Hash=iteration(append);
-//            //JNI-组件化
-//            sm3Hashcsf = useKey.messageDigest(useKey.secureRandom(1024).getEncoded());
-//        }
-//        System.out.println("CSF运算结束:"+(System.currentTimeMillis()-lcsf));
-//        System.out.println(Hex.toHexString(sm3Hashcsf));
 
 
 
-        long l = System.currentTimeMillis();
-        byte[] sm3Hash=null;
-
-        SM3 sm3 = new SM3();
-        sm3.append("1234".getBytes());
-        sm3Hash=iteration();
-        System.out.println("java运算结束:"+(System.currentTimeMillis()-l));
-        System.out.println(Hex.toHexString(sm3Hash));
-
-
-//        byte[] md = new byte[32];
-//        long lother = System.currentTimeMillis();
-//        for (int j = 0; j < 1024*1024; j++) {
-//            byte[] bytes = useKey.secureRandom(1024).getEncoded();
-//            SM3Digest sm3 = new SM3Digest();
-//            sm3.update(bytes, 0, bytes.length);
-//            sm3.doFinal(md, 0);
-//        }
-//        System.out.println("other运算结束:"+(System.currentTimeMillis()-lother));
-//        System.out.println(Hex.toHexString(md));
-
-    }
-
-
-
-
-    /**
-     * Byte转Bit
-     */
-    public static String byteToBit(byte b) {
-        return "" +(byte)((b >> 7) & 0x1) +
-                (byte)((b >> 6) & 0x1) +
-                (byte)((b >> 5) & 0x1) +
-                (byte)((b >> 4) & 0x1) +
-                (byte)((b >> 3) & 0x1) +
-                (byte)((b >> 2) & 0x1) +
-                (byte)((b >> 1) & 0x1) +
-                (byte)((b >> 0) & 0x1);
-    }
-    /**
-     * Bit转Byte
-     */
-    public static byte BitToByte(String byteStr) {
-        int re, len;
-        if (null == byteStr) {
-            return 0;
-        }
-        len = byteStr.length();
-        if (len != 4 && len != 8) {
-            return 0;
-        }
-        if (len == 8) {// 8 bit处理
-            if (byteStr.charAt(0) == '0') {// 正数
-                re = Integer.parseInt(byteStr, 2);
-            } else {// 负数
-                re = Integer.parseInt(byteStr, 2) - 256;
-            }
-        } else {//4 bit处理
-            re = Integer.parseInt(byteStr, 2);
-        }
-        return (byte) re;
-    }
 }

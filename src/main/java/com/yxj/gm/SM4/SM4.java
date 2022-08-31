@@ -16,7 +16,6 @@ import static com.yxj.gm.enums.ModeEnum.CTR;
  */
 public class SM4 {
 
-    int core = Runtime.getRuntime().availableProcessors();
     /**Mode
      * 0 ECB
      * 1 CBC
@@ -31,7 +30,8 @@ public class SM4 {
      * 1 Pkcs5
      */
     private PaddingEnum Padding =PaddingEnum.Pkcs7;
-    public SM4(){};
+    public SM4(){}
+
     public SM4(PaddingEnum padding,ModeEnum mode){
         this.Padding=padding;
         this.Mode=mode;
@@ -54,7 +54,6 @@ public class SM4 {
                 result = blockEncryptCBC(ming,iv,rks);
                 break;
             case CFB:
-                break;
             case OFB:
                 break;
             case CTR:
@@ -78,7 +77,6 @@ public class SM4 {
                 result = blockDecryptCBC(mi,iv,rks);
                 break;
             case CFB:
-                break;
             case OFB:
                 break;
             case CTR:
@@ -133,9 +131,8 @@ public class SM4 {
             result[i]=cipher(block[i], rks);
         }
         //4 合并
-        byte[] merge = merge(result);
         //5 去除填充
-        return merge;
+        return merge(result);
     }
     //CBC
     private byte[] blockEncryptCBC(byte[] m,byte[] iv,byte[][] rks){
@@ -181,19 +178,7 @@ public class SM4 {
         return DataConvertUtil.byteToN(temp.toByteArray(),16);
     }
     private byte[] cipher(byte[] in,byte[][] rks){
-        byte[] x0 = new byte[4];
-        byte[] x1 = new byte[4];
-        byte[] x2 = new byte[4];
-        byte[] x3 = new byte[4];
-        System.arraycopy(in,0,x0,0,4);
-        System.arraycopy(in,4,x1,0,4);
-        System.arraycopy(in,8,x2,0,4);
-        System.arraycopy(in,12,x3,0,4);
-        byte[][] Xs = new byte[36][4];
-        Xs[0]=x0;
-        Xs[1]=x1;
-        Xs[2]=x2;
-        Xs[3]=x3;
+        byte[][] Xs=SM4Pretreatment(in);
         for (int i = 0; i < 32; i++) {
             Xs[i+4]=F(Xs[i],Xs[i+1],Xs[i+2],Xs[i+3],rks[i]);
         }
@@ -232,6 +217,15 @@ public class SM4 {
         return unPadding(merge);
     }
     private byte[] decrypt(byte[] in,byte[][] rks){
+
+        byte[][] Xs=SM4Pretreatment(in);
+        for (int i = 0; i < 32; i++) {
+            Xs[i+4]=F(Xs[i],Xs[i+1],Xs[i+2],Xs[i+3],rks[31-i]);
+        }
+        return R(Xs[32],Xs[33],Xs[34],Xs[35]);
+    }
+
+    private byte[][] SM4Pretreatment(byte[] in) {
         byte[] x0 = new byte[4];
         byte[] x1 = new byte[4];
         byte[] x2 = new byte[4];
@@ -245,10 +239,7 @@ public class SM4 {
         Xs[1]=x1;
         Xs[2]=x2;
         Xs[3]=x3;
-        for (int i = 0; i < 32; i++) {
-            Xs[i+4]=F(Xs[i],Xs[i+1],Xs[i+2],Xs[i+3],rks[31-i]);
-        }
-        return R(Xs[32],Xs[33],Xs[34],Xs[35]);
+        return Xs;
     }
 
     //分组
@@ -293,7 +284,8 @@ public class SM4 {
         byte[] MK2 = new byte[4];
         byte[] MK3 = new byte[4];
         if(in.length!=16){
-            //TODO error
+            // error
+            throw new RuntimeException("in!=16");
         }
         System.arraycopy(in,0,MK0,0,4);
         System.arraycopy(in,4,MK1,0,4);
@@ -363,20 +355,8 @@ public class SM4 {
         return out;
     }
 
-    public PaddingEnum getPadding() {
-        return Padding;
-    }
 
-    public void setPadding(PaddingEnum padding) {
-        Padding = padding;
-    }
 
-    public ModeEnum getMode() {
-        return Mode;
-    }
 
-    public void setMode(ModeEnum mode) {
-        Mode = mode;
-    }
 
 }
