@@ -1,4 +1,4 @@
-package java;
+package com.yxj.gm;
 
 import com.kms.jca.UseKey;
 import com.kms.provider.key.ZyxxSecretKey;

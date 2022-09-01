@@ -1,4 +1,4 @@
-package java;
+package com.yxj.gm;
 
 import java.math.BigInteger;
 

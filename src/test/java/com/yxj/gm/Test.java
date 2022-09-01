@@ -1,4 +1,4 @@
-
+package com.yxj.gm;
 
 import com.kms.jca.UseKey;
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
@@ -8,6 +8,7 @@ import org.bouncycastle.util.encoders.Hex;
 import java.security.KeyPair;
 public class Test {
     public static void main(String[] args) {
+        System.out.println("1232");
         String msg = "message digest";
         System.out.println("密钥生成");
         KeyPair keyPair = SM2.generateSM2KeyPair();

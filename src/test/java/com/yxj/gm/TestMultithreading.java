@@ -1,4 +1,4 @@
-package java;
+package com.yxj.gm;
 
 import com.kms.jca.UseKey;
 import com.yxj.gm.SM2.Cipher.SM2Cipher;

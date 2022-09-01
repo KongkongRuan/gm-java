@@ -193,7 +193,9 @@ public class SM3 {
         return iteration();
     }
 
-
+    public void msgAllReset(){
+        msgAll=null;
+    }
 
 
 
