@@ -1,6 +1,5 @@
 
 
-import com.kms.jca.UseKey;
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
 import com.yxj.gm.SM2.Key.SM2;
 import com.yxj.gm.SM2.Signature.SM2Signature;
@@ -23,19 +22,13 @@ public class Test {
             }else {
                 System.out.println("java 验签通过");
             }
-        UseKey useKey = new UseKey();
-        boolean b = useKey.verifySignature(keyPair.getPublic(), msg.getBytes(), signature);
-        if(b){
-            System.out.println("C 验签通过");
-        }
+
         System.out.println("加解密测试");
         SM2Cipher sm2Cipher = new SM2Cipher();
         byte[] mi = sm2Cipher.SM2CipherEncrypt(msg.getBytes(), keyPair.getPublic().getEncoded());
         System.out.println("java加密后密文："+Hex.toHexString(mi));
         byte[] ming = sm2Cipher.SM2CipherDecrypt(mi, keyPair.getPrivate().getEncoded());
         System.out.println("java解密后明文："+new String(ming));
-        byte[] bytes = useKey.cipherDecrypeKeyPair("SM2", keyPair.getPrivate(), mi);
-        System.out.println("C解密后明文："+new String(bytes));
     }
 
 //    public static void main(String[] args) {

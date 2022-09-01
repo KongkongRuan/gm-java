@@ -1,12 +1,9 @@
-import com.kms.jca.UseKey;
-import com.kms.provider.key.ZyxxSecretKey;
 import com.yxj.gm.SM4.SM4;
 import com.yxj.gm.enums.ModeEnum;
 import org.bouncycastle.util.encoders.Hex;
 
 public class TestSM4 {
     public static void main(String[] args) {
-        UseKey useKey = new UseKey();
         byte[] msg = new byte[]{(byte)0x01,(byte)0x23,(byte)0x45,(byte)0x67,(byte)0x89,(byte)0xAB,(byte)0xCD,(byte)0xEF,(byte)0xFE,(byte)0xDC,(byte)0xBA,(byte)0x98,(byte)0x76,(byte)0x54,(byte)0x32,(byte)0x10,(byte)0x52,(byte)0x52};
         byte[] key = new byte[]{(byte)0x01,(byte)0x23,(byte)0x45,(byte)0x67,(byte)0x89,(byte)0xAB,(byte)0xCD,(byte)0xEF,(byte)0xFE,(byte)0xDC,(byte)0xBA,(byte)0x98,(byte)0x76,(byte)0x54,(byte)0x32,(byte)0x10};
         SM4 sm4 = new SM4();
@@ -15,13 +12,6 @@ public class TestSM4 {
         System.out.println("java-密文："+ Hex.toHexString(mi));
         byte[] ming = sm4.cipherDecrypt(key, mi, new byte[16]);
         System.out.println("java-明文："+Hex.toHexString(ming));
-        byte[] mic = useKey.cipherEncrypt("SM4", new ZyxxSecretKey(key), msg);
-        System.out.println("c-密文：   "+ Hex.toHexString(mic));
-        byte[] mingc = useKey.cipherDecrype("SM4", new ZyxxSecretKey(key), mic);
-        System.out.println("c-明文：   "+Hex.toHexString(mingc));
-        int i = System.identityHashCode(useKey);
-        System.out.println(useKey);
-        System.out.println(i);
         String s1 = "hh";
         String s2 = "ss";
         String s3 = "hhss";

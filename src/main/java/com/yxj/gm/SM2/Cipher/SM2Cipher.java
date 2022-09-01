@@ -1,9 +1,6 @@
 package com.yxj.gm.SM2.Cipher;
 
 
-import com.kms.jca.UseKey;
-import com.kms.provider.keyPair.ZyxxPrivateKey;
-import com.kms.provider.keyPair.ZyxxPublicKey;
 import com.yxj.gm.SM3.SM3;
 import com.yxj.gm.constant.SM2Constant;
 import com.yxj.gm.util.DataConvertUtil;
@@ -14,28 +11,7 @@ import java.math.BigInteger;
 import java.security.SecureRandom;
 
 public class SM2Cipher {
-    public static void main(String[] args) {
-        UseKey useKey = new UseKey();
 
-
-        String msg = "encryption standard";
-        System.out.println("msg HEX:");
-        System.out.println(Hex.toHexString(msg.getBytes()));
-        byte[] prikey = Hex.decode("07DF3A29105359F16BBF8EA753319F4ECC085F8A71BD473DAA05282309D10E71");
-        byte[] pubkey = Hex.decode("08B1E2B7E03B3B522C3064EB211B00123ADB81102F12C5F547F7AA3F7C8BE5614904A2CFF9715B85237E8AE62C5DD55297719270E6EC20B3D80E2BC2BC7F2856");
-        SM2Cipher sm2Cipher = new SM2Cipher();
-        byte[] mi = useKey.cipherEncryptKeyPair("SM2",new ZyxxPublicKey(pubkey),msg.getBytes());
-        System.out.println("组件化加密密文：");
-        System.out.println(Hex.toHexString(mi));
-        System.out.println(Hex.toHexString(mi).length());
-        byte[] ming = sm2Cipher.SM2CipherDecrypt(mi, prikey);
-        System.out.println(Hex.toHexString(ming));
-        System.out.println(new String(ming));
-        byte[] ming_cs = useKey.cipherDecrypeKeyPair("SM2", new ZyxxPrivateKey(prikey), mi);
-        System.out.println(Hex.toHexString(ming_cs));
-        System.out.println(new String(ming_cs));
-
-    }
     public byte[] SM2CipherEncrypt(byte[] M,byte[] pubKey){
         byte[] Xb = new byte[32];
         byte[] Yb = new byte[32];
