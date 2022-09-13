@@ -121,7 +121,6 @@ public class CertPaser {
                                             try {
                                                 DateFormat df = new SimpleDateFormat("yyy年MM月dd日 HH:mm:ss");
                                                 String date = df.format(time.getDate());
-                                                System.out.println(Hex.toHexString(time.getEncoded()));
                                                 if (startTime) {
                                                     System.out.println("startTime:" + date);
                                                     startTime = false;
@@ -161,13 +160,22 @@ public class CertPaser {
 //
 //                                        }
                                     }
+                                } else if (primitive instanceof ASN1ObjectIdentifier) {
+                                    //解析签名算法
+                                    ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
+                                    String algorithmName = x500Namestyle.oidToDisplayName(objectIdentifier);
+                                    //TODO getid -> toString
+                                    if (algorithmName == null && "1.2.156.10197.1.501".equals(objectIdentifier.getId())) {
+                                        algorithmName = "SM2WithSM3";
+                                    }
+                                    System.out.println(objectIdentifier + "->sigAlgorithmName:" + algorithmName);
                                 }
                             }
+                        } else if (primitive instanceof DERBitString) {
+                            DERBitString derBitString = (DERBitString) primitive;
+                            System.out.println("签名值："+Hex.toHexString(derBitString.getBytes()));
                         }
                     }
-                } else if (primitive instanceof DERBitString) {
-                    DERBitString derBitString = (DERBitString) primitive;
-                    System.out.println("签名值："+Hex.toHexString(derBitString.getBytes()));
                 }
             }
         }catch (IOException e){
