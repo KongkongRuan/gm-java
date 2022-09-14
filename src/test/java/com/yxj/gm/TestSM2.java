@@ -1,4 +1,4 @@
-package java;
+package com.yxj.gm;
 
 import com.yxj.gm.SM2.Key.SM2;
 

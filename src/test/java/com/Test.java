@@ -1,5 +1,6 @@
+package com;
 
-
+import com.kms.jca.UseKey;
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
 import com.yxj.gm.SM2.Key.SM2;
 import com.yxj.gm.SM2.Signature.SM2Signature;
@@ -7,28 +8,45 @@ import org.bouncycastle.util.encoders.Hex;
 import java.security.KeyPair;
 public class Test {
     public static void main(String[] args) {
-        String msg = "message digest";
-        System.out.println("密钥生成");
-        KeyPair keyPair = SM2.generateSM2KeyPair();
-        System.out.println("公钥："+Hex.toHexString(keyPair.getPublic().getEncoded()));
-        System.out.println("私钥："+Hex.toHexString(keyPair.getPrivate().getEncoded()));
-        System.out.println("签名验签测试");
-            SM2Signature sm2Signature = new SM2Signature();
-            byte[] signature = sm2Signature.signature(msg.getBytes(), null, keyPair.getPrivate().getEncoded());
-            SM2Signature sm2Verify = new SM2Signature();
-            boolean verify = sm2Verify.verify(msg.getBytes(), null, signature, keyPair.getPublic().getEncoded());
-            if(!verify){
-                System.err.println("错误");
-            }else {
-                System.out.println("java 验签通过");
-            }
-
-        System.out.println("加解密测试");
-        SM2Cipher sm2Cipher = new SM2Cipher();
-        byte[] mi = sm2Cipher.SM2CipherEncrypt(msg.getBytes(), keyPair.getPublic().getEncoded());
-        System.out.println("java加密后密文："+Hex.toHexString(mi));
-        byte[] ming = sm2Cipher.SM2CipherDecrypt(mi, keyPair.getPrivate().getEncoded());
-        System.out.println("java解密后明文："+new String(ming));
+        System.out.println("2cvvdfgh111111112222211111321");
+        int count=0;
+//        for (int i = 0; i < 1000; i++) {
+//            System.out.println("123");
+//            String msg = "message digest";
+//            System.out.println("密钥生成");
+//            KeyPair keyPair = SM2.generateSM2KeyPair();
+//            System.out.println("公钥："+Hex.toHexString(keyPair.getPublic().getEncoded()));
+//            System.out.println("私钥："+Hex.toHexString(keyPair.getPrivate().getEncoded()));
+//            System.out.println("签名验签测试");
+//            SM2Signature sm2Signature = new SM2Signature();
+//            byte[] signature = sm2Signature.signature(msg.getBytes(), null, keyPair.getPrivate().getEncoded());
+//            SM2Signature sm2Verify = new SM2Signature();
+//            boolean verify = sm2Verify.verify(msg.getBytes(), null, signature, keyPair.getPublic().getEncoded());
+//            if(!verify){
+//                System.err.println("错误");
+//            }else {
+//                count++;
+//                System.out.println("java 验签通过");
+//            }
+//            UseKey useKey = new UseKey();
+//            boolean b = useKey.verifySignature(keyPair.getPublic(), msg.getBytes(), signature);
+//            if(b){
+//                count++;
+//                System.out.println("C 验签通过");
+//            }
+//            System.out.println("加解密测试");
+//            SM2Cipher sm2Cipher = new SM2Cipher();
+//            byte[] mi = sm2Cipher.SM2CipherEncrypt(msg.getBytes(), keyPair.getPublic().getEncoded());
+//            System.out.println("java加密后密文："+Hex.toHexString(mi));
+//            byte[] ming = sm2Cipher.SM2CipherDecrypt(mi, keyPair.getPrivate().getEncoded());
+//            System.out.println("java解密后明文："+new String(ming));
+//            byte[] bytes = useKey.cipherDecrypeKeyPair("SM2", keyPair.getPrivate(), mi);
+//            System.out.println("C解密后明文："+new String(bytes));
+//            if(new String(bytes).equals(new String(ming))){
+//                count++;
+//            }
+//        }
+        if(count==3000) System.out.println("-------------success-------------");
     }
 
 //    public static void main(String[] args) {

@@ -1,12 +1,23 @@
 package com.yxj.gm.util;
 
 import com.yxj.gm.constant.SM2Constant;
+import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.gm.GMNamedCurves;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.asn1.x9.X9ECParameters;
+import org.bouncycastle.crypto.params.ECDomainParameters;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
 
 public class SM2Util {
+    public static final ECDomainParameters SM2_DOMAIN_PARAMS = SM2Util.toDomainParams(GMNamedCurves.getByName("sm2p256v1"));
+
+
+    public static final AlgorithmIdentifier sigAlgId = new AlgorithmIdentifier(new ASN1ObjectIdentifier("1.2.156.10197.1.501"));
+
+
 
 
     public static byte[][] generatePubKey(){
@@ -40,6 +51,9 @@ public class SM2Util {
             }
             System.err.println("公钥验证失败："+Hex.toHexString(random));
         }
+    }
+    public static ECDomainParameters toDomainParams(X9ECParameters x9ECParameters) {
+        return new ECDomainParameters(x9ECParameters.getCurve(), x9ECParameters.getG(), x9ECParameters.getN(), x9ECParameters.getH());
     }
     /**
      * 二进制展开法倍点运算

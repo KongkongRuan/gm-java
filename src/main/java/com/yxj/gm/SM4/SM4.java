@@ -30,6 +30,23 @@ public class SM4 {
      * 1 Pkcs5
      */
     private PaddingEnum Padding =PaddingEnum.Pkcs7;
+
+    public ModeEnum getMode() {
+        return Mode;
+    }
+
+    public void setMode(ModeEnum mode) {
+        Mode = mode;
+    }
+
+    public PaddingEnum getPadding() {
+        return Padding;
+    }
+
+    public void setPadding(PaddingEnum padding) {
+        Padding = padding;
+    }
+
     public SM4(){}
 
     public SM4(PaddingEnum padding,ModeEnum mode){
@@ -120,7 +137,7 @@ public class SM4 {
     }
     //2. 分组然后根据模式并行加密
     //ECB
-    private byte[] blockEncryptECB(byte[] m,byte[][] rks){
+    public byte[] blockEncryptECB(byte[] m, byte[][] rks){
         //1 填充
         m=padding(m);
         //2 分块
@@ -135,7 +152,7 @@ public class SM4 {
         return merge(result);
     }
     //CBC
-    private byte[] blockEncryptCBC(byte[] m,byte[] iv,byte[][] rks){
+    public byte[] blockEncryptCBC(byte[] m, byte[] iv, byte[][] rks){
         //1 填充
         m=padding(m);
         //2 分块
@@ -153,7 +170,7 @@ public class SM4 {
         return merge(result);
     }
     //CRT
-    private byte[] blockEncryptCTR(byte[] m,byte[] iv,byte[][] rks){
+    public byte[] blockEncryptCTR(byte[] m, byte[] iv, byte[][] rks){
         if(iv.length!=16){
             throw new RuntimeException("iv 长度错误 iv len="+iv.length);
         }
@@ -187,7 +204,7 @@ public class SM4 {
 
     //解密
     //ECB
-    private byte[] blockDecryptECB(byte[] m,byte[][] rks){
+    public byte[] blockDecryptECB(byte[] m, byte[][] rks){
         //1 分块
         byte[][] block = block(m);
         //2 解密
@@ -201,7 +218,7 @@ public class SM4 {
         return unPadding(merge);
     }
     //CBC
-    private byte[] blockDecryptCBC(byte[] m,byte[] iv,byte[][] rks){
+    public byte[] blockDecryptCBC(byte[] m, byte[] iv, byte[][] rks){
         //1 分块
         byte[][] block = block(m);
         //2 解密
@@ -278,14 +295,14 @@ public class SM4 {
         return out;
     }
     //轮密钥扩展
-    private byte[][] ext_key_L(byte[] in){
+    public byte[][] ext_key_L(byte[] in){
         byte[] MK0 = new byte[4];
         byte[] MK1 = new byte[4];
         byte[] MK2 = new byte[4];
         byte[] MK3 = new byte[4];
         if(in.length!=16){
             // error
-            throw new RuntimeException("in!=16");
+            throw new RuntimeException("KEY length!=16");
         }
         System.arraycopy(in,0,MK0,0,4);
         System.arraycopy(in,4,MK1,0,4);
