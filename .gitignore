@@ -56,3 +56,4 @@ mvnw
 
 # Files or folders need to be retained
 # ...
+/src/test/
