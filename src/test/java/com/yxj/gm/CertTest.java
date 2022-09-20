@@ -2,7 +2,8 @@ package com.yxj.gm;
 
 import com.yxj.gm.SM2.Key.SM2PrivateKey;
 import com.yxj.gm.SM2.Key.SM2PublicKey;
-import com.yxj.gm.util.CertValidation;
+import com.yxj.gm.cert.CertParseVo;
+import com.yxj.gm.util.CertPaser;
 import com.yxj.gm.util.FileUtils;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -34,23 +35,32 @@ public class CertTest {
 //        CertTest certTest = new CertTest();
 //        byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, certTest.getRootPrivateKey().getEncoded(), certTest.getRootPublicKey().getEncoded());
 //        try {
-//            FileUtils.writeFile("D:/certtest/java-ca-2.cer",rootCert);
+//            FileUtils.writeFile("D:/certtest/java-ca-3.cer",rootCert);
 //        } catch (Exception e) {
 //            throw new RuntimeException(e);
 //        }
 //        byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, certTest.getRootPrivateKey().getEncoded(), certTest.getChildPublicKey().getEncoded());
 //        try {
-//            FileUtils.writeFile("D:/certtest/java-ownerCert-2.cer",ownerCert);
+//            FileUtils.writeFile("D:/certtest/java-ownerCert-3.cer",ownerCert);
 //        } catch (Exception e) {
 //            throw new RuntimeException(e);
 //        }
-        byte[] caCert = FileUtils.readFileToByteArray(new File("D:\\certtest\\java-ca-2.cer"));
-        byte[] ownerCert = FileUtils.readFileToByteArray(new File("D:\\certtest\\java-ownerCert-2.cer"));
 
-        boolean b = CertValidation.selfSignedCaValidation(caCert);
-        System.err.println(b);
-        boolean b1 = CertValidation.CertificateChainValidation(caCert, ownerCert);
-        System.err.println(b1);
+
+        byte[] fileBytes = FileUtils.readFileToByteArray(new File("D:\\soft\\GenShen\\_.bt.cn.crt"));
+//        byte[] fileBytes = FileUtils.readFileToByteArray(new File("D:\\设备0004_SM2_20220801144024.crt"));
+        CertParseVo certParseVo = CertPaser.parseCert(fileBytes);
+        System.out.println(certParseVo);
+
+
+//
+//        byte[] caCert = FileUtils.readFileToByteArray(new File("D:\\certtest\\java-ca-2.cer"));
+//        byte[] ownerCert = FileUtils.readFileToByteArray(new File("D:\\certtest\\java-ownerCert-2.cer"));
+//
+//        boolean b = CertValidation.selfSignedCaValidation(caCert);
+//        System.err.println(b);
+//        boolean b1 = CertValidation.CertificateChainValidation(caCert, ownerCert);
+//        System.err.println(b1);
 
 
     }

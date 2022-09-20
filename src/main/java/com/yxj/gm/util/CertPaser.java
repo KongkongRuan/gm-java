@@ -4,9 +4,9 @@ import com.yxj.gm.cert.CertParseVo;
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.x500.X500NameStyle;
 import org.bouncycastle.asn1.x500.style.RFC4519Style;
+import org.bouncycastle.util.encoders.Hex;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -17,25 +17,13 @@ import java.text.SimpleDateFormat;
 
 public class CertPaser {
 
-        public static void main(String[] args) throws Exception {
-//          bytell asn1Bytes=pemTOASN18yteArrary(FileutilsreadFileToByteArray(newFile("D:\\d20b06ef-a4dd-40e2-343a-7924d6b54944.crt"))); bytell filebytes =Fileutils.readfileToByteArray(newFile("D;l\pkcs7.p7b"))
-//            byte[] fileBytes = FileUtils.readFileToByteArray(new File("D:\\certtest\\java-ca-2.cer"));
-            byte[] fileBytes = FileUtils.readFileToByteArray(new File("D:\\certtest\\java-ca-2.cer"));
-            CertParseVo certParseVo = CertPaser.parseCert(fileBytes);
-            System.out.println(certParseVo);
-//            // System.out.println("待验签数据："+Hex.toHexString(certParseVo.getTbsCert()));
-//            // System.out.println("公钥："+Hex.toHexString(certParseVo.getPubKey()));
-//            // System.out.println("签名值："+Hex.toHexString(certParseVo.getSignature()));
-//            SM2Signature signature = new SM2Signature();
-//            boolean verify = signature.verify(certParseVo.getTbsCert(), null, certParseVo.getSignature(), certParseVo.getPubKey());
-//            // System.out.println(verify);
-        }
         public static  CertParseVo parseCert(byte[] cert){
             X500NameStyle x500Namestyle = RFC4519Style.INSTANCE;
             int tag = 0;
             MessageDigest mdTemp ;
             ASN1Primitive primitive;
 
+            String signatureAlgorithmOid="";
             ByteArrayInputStream bis;
             ASN1InputStream ais;
             byte[] asn1Bytes;
@@ -77,7 +65,6 @@ public class CertPaser {
             //证书解析开始
             try {
                 while ((primitive = ais.readObject()) != null) {
-
                     //第一层Sequence
                     if (primitive instanceof ASN1Sequence) {
                         // System.out.println("1sequence -> " + primitive);
@@ -344,6 +331,8 @@ public class CertPaser {
                                                                 ASN1ObjectIdentifier objectIdentifier2 = (ASN1ObjectIdentifier) primitive;
                                                                 // System.out.println(objectIdentifier.getId() + "->" + name + ":" + objectIdentifier2.getId());
                                                                 resultVo.setPublicKeyInfo(objectIdentifier2.getId());
+                                                            }else {
+                                                                resultVo.setPublicKeyInfo(Hex.toHexString(primitive.getEncoded()));
                                                             }
                                                         }
                                                     }
@@ -355,8 +344,12 @@ public class CertPaser {
                                                  */
                                                 DERBitString derBitString = (DERBitString) primitive;
                                                 byte[] pubKeyWitchHead=derBitString.getBytes();
+                                                if(pubKeyWitchHead[0]==0x04){
+                                                    resultVo.setPubKey(DataConvertUtil.byteToN(pubKeyWitchHead,64));
+                                                }else {
+                                                    resultVo.setPubKey(pubKeyWitchHead);
+                                                }
                                                 //去除公钥的压缩头04
-                                                resultVo.setPubKey(DataConvertUtil.byteToN(pubKeyWitchHead,64));
                                                 // System.out.println("公钥："+Hex.toHexString(DataConvertUtil.byteToN(pubKeyWitchHead,64)));
                                             }
                                         }
@@ -369,8 +362,11 @@ public class CertPaser {
                                         String algorithmName = x500Namestyle.oidToDisplayName(objectIdentifier);
                                         if (algorithmName == null && "1.2.156.10197.1.501".equals(objectIdentifier.getId())) {
                                             algorithmName = "SM2WithSM3";
-                                            resultVo.setSignatureAlgorithm(algorithmName);
+                                        }else {
+                                            algorithmName=objectIdentifier.getId();
                                         }
+                                        signatureAlgorithmOid=objectIdentifier.getId();
+                                        resultVo.setSignatureAlgorithm(algorithmName);
                                         // System.out.println(objectIdentifier + "->sigAlgorithmName:" + algorithmName);
                                     }
                                 }
@@ -379,37 +375,46 @@ public class CertPaser {
                                  *Sequence->DERBitString
                                  * 解析签名值
                                  */
-                                //SM2证书的签名值为DERBitString{ASN1Sequence{ASN1Integer r,ASN1Integer s}}
                                 DERBitString derBitString = (DERBitString) primitive;
-                                byte[] seqBytes=derBitString.getBytes();
-                                ASN1Primitive asn1Primitive;
-                                try (ASN1InputStream asn1InputStream = new ASN1InputStream(seqBytes)) {
-                                    asn1Primitive = asn1InputStream.readObject();
-                                }
+                                //SM2
+                                if(signatureAlgorithmOid.equals("1.2.156.10197.1.501")){
+                                    //SM2证书的签名值为DERBitString{ASN1Sequence{ASN1Integer r,ASN1Integer s}}
 
-                                if (asn1Primitive instanceof ASN1Sequence) {
-                                    ASN1Sequence sequence1 = (ASN1Sequence)asn1Primitive;
-                                    ASN1SequenceParser parser1 = sequence1.parser();
-                                    ASN1Encodable encodable1;
-                                    byte[] signature = new byte[64];
-                                    boolean r = true;
-                                    while ((encodable1 = parser1.readObject()) != null) {
-                                        primitive = encodable1.toASN1Primitive();
-                                        if (primitive instanceof ASN1Integer) {
-                                            ASN1Integer integer = (ASN1Integer) primitive;
+                                    byte[] seqBytes=derBitString.getBytes();
+                                    ASN1Primitive asn1Primitive;
+                                    try (ASN1InputStream asn1InputStream = new ASN1InputStream(seqBytes)) {
+                                        asn1Primitive = asn1InputStream.readObject();
+                                    }
 
-                                            byte[] integerBytes = integer.getValue().toByteArray();
-                                            if(r){
-                                                System.arraycopy(DataConvertUtil.byteTo32(integerBytes),0,signature,0,32);
-                                                r=false;
-                                            }else {
-                                                System.arraycopy(DataConvertUtil.byteTo32(integerBytes),0,signature,32,32);
+                                    if (asn1Primitive instanceof ASN1Sequence) {
+                                        ASN1Sequence sequence1 = (ASN1Sequence)asn1Primitive;
+                                        ASN1SequenceParser parser1 = sequence1.parser();
+                                        ASN1Encodable encodable1;
+                                        byte[] signature = new byte[64];
+                                        boolean r = true;
+                                        while ((encodable1 = parser1.readObject()) != null) {
+                                            primitive = encodable1.toASN1Primitive();
+                                            if (primitive instanceof ASN1Integer) {
+                                                ASN1Integer integer = (ASN1Integer) primitive;
+
+                                                byte[] integerBytes = integer.getValue().toByteArray();
+                                                if(r){
+                                                    System.arraycopy(DataConvertUtil.byteTo32(integerBytes),0,signature,0,32);
+                                                    r=false;
+                                                }else {
+                                                    System.arraycopy(DataConvertUtil.byteTo32(integerBytes),0,signature,32,32);
+                                                }
                                             }
                                         }
+                                        resultVo.setSignatureValue(signature);
+                                        // System.out.println("签名值："+Hex.toHexString(signature));
                                     }
-                                    resultVo.setSignatureValue(signature);
-                                    // System.out.println("签名值："+Hex.toHexString(signature));
+
                                 }
+                                else {
+                                    resultVo.setSignatureValue(derBitString.getBytes());
+                                }
+
                             }
                         }
                     }

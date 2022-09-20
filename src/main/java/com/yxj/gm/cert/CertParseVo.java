@@ -179,12 +179,12 @@ public class CertParseVo {
                 ", isCa=" + isCa +
                 ", sigMaxLength=" + sigMaxLength +
                 ", keyUsage='" + keyUsage + '\'' +
-                ", tbsCert=" + Hex.toHexString(tbsCert) +
                 ", publicKeyInfo='" + publicKeyInfo + '\'' +
                 ", pubKey=" + Hex.toHexString(pubKey) +
                 ", signatureAlgorithm='" + signatureAlgorithm + '\'' +
                 ", signatureValue=" + Hex.toHexString(signatureValue) +
                 ", SHA1Thumbprint=" + Hex.toHexString(SHA1Thumbprint) +
+                ", tbsCert=" + Hex.toHexString(tbsCert) +
                 '}';
     }
 }

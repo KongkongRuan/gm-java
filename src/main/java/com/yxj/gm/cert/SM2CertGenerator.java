@@ -90,7 +90,7 @@ public class SM2CertGenerator {
             aev.add(ASN1Boolean.getInstance(true));// ca cert
             aev.add(new ASN1Integer(255));//Path Length Constraint
             DERSequence basicConstraintsSeq = new DERSequence(aev);
-            extGenerator.addExtension(Extension.basicConstraints, true, basicConstraintsSeq);
+            extGenerator.addExtension(Extension.basicConstraints, false, basicConstraintsSeq);
         }
         extGenerator.addExtension(Extension.keyUsage, true, keyUsage);
 //        extGenerator.addExtension(Extension.keyUsage, true, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign | KeyUsage.cRLSign));
