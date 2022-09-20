@@ -39,6 +39,7 @@ public class CertPaser {
             ByteArrayInputStream bis;
             ASN1InputStream ais;
             byte[] asn1Bytes;
+            CertParseVo resultVo = new CertParseVo();
 
             InputStream tagInputStream = new ByteArrayInputStream(cert);
 
@@ -64,11 +65,11 @@ public class CertPaser {
             }
             mdTemp.update(asn1Bytes);
             byte[] md = mdTemp.digest();
+            resultVo.setSHA1Thumbprint(md);
             // System.out.println("SHA1:"+ Hex.toHexString(md));
             bis = new ByteArrayInputStream(asn1Bytes);
             ais = new ASN1InputStream(bis);
 
-            CertParseVo resultVo = new CertParseVo();
             try {
                 while ((primitive = ais.readObject()) != null) {
 

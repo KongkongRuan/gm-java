@@ -1,6 +1,6 @@
 package com.yxj.gm.cert;
 
-import java.util.Arrays;
+import org.bouncycastle.util.encoders.Hex;
 
 public class CertParseVo {
     //版本
@@ -31,6 +31,8 @@ public class CertParseVo {
     private String publicKeyInfo;
     //签名值
     private  byte[] signature;
+    //SHA1 指纹
+    private byte[] SHA1Thumbprint;
 
 
     public String getVersion() {
@@ -145,11 +147,19 @@ public class CertParseVo {
         this.signature = signature;
     }
 
+    public byte[] getSHA1Thumbprint() {
+        return SHA1Thumbprint;
+    }
+
+    public void setSHA1Thumbprint(byte[] SHA1Thumbprint) {
+        this.SHA1Thumbprint = SHA1Thumbprint;
+    }
+
     @Override
     public String toString() {
         return "CertParseVo{" +
                 "version='" + version + '\'' +
-                ", serial=" + Arrays.toString(serial) +
+                ", serial=" + Hex.toHexString(serial) +
                 ", signatureAlgorithm='" + signatureAlgorithm + '\'' +
                 ", issuerSubject='" + issuerSubject + '\'' +
                 ", startTime='" + startTime + '\'' +
@@ -158,10 +168,11 @@ public class CertParseVo {
                 ", isCa=" + isCa +
                 ", sigMaxLength=" + sigMaxLength +
                 ", keyUsage='" + keyUsage + '\'' +
-                ", tbsCert=" + Arrays.toString(tbsCert) +
-                ", pubKey=" + Arrays.toString(pubKey) +
+                ", tbsCert=" + Hex.toHexString(tbsCert) +
+                ", pubKey=" + Hex.toHexString(pubKey) +
                 ", publicKeyInfo='" + publicKeyInfo + '\'' +
-                ", signature=" + Arrays.toString(signature) +
+                ", signature=" + Hex.toHexString(signature) +
+                ", SHA1Thumbprint=" + Hex.toHexString(SHA1Thumbprint) +
                 '}';
     }
 }
