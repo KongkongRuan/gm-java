@@ -26,7 +26,7 @@ public class SM2CertGenerator {
     ExtensionsGenerator extGenerator;
 
 
-    public byte[] generatorCert(String issuerSubject, long validity, String ownerSubject, KeyUsage keyUsage,boolean isCa,byte[] issuerPriKey,byte[] ownerPubKey)  {
+    public byte[] generatorCert(String issuerSubject, long validity, String ownerSubject, KeyUsage keyUsage,boolean isCa,byte[] issuerPriKey,byte[] ownerPubKey){
         PublicKey publicKey = new SM2PublicKey(ownerPubKey);
         PrivateKey privateKey = new SM2PrivateKey(issuerPriKey);
         //颁发者信息
@@ -52,14 +52,14 @@ public class SM2CertGenerator {
         //生成证书体
         TBSCertificate tbsCert = tbsGen.generateTBSCertificate();
         SM2Signature signature = new SM2Signature();
-        byte[] certMsg = new byte[0];
+        byte[] certMsg  ;
         try {
             certMsg = tbsCert.getEncoded();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         //组合证书体，算法以及签名值
-        X509CertificateHolder certificateHolder = null;
+        X509CertificateHolder certificateHolder ;
         try {
             certificateHolder = new X509CertificateHolder(X509Util.generateStructure(tbsCert, SM2Util.sigAlgId,signature.signature(certMsg,null, privateKey.getEncoded()) ));
         } catch (IOException e) {

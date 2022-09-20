@@ -19,6 +19,7 @@ import java.math.BigInteger;
 
 public class X509Util {
 
+    static String[] keyUsage = {"digitalSignature","nonRepudiation","keyEncipherment","dataEncipherment","keyAgreement","keyCertSign","cRLSign","encipherOnly","decipherOnly"};
     public static ECPublicKeyParameters toSm2PublicParams(byte[] xBytes, byte[] yBytes){
         return toPublicParams(xBytes,yBytes,SM2Util.SM2_DOMAIN_PARAMS);
     }
@@ -77,4 +78,23 @@ public class X509Util {
 
         return Certificate.getInstance(new DERSequence(v));
     }
+    //密钥用途字段解析翻译
+    public static String paserKeyUsage(DERBitString derBitString){
+        if(derBitString==null)return "null";
+        byte[] bytes = derBitString.getBytes();
+        BigInteger bigInteger = new BigInteger(1,bytes);
+        String s = bigInteger.toString(2);
+        if(s.length()>8)return "length error";
+//        s=new StringBuffer(s).reverse().toString();
+        StringBuffer sb = new StringBuffer();
+        for (int i = 0; i < s.length(); i++) {
+            if(s.charAt(i)=='1'){
+                sb.append(keyUsage[i]);
+                sb.append(",");
+            }
+        }
+        sb.deleteCharAt(sb.length()-1);
+        return sb.toString();
+    }
 }
+

@@ -2,10 +2,12 @@ package com.yxj.gm;
 
 import com.yxj.gm.SM2.Key.SM2PrivateKey;
 import com.yxj.gm.SM2.Key.SM2PublicKey;
-import com.yxj.gm.cert.SM2CertGenerator;
+import com.yxj.gm.util.CertValidation;
 import com.yxj.gm.util.FileUtils;
-import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.util.encoders.Hex;
+
+import java.io.File;
+import java.io.IOException;
 
 public class CertTest {
     SM2PublicKey getRootPublicKey(){
@@ -25,23 +27,30 @@ public class CertTest {
         byte[] bytes = Hex.decode("712f5f88a22806c66af587f8702371e0140ffe888f247dd889caddb3a1ec19a2");
         return new SM2PrivateKey(bytes);
     }
-    public static void main(String[] args) {
-        SM2CertGenerator sm2CertGenerator = new SM2CertGenerator();
-         String DN_CA = "CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US";
-         String DN_CHILD = "CN=DD,OU=DD,O=DD,L=Linton,ST=Utah,C=CN";
-        CertTest certTest = new CertTest();
-        byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, certTest.getRootPrivateKey().getEncoded(), certTest.getRootPublicKey().getEncoded());
-        try {
-            FileUtils.writeFile("D:/certtest/java-ca-2.cer",rootCert);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, certTest.getRootPrivateKey().getEncoded(), certTest.getChildPublicKey().getEncoded());
-        try {
-            FileUtils.writeFile("D:/certtest/java-ownerCert-2.cer",ownerCert);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+    public static void main(String[] args) throws IOException {
+//        SM2CertGenerator sm2CertGenerator = new SM2CertGenerator();
+//         String DN_CA = "CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US";
+//         String DN_CHILD = "CN=DD,OU=DD,O=DD,L=Linton,ST=Utah,C=CN";
+//        CertTest certTest = new CertTest();
+//        byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, certTest.getRootPrivateKey().getEncoded(), certTest.getRootPublicKey().getEncoded());
+//        try {
+//            FileUtils.writeFile("D:/certtest/java-ca-2.cer",rootCert);
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+//        byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, certTest.getRootPrivateKey().getEncoded(), certTest.getChildPublicKey().getEncoded());
+//        try {
+//            FileUtils.writeFile("D:/certtest/java-ownerCert-2.cer",ownerCert);
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+        byte[] caCert = FileUtils.readFileToByteArray(new File("D:\\certtest\\java-ca-2.cer"));
+        byte[] ownerCert = FileUtils.readFileToByteArray(new File("D:\\certtest\\java-ownerCert-2.cer"));
+
+        boolean b = CertValidation.selfSignedCaValidation(caCert);
+        System.err.println(b);
+        boolean b1 = CertValidation.CertificateChainValidation(caCert, ownerCert);
+        System.err.println(b1);
 
 
     }
