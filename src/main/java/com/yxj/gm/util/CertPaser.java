@@ -49,6 +49,9 @@ public class CertPaser {
                 throw new RuntimeException(e);
             }
             // System.out.println("oppptang:" + tag);
+            /*
+             * 判断证书是否为pem格式
+             */
             if (tag == 48) {
                 asn1Bytes = cert;
             } else if (tag == 45) {
@@ -57,7 +60,9 @@ public class CertPaser {
                 throw new RuntimeException("证书格式错误、无法解析");
             }
             // System.out.println("开始计算指纹");
-
+            /*
+            计算SHA1指纹
+             */
             try {
                 mdTemp = MessageDigest.getInstance("SHA1");
             } catch (NoSuchAlgorithmException e) {
@@ -69,10 +74,11 @@ public class CertPaser {
             // System.out.println("SHA1:"+ Hex.toHexString(md));
             bis = new ByteArrayInputStream(asn1Bytes);
             ais = new ASN1InputStream(bis);
-
+            //证书解析开始
             try {
                 while ((primitive = ais.readObject()) != null) {
 
+                    //第一层Sequence
                     if (primitive instanceof ASN1Sequence) {
                         // System.out.println("1sequence -> " + primitive);
                         ASN1Sequence sequence = (ASN1Sequence) primitive;
@@ -81,6 +87,7 @@ public class CertPaser {
                         while ((encodable = parser.readObject()) != null) {
                             primitive = encodable.toASN1Primitive();
                             if (primitive instanceof ASN1Sequence) {
+                                //第一层Sequence内的第一个Sequence为证书签名验签数据
                                 if(resultVo.getTbsCert()==null){
                                     resultVo.setTbsCert(primitive.getEncoded());
                                 }
@@ -91,10 +98,12 @@ public class CertPaser {
 
                                     primitive = encodable2.toASN1Primitive();
                                     if (primitive instanceof ASN1Integer) {
+                                        //Sequence->Sequence->ASN1Integer
                                         ASN1Integer integer = (ASN1Integer) primitive;
                                         // System.out.println("证书序列号：" + Hex.toHexString(integer.getValue().toByteArray()));
                                         resultVo.setSerial(integer.getValue().toByteArray());
                                     } else if (primitive instanceof DLTaggedObject) {
+                                        //Sequence->Sequence->Contex
                                         DLTaggedObject dlTaggedObject = (DLTaggedObject) primitive;
                                         ASN1Object baseObject = dlTaggedObject.getBaseObject();
 
@@ -105,6 +114,10 @@ public class CertPaser {
                                             // System.out.println(Hex.toHexString(integer.getValue().toByteArray()));
                                             resultVo.setVersion(integer.toString());
                                         }else if(baseObject instanceof ASN1Sequence){
+                                            /*
+                                            Sequence->Sequence->最后一个Context
+                                            扩展项
+                                            */
                                             ASN1Sequence sequence1=(ASN1Sequence)baseObject;
                                             ASN1SequenceParser parser1 = sequence1.parser();
                                             ASN1Encodable encodable1;
@@ -118,6 +131,7 @@ public class CertPaser {
                                                         primitive=encodable3.toASN1Primitive();
                                                         if(primitive instanceof ASN1ObjectIdentifier ){
                                                             ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
+                                                            //基本约束
                                                             if(objectIdentifier.getId().equals("2.5.29.19")){
                                                                 if((encodable3=parser3.readObject())!=null){
                                                                     primitive=encodable3.toASN1Primitive();
@@ -125,9 +139,11 @@ public class CertPaser {
 
                                                                     }
                                                                 }
+                                                                //如果是基本约束项则继续解析
                                                                 if((encodable3=parser3.readObject())!=null){
                                                                     primitive=encodable3.toASN1Primitive();
                                                                     if(primitive instanceof DEROctetString){
+                                                                        //把DEROctetString通过流转换为ASN1Sequence
                                                                         DEROctetString derOctetString=(DEROctetString)primitive;
                                                                         byte[] octets = derOctetString.getOctets();
                                                                         ASN1Primitive asn1Primitive;
@@ -138,6 +154,7 @@ public class CertPaser {
                                                                             ASN1Sequence sequence4=(ASN1Sequence)asn1Primitive;
                                                                             ASN1SequenceParser parser4 = sequence4.parser();
                                                                             ASN1Encodable encodable4;
+                                                                            //从ASN1Sequence中取出CA标识以及最大签发长度
                                                                             while ((encodable4=parser4.readObject())!=null){
                                                                                 primitive=encodable4.toASN1Primitive();
                                                                                 if(primitive instanceof ASN1Boolean){
@@ -155,6 +172,7 @@ public class CertPaser {
                                                                     }
                                                                 }
                                                             }else if(objectIdentifier.getId().equals("2.5.29.15")){
+                                                                //如果是keyUsage在下面解析用途
                                                                 if((encodable3=parser3.readObject())!=null){
                                                                     primitive=encodable3.toASN1Primitive();
                                                                     if(primitive instanceof ASN1Boolean){
@@ -164,6 +182,12 @@ public class CertPaser {
                                                                 if((encodable3=parser3.readObject())!=null) {
                                                                     primitive = encodable3.toASN1Primitive();
                                                                     if(primitive instanceof DEROctetString){
+                                                                        /*
+                                                                         * 先把DEROctetString通过流转换为DERBitString
+                                                                         * 再通过工具解析出真实的用途
+                                                                         * DERBitString存储的为一个int
+                                                                         */
+
                                                                         DEROctetString derOctetString=(DEROctetString)primitive;
                                                                         byte[] octets = derOctetString.getOctets();
                                                                         ASN1Primitive asn1Primitive;
@@ -186,27 +210,38 @@ public class CertPaser {
                                             }
                                         }
                                     } else if (primitive instanceof ASN1Sequence) {
+                                        /*
+                                         *解析第三层Sequence
+                                         * 1. 签名算法
+                                         * 2. 颁发者信息
+                                         * 3. 有效期
+                                         * 4. 使用者信息
+                                         * 5. 公钥
+                                         */
                                         ASN1Sequence sequence3 = (ASN1Sequence) primitive;
                                         ASN1SequenceParser parser3 = sequence3.parser();
                                         ASN1Encodable encodable3;
-                                        StringBuffer sb = new StringBuffer();
+                                        StringBuilder sb = new StringBuilder();
                                         while ((encodable3 = parser3.readObject()) != null) {
                                             primitive = encodable3.toASN1Primitive();
                                             if (primitive instanceof ASN1ObjectIdentifier) {
+                                                //证书结构体内的签名算法
                                                 ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
                                                 String algorithmName = x500Namestyle.oidToDisplayName(objectIdentifier);
-                                                //TODO getid -> toString
                                                 if (algorithmName == null) {
                                                     if("1.2.156.10197.1.501".equals(objectIdentifier.getId())){
                                                         algorithmName = "SM2WithSM3";
                                                     }else {
                                                         algorithmName =objectIdentifier.getId();
                                                     }
-
                                                 }
-                                                resultVo.setSignatureAlgorithm(algorithmName);
+                                                resultVo.setSignature(algorithmName);
                                                 // System.out.println(objectIdentifier + "->algorithmName:" + algorithmName);
                                             } else if (primitive instanceof DLSet) {
+                                                /*
+                                                 *如果解析到DLSet就持续解析
+                                                 *直到这个seq里的所有DLSet解析完毕
+                                                 */
                                                 while ( primitive instanceof DLSet  ) {
                                                     DLSet set = (DLSet) primitive;
                                                     for (ASN1Encodable asn1Encodable : set) {
@@ -237,6 +272,7 @@ public class CertPaser {
                                                                             value = (DERIA5String) primitive;
                                                                             // System.out.println(objectIdentifier.getId() + "->" + name + ":" + value);
                                                                         }
+                                                                        //每解析一条就放到stringBuild里面
                                                                         sb.append(name).append(":").append(value);
                                                                         sb.append(",");
                                                                     }
@@ -244,32 +280,49 @@ public class CertPaser {
                                                             }
                                                         }
                                                     }
+                                                    //判断seq里是否有set
                                                     if((encodable3 = parser3.readObject()) != null){
                                                         primitive=encodable3.toASN1Primitive();
                                                     }else break;
 
                                                 }
+                                                //去除最后的分隔符
                                                 sb.deleteCharAt(sb.length()-1);
+                                                //统一把信息放到vo里，先放颁发者再放使用者
                                                 if(resultVo.getIssuerSubject()==null){
                                                     resultVo.setIssuerSubject(sb.toString());
                                                 }else {
                                                     resultVo.setOwnerSubject(sb.toString());
                                                 }
                                             } else if (primitive instanceof ASN1UTCTime) {
+                                                /*
+                                                 *如果解析出ASN1UTCTime
+                                                 * 则说明解析到了开始时间和结束时间
+                                                 * 连续解析
+                                                 */
                                                 ASN1UTCTime time = (ASN1UTCTime) primitive;
                                                 try {
+                                                    //开始时间
                                                     DateFormat df = new SimpleDateFormat("yyy年MM月dd日 HH:mm:ss");
                                                     String date = df.format(time.getDate());
-                                                    if(resultVo.getStartTime()==null){
-                                                        resultVo.setStartTime(date);
-                                                    }else {
-                                                        resultVo.setEndTime(date);
-
+                                                    resultVo.setStartTime(date);
+                                                    //直接解析结束时间
+                                                    if((encodable3 = parser3.readObject()) != null){
+                                                        primitive = encodable3.toASN1Primitive();
+                                                        if (primitive instanceof ASN1UTCTime) {
+                                                            time = (ASN1UTCTime) primitive;
+                                                            date = df.format(time.getDate());
+                                                            resultVo.setEndTime(date);
+                                                        }
                                                     }
                                                 } catch (ParseException e) {
                                                     e.printStackTrace();
                                                 }
                                             }else if (primitive instanceof ASN1Sequence) {
+                                                /*
+                                                 *Sequence->Sequence->Sequence->Sequence
+                                                 * 公钥参数
+                                                 */
                                                 ASN1Sequence sequence5 = (ASN1Sequence) primitive;
                                                 ASN1SequenceParser parser5 = sequence5.parser();
                                                 ASN1Encodable encodable5;
@@ -296,6 +349,10 @@ public class CertPaser {
                                                     }
                                                 }
                                             } else if (primitive instanceof DERBitString ) {
+                                                /*
+                                                 *Sequence->Sequence->Sequence->DERBitString
+                                                 * 公钥
+                                                 */
                                                 DERBitString derBitString = (DERBitString) primitive;
                                                 byte[] pubKeyWitchHead=derBitString.getBytes();
                                                 //去除公钥的压缩头04
@@ -304,17 +361,24 @@ public class CertPaser {
                                             }
                                         }
                                     }else if (primitive instanceof ASN1ObjectIdentifier) {
-                                        //解析签名算法
+                                        /*
+                                         *Sequence->Sequence->ASN1ObjectIdentifier
+                                         *解析签名算法
+                                         */
                                         ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
                                         String algorithmName = x500Namestyle.oidToDisplayName(objectIdentifier);
-                                        //TODO getid -> toString
                                         if (algorithmName == null && "1.2.156.10197.1.501".equals(objectIdentifier.getId())) {
                                             algorithmName = "SM2WithSM3";
+                                            resultVo.setSignatureAlgorithm(algorithmName);
                                         }
                                         // System.out.println(objectIdentifier + "->sigAlgorithmName:" + algorithmName);
                                     }
                                 }
                             } else if (primitive instanceof DERBitString) {
+                                /*
+                                 *Sequence->DERBitString
+                                 * 解析签名值
+                                 */
                                 //SM2证书的签名值为DERBitString{ASN1Sequence{ASN1Integer r,ASN1Integer s}}
                                 DERBitString derBitString = (DERBitString) primitive;
                                 byte[] seqBytes=derBitString.getBytes();
@@ -343,7 +407,7 @@ public class CertPaser {
                                             }
                                         }
                                     }
-                                    resultVo.setSignature(signature);
+                                    resultVo.setSignatureValue(signature);
                                     // System.out.println("签名值："+Hex.toHexString(signature));
                                 }
                             }

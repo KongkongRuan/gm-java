@@ -8,7 +8,7 @@ public class CertParseVo {
     //序列号
     private byte[] serial;
     //签名算法
-    private String signatureAlgorithm;
+    private String signature;
     //颁发者信息
     private  String issuerSubject;
     //有效期开始时间
@@ -29,8 +29,10 @@ public class CertParseVo {
     private  byte[] pubKey;
     //公钥参数
     private String publicKeyInfo;
+    //证书签发机构签发该证书所使用的密码算法的标识符
+    private String signatureAlgorithm;
     //签名值
-    private  byte[] signature;
+    private  byte[] signatureValue;
     //SHA1 指纹
     private byte[] SHA1Thumbprint;
 
@@ -139,12 +141,20 @@ public class CertParseVo {
         this.pubKey = pubKey;
     }
 
-    public byte[] getSignature() {
+    public String getSignature() {
         return signature;
     }
 
-    public void setSignature(byte[] signature) {
+    public void setSignature(String signature) {
         this.signature = signature;
+    }
+
+    public byte[] getSignatureValue() {
+        return signatureValue;
+    }
+
+    public void setSignatureValue(byte[] signatureValue) {
+        this.signatureValue = signatureValue;
     }
 
     public byte[] getSHA1Thumbprint() {
@@ -155,12 +165,13 @@ public class CertParseVo {
         this.SHA1Thumbprint = SHA1Thumbprint;
     }
 
+
     @Override
     public String toString() {
         return "CertParseVo{" +
                 "version='" + version + '\'' +
                 ", serial=" + Hex.toHexString(serial) +
-                ", signatureAlgorithm='" + signatureAlgorithm + '\'' +
+                ", signature='" + signature + '\'' +
                 ", issuerSubject='" + issuerSubject + '\'' +
                 ", startTime='" + startTime + '\'' +
                 ", endTime='" + endTime + '\'' +
@@ -169,9 +180,10 @@ public class CertParseVo {
                 ", sigMaxLength=" + sigMaxLength +
                 ", keyUsage='" + keyUsage + '\'' +
                 ", tbsCert=" + Hex.toHexString(tbsCert) +
-                ", pubKey=" + Hex.toHexString(pubKey) +
                 ", publicKeyInfo='" + publicKeyInfo + '\'' +
-                ", signature=" + Hex.toHexString(signature) +
+                ", pubKey=" + Hex.toHexString(pubKey) +
+                ", signatureAlgorithm='" + signatureAlgorithm + '\'' +
+                ", signatureValue=" + Hex.toHexString(signatureValue) +
                 ", SHA1Thumbprint=" + Hex.toHexString(SHA1Thumbprint) +
                 '}';
     }
