@@ -2,6 +2,9 @@ package com.yxj.gm.util;
 
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
+import org.bouncycastle.asn1.x500.X500NameStyle;
+import org.bouncycastle.asn1.x500.style.BCStyle;
+import org.bouncycastle.asn1.x500.style.RFC4519Style;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.Certificate;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -13,9 +16,13 @@ import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.math.ec.ECCurve;
 import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.util.BigIntegers;
+import sun.security.mscapi.SunMSCAPI;
+import sun.security.rsa.SunRsaSignEntries;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.HashMap;
+import java.util.Map;
 
 public class X509Util {
 
@@ -95,6 +102,67 @@ public class X509Util {
         }
         sb.deleteCharAt(sb.length()-1);
         return sb.toString();
+    }
+    //oid解析
+    public static String oidToDisplayName(ASN1ObjectIdentifier oid){
+        X500NameStyle rFC4519Style = RFC4519Style.INSTANCE;
+        X500NameStyle bcStyle = BCStyle.INSTANCE;
+        SunMSCAPI sunMSCAPI =new SunMSCAPI();
+        //RSA oidMap
+        HashMap<Object,Object> sunRsaSignEntriesMap = new HashMap<>();
+        SunRsaSignEntries.putEntries(sunRsaSignEntriesMap);
+        //EC oidMap
+        Map<String,String> ecOidMap=initECOid();
+        //GM oidMap
+        Map<String, String> gmOidMap = initGMOid();
+        //先用BC解析
+        String temp=bcStyle.oidToDisplayName(oid);
+        if(temp!=null){
+            return temp;
+        }
+        //再用RFC4519Style来解析
+        temp=rFC4519Style.oidToDisplayName(oid);
+        if(temp!=null){
+            return temp;
+        }
+        //再用sunRsaSignEntriesMap解析
+        Object o=sunRsaSignEntriesMap.get("Alg.Alias.Signature."+oid.getId());
+        if(o!=null){
+            return o.toString();
+        }
+        //如果全部查不到再去SunMSCAPI解析
+         o = sunMSCAPI.get("Alg.Alias.Signature.OID." + oid.getId());
+        if(o!=null){
+            return o.toString();
+        }
+        //ECC解析
+        temp=ecOidMap.get(oid.getId());
+        if(temp!=null){
+            return temp;
+        }
+        //添加国密oid
+        temp=gmOidMap.get(oid.getId());
+        if(temp!=null){
+            return temp;
+        }
+        //如果是null则返回oid字符串
+        return oid.getId();
+    }
+    private static Map<String,String> initGMOid(){
+        HashMap<String,String> gmOidMap = new HashMap<>();
+        gmOidMap.put("1.2.156.10197.1.501","SM3WithSM2Encryption");
+        gmOidMap.put("1.2.156.10197.1.301","SM2椭圆曲线公钥密码算法");
+        return gmOidMap;
+    }
+    private static HashMap<String,String> initECOid(){
+        HashMap<String,String> map = new HashMap<>();
+        map.put("1.2.840.10045.4.1", "SHA1withECDSA");
+        map.put("1.2.840.10045.4.3.1", "SHA224withECDSA");
+        map.put("1.2.840.10045.4.3.2", "SHA256withECDSA");
+        map.put(".2.840.10045.4.3.3", "SHA384withECDSA");
+        map.put("1.2.840.10045.4.3.4", "SHA512withECDSA");
+        map.put("1.2.840.10045.2.1", "EC");
+        return map;
     }
 }
 

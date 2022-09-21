@@ -214,14 +214,7 @@ public class CertPaser {
                                             if (primitive instanceof ASN1ObjectIdentifier) {
                                                 //证书结构体内的签名算法
                                                 ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
-                                                String algorithmName = x500Namestyle.oidToDisplayName(objectIdentifier);
-                                                if (algorithmName == null) {
-                                                    if("1.2.156.10197.1.501".equals(objectIdentifier.getId())){
-                                                        algorithmName = "SM2WithSM3";
-                                                    }else {
-                                                        algorithmName =objectIdentifier.getId();
-                                                    }
-                                                }
+                                                String algorithmName = X509Util.oidToDisplayName(objectIdentifier);
                                                 resultVo.setSignature(algorithmName);
                                                 // System.out.println(objectIdentifier + "->algorithmName:" + algorithmName);
                                             } else if (primitive instanceof DLSet) {
@@ -241,10 +234,7 @@ public class CertPaser {
                                                                 primitive = encodable4.toASN1Primitive();
                                                                 if (primitive instanceof ASN1ObjectIdentifier) {
                                                                     ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
-                                                                    String name = x500Namestyle.oidToDisplayName(objectIdentifier);
-                                                                    if (name == null && ("1.2.840.113549.1.9.1").equals(objectIdentifier.getId())) {
-                                                                        name = "e";
-                                                                    }
+                                                                    String name = X509Util.oidToDisplayName(objectIdentifier);
 
                                                                     if ((encodable4 = parser4.readObject()) != null) {
                                                                         primitive = encodable4.toASN1Primitive();
@@ -317,14 +307,8 @@ public class CertPaser {
                                                     primitive = encodable5.toASN1Primitive();
                                                     if (primitive instanceof ASN1ObjectIdentifier) {
                                                         ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
-                                                        String name = x500Namestyle.oidToDisplayName(objectIdentifier);
-                                                        if (name == null) {
-                                                            if(("1.2.840.10045.2.1").equals(objectIdentifier.getId())){
-                                                                name = "ECC公钥参数";
-                                                            }else {
-                                                                name= objectIdentifier.getId();
-                                                            }
-                                                        }
+                                                        String name = X509Util.oidToDisplayName(objectIdentifier);
+
                                                         if ((encodable5 = parser5.readObject()) != null) {
                                                             primitive = encodable5.toASN1Primitive();
                                                             if (primitive instanceof ASN1ObjectIdentifier) {
@@ -359,12 +343,7 @@ public class CertPaser {
                                          *解析签名算法
                                          */
                                         ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
-                                        String algorithmName = x500Namestyle.oidToDisplayName(objectIdentifier);
-                                        if (algorithmName == null && "1.2.156.10197.1.501".equals(objectIdentifier.getId())) {
-                                            algorithmName = "SM2WithSM3";
-                                        }else {
-                                            algorithmName=objectIdentifier.getId();
-                                        }
+                                        String algorithmName = X509Util.oidToDisplayName(objectIdentifier);
                                         signatureAlgorithmOid=objectIdentifier.getId();
                                         resultVo.setSignatureAlgorithm(algorithmName);
                                         // System.out.println(objectIdentifier + "->sigAlgorithmName:" + algorithmName);
