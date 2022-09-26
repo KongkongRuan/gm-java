@@ -14,7 +14,7 @@ import static com.yxj.gm.enums.ModeEnum.CTR;
  *      默认为CTR模式
  *      PKCS7填充
  */
-public class SM4 {
+public class SM4Cipher {
 
     /**Mode
      * 0 ECB
@@ -47,16 +47,16 @@ public class SM4 {
         Padding = padding;
     }
 
-    public SM4(){}
+    public SM4Cipher(){}
 
-    public SM4(PaddingEnum padding,ModeEnum mode){
+    public SM4Cipher(PaddingEnum padding, ModeEnum mode){
         this.Padding=padding;
         this.Mode=mode;
     }
-    public SM4(PaddingEnum padding){
+    public SM4Cipher(PaddingEnum padding){
         this.Padding=padding;
     }
-    public SM4(ModeEnum mode){
+    public SM4Cipher(ModeEnum mode){
         this.Mode=mode;
     }
     public byte[] cipherEncrypt(byte [] key,byte[] ming,byte[] iv){

@@ -3,7 +3,7 @@ import com.yxj.gm.util.DataConvertUtil;
 
 import java.nio.ByteBuffer;
 
-public class SM3 {
+public class SM3Digest {
 
     private static final byte[] IVbyte =new byte[]{(byte) 0x73,(byte) 0x80,(byte) 0x16,(byte) 0x6f,(byte) 0x49,(byte) 0x14,(byte) 0xb2,(byte) 0xb9,(byte) 0x17
             ,(byte) 0x24,(byte) 0x42,(byte) 0xd7,(byte) 0xda,(byte) 0x8a,(byte) 0x06,(byte) 0x00,(byte) 0xa9,(byte) 0x6f,(byte) 0x30,(byte) 0xbc
@@ -190,6 +190,10 @@ public class SM3 {
         }
     }
     public byte[] doFinal(){
+        return iteration();
+    }
+    public byte[] doFinal(byte[] msg){
+        msgAll=msg;
         return iteration();
     }
 

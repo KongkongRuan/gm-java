@@ -1,7 +1,7 @@
 package com.yxj.gm.SM2.Signature;
 
 
-import com.yxj.gm.SM3.SM3;
+import com.yxj.gm.SM3.SM3Digest;
 import com.yxj.gm.constant.SM2Constant;
 import com.yxj.gm.util.DataConvertUtil;
 import com.yxj.gm.util.SM2Util;
@@ -42,10 +42,10 @@ public class SM2Signature {
             System.arraycopy(zaByte, 0, ZaMsg, index, zaByte.length);
             index += zaByte.length;
         }
-        SM3 sm3 = new SM3();
-        sm3.update(ZaMsg);
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(ZaMsg);
 
-        Za = sm3.doFinal();
+        Za = sm3Digest.doFinal();
 
     }
 
@@ -53,9 +53,9 @@ public class SM2Signature {
         byte[] M_= new byte[Za.length+msg.length];
         System.arraycopy(Za,0,M_,0,Za.length);
         System.arraycopy(msg,0,M_,Za.length,msg.length);
-        SM3 sm3 = new SM3();
-        sm3.update(M_);
-        byte[] e = sm3.doFinal();
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(M_);
+        byte[] e = sm3Digest.doFinal();
         //转biginteger之前补0
         e=DataConvertUtil.oneAdd(e);
         BigInteger bigE = new BigInteger(e);
@@ -112,9 +112,9 @@ public class SM2Signature {
         System.arraycopy(Za,0,M_,0,Za.length);
         System.arraycopy(M,0,M_,Za.length,M.length);
 
-        SM3 sm3 = new SM3();
-        sm3.update(M_);
-        byte[] e = sm3.doFinal();
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(M_);
+        byte[] e = sm3Digest.doFinal();
         BigInteger bigE = new BigInteger(DataConvertUtil.oneAdd(e));
         BigInteger bigR = new BigInteger(radd);
         BigInteger bigS = new BigInteger(sadd);

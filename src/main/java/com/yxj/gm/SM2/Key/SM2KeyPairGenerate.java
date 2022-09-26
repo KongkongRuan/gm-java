@@ -6,7 +6,7 @@ import com.yxj.gm.util.SM2Util;
 
 import java.security.KeyPair;
 
-public class SM2 {
+public class SM2KeyPairGenerate {
 
 
 

@@ -1,11 +1,10 @@
 package com.yxj.gm.SM2.Cipher;
 
 
-import com.yxj.gm.SM3.SM3;
+import com.yxj.gm.SM3.SM3Digest;
 import com.yxj.gm.constant.SM2Constant;
 import com.yxj.gm.util.DataConvertUtil;
 import com.yxj.gm.util.SM2Util;
-import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
@@ -40,9 +39,9 @@ public class SM2Cipher {
         System.arraycopy(bytes[0],0,x2My2,0,bytes[0].length);
         System.arraycopy(M,0,x2My2,bytes[0].length,M.length);
         System.arraycopy(bytes[1],0,x2My2,bytes[0].length+M.length,bytes[1].length);
-        SM3 sm3 = new SM3();
-        sm3.update(x2My2);
-        byte[] C3=sm3.doFinal();
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(x2My2);
+        byte[] C3= sm3Digest.doFinal();
         byte[] MI = new byte[C1.length+C2.length+C3.length];
         System.arraycopy(C1,0,MI,0,C1.length);
         System.arraycopy(C3,0,MI,C1.length,C3.length);
@@ -83,9 +82,9 @@ public class SM2Cipher {
         System.arraycopy(bytes[0],0,x2My2,0,bytes[0].length);
         System.arraycopy(ming,0,x2My2,bytes[0].length,ming.length);
         System.arraycopy(bytes[1],0,x2My2,bytes[0].length+ming.length,bytes[1].length);
-        SM3 sm3 = new SM3();
-        sm3.update(x2My2);
-        byte[] u=sm3.doFinal();
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(x2My2);
+        byte[] u= sm3Digest.doFinal();
         if(new BigInteger(u).compareTo(new BigInteger(C3))!=0){
             throw new RuntimeException("C3验证未通过");
         }
@@ -143,9 +142,9 @@ public class SM2Cipher {
         System.arraycopy(z,0,connect,0,z.length);
         System.arraycopy(ctPadd,0,connect,z.length,ctPadd.length);
         //Hash256
-        SM3 sm3 = new SM3();
-        sm3.update(connect);
-        return sm3.doFinal();
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(connect);
+        return sm3Digest.doFinal();
     }
 
 
