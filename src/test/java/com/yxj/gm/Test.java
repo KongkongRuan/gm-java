@@ -1,7 +1,7 @@
 package com.yxj.gm;
 
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
-import com.yxj.gm.SM2.Key.SM2;
+import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM2.Signature.SM2Signature;
 import org.bouncycastle.util.encoders.Hex;
 import java.security.KeyPair;
@@ -10,7 +10,7 @@ public class Test {
         System.out.println("1232");
         String msg = "message digest";
         System.out.println("密钥生成");
-        KeyPair keyPair = SM2.generateSM2KeyPair();
+        KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
         System.out.println("公钥："+Hex.toHexString(keyPair.getPublic().getEncoded()));
         System.out.println("私钥："+Hex.toHexString(keyPair.getPrivate().getEncoded()));
         System.out.println("签名验签测试");

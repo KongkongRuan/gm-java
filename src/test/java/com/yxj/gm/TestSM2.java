@@ -1,6 +1,6 @@
 package com.yxj.gm;
 
-import com.yxj.gm.SM2.Key.SM2;
+import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 
 import java.security.KeyPair;
 
@@ -89,7 +89,7 @@ public class TestSM2 {
 
         for(int i=0;i<10;i++){
 //            System.out.println(i);
-            KeyPair keyPair = SM2.generateSM2KeyPair();
+            KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
 //            byte[] sm2s = useKey.cipherEncryptKeyPair("com.yxj.gm.sm2.SM2", keyPair.getPublic(), msg.getBytes());
 //            byte[] sm2s1 = useKey.cipherDecrypeKeyPair("com.yxj.gm.sm2.SM2", keyPair.getPrivate(), sm2s);
 
