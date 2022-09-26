@@ -157,6 +157,9 @@ public class SM2Signature {
         System.arraycopy(bytes[1],0,temp,bytes[0].length,bytes[1].length);
         return temp;
     }
+    public byte[] signatureByHSM(byte[] msg,int index){
+        return new byte[0];
+    }
     public  boolean verify(byte[] msg,byte[] id,byte[] signature,byte[] pubKey){
         initXaYa(pubKey);
         initZa(id);
