@@ -134,9 +134,10 @@ public class CertPaser {
                                                                         DEROctetString derOctetString=(DEROctetString)primitive;
                                                                         byte[] octets = derOctetString.getOctets();
                                                                         ASN1Primitive asn1Primitive;
-                                                                        try (ASN1InputStream asn1InputStream = new ASN1InputStream(octets)) {
+//                                                                        try (ASN1InputStream asn1InputStream = new ASN1InputStream(octets)) {
+                                                                        ASN1InputStream asn1InputStream = new ASN1InputStream(octets);
                                                                             asn1Primitive = asn1InputStream.readObject();
-                                                                        }
+//                                                                        }
                                                                         if(asn1Primitive instanceof ASN1Sequence){
                                                                             ASN1Sequence sequence4=(ASN1Sequence)asn1Primitive;
                                                                             ASN1SequenceParser parser4 = sequence4.parser();
@@ -178,9 +179,10 @@ public class CertPaser {
                                                                         DEROctetString derOctetString=(DEROctetString)primitive;
                                                                         byte[] octets = derOctetString.getOctets();
                                                                         ASN1Primitive asn1Primitive;
-                                                                        try (ASN1InputStream asn1InputStream = new ASN1InputStream(octets)) {
+//                                                                        try (ASN1InputStream asn1InputStream = new ASN1InputStream(octets)) {
+                                                                            ASN1InputStream asn1InputStream = new ASN1InputStream(octets);
                                                                             asn1Primitive = asn1InputStream.readObject();
-                                                                        }
+//                                                                        }
                                                                         if(asn1Primitive instanceof DERBitString){
                                                                             DERBitString derBitString = (DERBitString) asn1Primitive;
                                                                             String keyUsage = X509Util.paserKeyUsage(derBitString);
@@ -361,9 +363,10 @@ public class CertPaser {
 
                                     byte[] seqBytes=derBitString.getBytes();
                                     ASN1Primitive asn1Primitive;
-                                    try (ASN1InputStream asn1InputStream = new ASN1InputStream(seqBytes)) {
+//                                    try (ASN1InputStream asn1InputStream = new ASN1InputStream(seqBytes)) {
+                                        ASN1InputStream asn1InputStream = new ASN1InputStream(seqBytes);
                                         asn1Primitive = asn1InputStream.readObject();
-                                    }
+//                                    }
 
                                     if (asn1Primitive instanceof ASN1Sequence) {
                                         ASN1Sequence sequence1 = (ASN1Sequence)asn1Primitive;

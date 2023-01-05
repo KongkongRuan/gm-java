@@ -5,7 +5,10 @@ import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM2.Signature.SM2Signature;
 import com.yxj.gm.SM3.SM3Digest;
 import com.yxj.gm.SM4.SM4Cipher;
+import com.yxj.gm.cert.SM2CertGenerator;
 import com.yxj.gm.enums.ModeEnum;
+import com.yxj.gm.util.FileUtils;
+import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.security.KeyPair;
@@ -26,6 +29,31 @@ public class Test {
         byte[] signature1 = signature.signature(msg.getBytes(), null, keyPair.getPrivate().getEncoded());
         boolean b = signature.verify(msg.getBytes(), null, signature1, keyPair.getPublic().getEncoded());
         System.out.println("SM2验签结果："+b);
+        //制作SM2证书
+        //ca证书密钥
+        KeyPair caKeyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+        //终端证书密钥
+        KeyPair equipKeyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+
+        SM2CertGenerator sm2CertGenerator = new SM2CertGenerator();
+        String DN_CA = "CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US";
+        String DN_CHILD = "CN=DD,OU=DD,O=DD,L=Linton,ST=Utah,C=CN";
+
+        byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded(),false,0);
+        try {
+            FileUtils.writeFile("D:/certtest/java-ca-3.cer",rootCert);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, caKeyPair.getPrivate().getEncoded(), equipKeyPair.getPublic().getEncoded(),false,0);
+        try {
+            FileUtils.writeFile("D:/certtest/java-ownerCert-3.cer",ownerCert);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        //使用HSM签名制作SM2证书
+        int hsmSigPriIndex=0;
+//        rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded(),true,hsmSigPriIndex);
         //SM3摘要计算
         SM3Digest sm3Digest = new SM3Digest();
         sm3Digest.update(msg.getBytes());

@@ -1,6 +1,6 @@
 package com.yxj.gm;
 
-import com.kms.jca.UseKey;
+
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 
@@ -54,7 +54,7 @@ public class TestMultithreading {
     static class WorkerThread implements Runnable{
         CountDownLatch c;
         WorkerThread(){};
-        UseKey useKey = new UseKey();
+
         WorkerThread(CountDownLatch c){
             this.c=c;
         }

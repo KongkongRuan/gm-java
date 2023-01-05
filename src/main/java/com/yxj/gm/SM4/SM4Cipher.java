@@ -82,6 +82,10 @@ public class SM4Cipher {
         return result;
     }
     public byte[] cipherDecrypt(byte [] key,byte[] mi,byte[] iv){
+        //iv设置默认值
+        if(iv==null){
+            iv="1234567812345678".getBytes();
+        }
         //生成轮密钥
         byte[][] rks = ext_key_L(key);
 
