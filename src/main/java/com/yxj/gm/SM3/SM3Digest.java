@@ -46,11 +46,15 @@ public class SM3Digest {
     //1.填充
     private static byte[] append(byte[] m){
         //System.out.println("ivlen:"+IVbyte.length);
-        long l = m.length* 8L;
+        long l = m.length* 8L; //448
         //System.out.println("l:"+l);
         //计算k
-        long k = 448-((l+1)%512);
-        long length = (l+1+k+64)/8;
+        long k = 448-((l+1)%512); //-1
+        //K不为0
+        if(k<0){
+            k=k+512;
+        }
+        long length = (l+1+k+64)/8; //64
         //System.out.println("length:"+length);
         byte[] append = new byte[(int)length];
         int mLen = m.length;
