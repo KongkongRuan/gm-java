@@ -18,7 +18,7 @@ public class CertParseVo {
     //使用者信息
     private  String ownerSubject;
     //是否为CA证书
-    private  boolean isCa;
+    private  Boolean isCa;
     //最大签发长度
     private  int sigMaxLength;
     //密钥用途

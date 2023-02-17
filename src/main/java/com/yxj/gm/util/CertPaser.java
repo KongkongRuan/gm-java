@@ -120,12 +120,16 @@ public class CertPaser {
                                                             ASN1ObjectIdentifier objectIdentifier = (ASN1ObjectIdentifier) primitive;
                                                             //基本约束
                                                             if(objectIdentifier.getId().equals("2.5.29.19")){
-                                                                if((encodable3=parser3.readObject())!=null){
-                                                                    primitive=encodable3.toASN1Primitive();
-                                                                    if(primitive instanceof ASN1Boolean){
-
-                                                                    }
-                                                                }
+//                                                                if((encodable3=parser3.readObject())!=null){
+//                                                                    primitive=encodable3.toASN1Primitive();
+//                                                                    if(primitive instanceof ASN1Boolean){
+//                                                                        //TODO
+//                                                                    }
+//                                                                    if(primitive instanceof DEROctetString){
+//                                                                        DEROctetString derOctetString=(DEROctetString)primitive;
+////                                                                        derOctetString.toString()
+//                                                                    }
+//                                                                }
                                                                 //如果是基本约束项则继续解析
                                                                 if((encodable3=parser3.readObject())!=null){
                                                                     primitive=encodable3.toASN1Primitive();
