@@ -11,7 +11,7 @@ public class ApplyKeyReq extends ASN1Object {
     private AlgorithmIdentifier retSymAlg;
     private AlgorithmIdentifier retHashAlg;
     private AppUserInfo appUserInfo;
-
+    public static final int tagNo = 0;
 
 
     public static ApplyKeyReq getInstance(ASN1TaggedObject obj, boolean explicit)

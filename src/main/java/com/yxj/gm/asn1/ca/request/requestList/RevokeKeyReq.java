@@ -5,6 +5,7 @@ import org.bouncycastle.asn1.*;
 public class RevokeKeyReq  extends ASN1Object {
 
     private ASN1Integer userCertNo;
+    public static final int tagNo = 2;
 
     public static RevokeKeyReq getInstance(ASN1TaggedObject obj, boolean explicit)
     {

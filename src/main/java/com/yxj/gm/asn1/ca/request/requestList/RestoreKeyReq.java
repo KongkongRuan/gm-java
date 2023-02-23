@@ -9,6 +9,7 @@ public class RestoreKeyReq extends ASN1Object {
     private AlgorithmIdentifier retSymAlg;
     private AlgorithmIdentifier retHashAlg;
     private ASN1Integer userCertNo;
+    public static final int tagNo = 1;
 
     private SubjectPublicKeyInfo userPubKey;
 

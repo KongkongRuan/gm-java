@@ -150,8 +150,23 @@ public class X509Util {
     }
     private static Map<String,String> initGMOid(){
         HashMap<String,String> gmOidMap = new HashMap<>();
-        gmOidMap.put("1.2.156.10197.1.501","SM3WithSM2Encryption");
+        gmOidMap.put("1.2.156.10197.1.104.1","SM4_ECB");
+        gmOidMap.put("1.2.156.10197.1.104.2","SM4_CBC");
+        gmOidMap.put("1.2.156.10197.1.104.3","SM4_OFB128");
+        gmOidMap.put("1.2.156.10197.1.104.4","SM4_CFB128");
+        gmOidMap.put("1.2.156.10197.1.104.5","SM4_CFB1");
+        gmOidMap.put("1.2.156.10197.1.104.6","SM4_CFB8");
+        gmOidMap.put("1.2.156.10197.1.104.7","SM4_CTR");
+        gmOidMap.put("1.2.156.10197.1.104.8","SM4_GCM");
+        gmOidMap.put("1.2.156.10197.1.104.9","SM4_CCM");
+        gmOidMap.put("1.2.156.10197.1.104.10","SM4_XTS");
+        gmOidMap.put("1.2.156.10197.1.104.11","SM4_WRAP");
+        gmOidMap.put("1.2.156.10197.1.104.12","SM4_WRAP_PAD");
+        gmOidMap.put("1.2.156.10197.1.104.100","SM4_OCB");
+        gmOidMap.put("1.2.156.10197.1.201","SM5");
         gmOidMap.put("1.2.156.10197.1.301","SM2椭圆曲线公钥密码算法");
+        gmOidMap.put("1.2.156.10197.1.401","SM3");
+        gmOidMap.put("1.2.156.10197.1.501","SM3WithSM2Signature");
         return gmOidMap;
     }
     private static HashMap<String,String> initECOid(){
@@ -161,7 +176,7 @@ public class X509Util {
         map.put("1.2.840.10045.4.3.2", "SHA256withECDSA");
         map.put(".2.840.10045.4.3.3", "SHA384withECDSA");
         map.put("1.2.840.10045.4.3.4", "SHA512withECDSA");
-        map.put("1.2.840.10045.2.1", "EC");
+        map.put("1.2.840.10045.2.1", "ecPublicKey");
         return map;
     }
 }

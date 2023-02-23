@@ -36,9 +36,9 @@ public class AppUserInfo extends ASN1Object {
             notBefore = ASN1GeneralizedTime.getInstance(sequence.getObjectAt(2));
             notAfter = ASN1GeneralizedTime.getInstance(sequence.getObjectAt(3));
 
-            int extras = sequence.size() - 4 ;
-            while (extras>0){
-                ASN1TaggedObject extra=(ASN1TaggedObject)sequence.getObjectAt(4+extras-1);
+            int count =1;
+            while (3+count<sequence.size()){
+                ASN1TaggedObject extra=(ASN1TaggedObject)sequence.getObjectAt(3+count);
                 switch (extra.getTagNo()){
                     case 0:
                         userName=ASN1OctetString.getInstance(extra,true);
@@ -52,7 +52,7 @@ public class AppUserInfo extends ASN1Object {
                     default:
                         throw new IllegalArgumentException("Unknown tag encountered in structure: " + extra.getTagNo());
                 }
-                extras--;
+                count++;
             }
     }
 
