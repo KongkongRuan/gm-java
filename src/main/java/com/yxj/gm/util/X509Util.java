@@ -17,7 +17,6 @@ import org.bouncycastle.math.ec.ECCurve;
 import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.util.BigIntegers;
 import sun.security.mscapi.SunMSCAPI;
-import sun.security.rsa.SunRsaSignEntries;
 
 import java.io.IOException;
 import java.math.BigInteger;
