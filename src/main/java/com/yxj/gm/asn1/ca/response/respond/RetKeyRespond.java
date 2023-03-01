@@ -23,6 +23,12 @@ public class RetKeyRespond  extends ASN1Object {
         }
     }
 
+    public RetKeyRespond(ASN1Integer userCertNo,SubjectPublicKeyInfo retPubKey,SignedAndEnvelopedData retPriKey){
+        this.userCertNo=userCertNo;
+        this.retPubKey=retPubKey;
+        this.retPriKey=retPriKey;
+    }
+
     public RetKeyRespond(ASN1Sequence sequence) {
         if (sequence.size() == 3) {
             userCertNo = ASN1Integer.getInstance(sequence.getObjectAt(0));

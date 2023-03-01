@@ -2,17 +2,17 @@ package com.yxj.gm.asn1.ca.response.respond.envelopeddata;
 
 import com.yxj.gm.asn1.ca.set.*;
 import org.bouncycastle.asn1.*;
-import org.bouncycastle.asn1.x509.Certificate;
+
+import java.math.BigInteger;
 
 public class SignedAndEnvelopedData extends ASN1Object {
     private ASN1Integer version;
     private RecipientInfos recipientInfos;
     private DigestAlgorithmIdentifiers digestAlgorithms;
     private EncryptedContentInfo encryptedContentInfo;
-    private ExtendedCertificatesAndCertificates certificates; //OPTIONAL
-    private CertificateRevocationLists crls; //OPTIONAL
+    private ExtendedCertificatesAndCertificates certificates; //OPTIONAL 0
+    private CertificateRevocationLists crls; //OPTIONAL 1
     private SignerInfos signerInfos;
-
 
     public static SignedAndEnvelopedData getInstance(ASN1TaggedObject obj, boolean explicit)
     {
@@ -27,6 +27,13 @@ public class SignedAndEnvelopedData extends ASN1Object {
         }
     }
 
+    public SignedAndEnvelopedData(RecipientInfos recipientInfos,DigestAlgorithmIdentifiers digestAlgorithms,EncryptedContentInfo encryptedContentInfo,SignerInfos signerInfos){
+        this.version = new ASN1Integer(new BigInteger("1"));
+        this.recipientInfos=recipientInfos;
+        this.digestAlgorithms=digestAlgorithms;
+        this.encryptedContentInfo=encryptedContentInfo;
+        this.signerInfos=signerInfos;
+    }
     public SignedAndEnvelopedData(ASN1Sequence sequence) {
         version = ASN1Integer.getInstance(sequence.getObjectAt(0));
         recipientInfos = RecipientInfos.getInstance(sequence.getObjectAt(1));

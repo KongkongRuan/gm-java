@@ -9,7 +9,12 @@ public class EntName  extends ASN1Object {
     private final GeneralName entName;
     private final ASN1OctetString entPubKeyHash;
     private final ASN1Integer serialNumber;
-
+    public EntName(AlgorithmIdentifier hashAlgorithm,GeneralName entName,ASN1OctetString entPubKeyHash,ASN1Integer serialNumber) {
+        this.hashAlgorithm=hashAlgorithm;
+        this.entName=entName;
+        this.entPubKeyHash=entPubKeyHash;
+        this.serialNumber=serialNumber;
+    }
     public static EntName getInstance(ASN1TaggedObject obj, boolean explicit)
     {
         return getInstance(ASN1Sequence.getInstance(obj, explicit));

@@ -10,10 +10,10 @@ public class SignerInfo  extends ASN1Object {
     private ASN1Integer version;
     private IssuerAndSerialNumber issuerAndSerialNumber;
     private AlgorithmIdentifier digestAlgorithm;
-    private ASN1Set            authenticatedAttributes;
+    private ASN1Set            authenticatedAttributes;//IMPLICIT  OPTIONAL 0
     private AlgorithmIdentifier digestEncryptionAlgorithm;
     private ASN1OctetString encryptedDigest;
-    private ASN1Set         unauthenticatedAttributes;
+    private ASN1Set         unauthenticatedAttributes;//IMPLICIT OPTIONAL 1
     /**
      * Return a SignerInfo object from the given input
      * <p>
@@ -66,7 +66,19 @@ public class SignerInfo  extends ASN1Object {
         this.encryptedDigest = encryptedDigest;
     }
 
+    public SignerInfo(
+            IssuerAndSerialNumber issuerAndSerialNumber,
+            AlgorithmIdentifier     digestAlgorithm,
+            AlgorithmIdentifier     digestEncryptionAlgorithm,
+            ASN1OctetString         encryptedDigest)
+    {
 
+        this.version = new ASN1Integer(1);
+        this.issuerAndSerialNumber=issuerAndSerialNumber;
+        this.digestAlgorithm = digestAlgorithm;
+        this.digestEncryptionAlgorithm = digestEncryptionAlgorithm;
+        this.encryptedDigest = encryptedDigest;
+    }
 
     private SignerInfo(
             ASN1Sequence seq)

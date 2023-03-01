@@ -4,13 +4,21 @@ import com.yxj.gm.asn1.ca.request.EntName;
 import com.yxj.gm.asn1.ca.response.respond.Respond;
 import org.bouncycastle.asn1.*;
 
+import java.math.BigInteger;
+
 public class KSRespond  extends ASN1Object {
     ASN1Integer version;
     EntName kmName;
     Respond respondList;
     ASN1GeneralizedTime respondTime;
     ASN1Integer taskNo;
-
+    public KSRespond(EntName kmName,Respond respondList,ASN1GeneralizedTime respondTime,ASN1Integer taskNo) {
+        this.version=new ASN1Integer(new BigInteger("1"));
+        this.kmName=kmName;
+        this.respondList=respondList;
+        this.respondTime=respondTime;
+        this.taskNo=taskNo;
+    }
 
     public static KSRespond getInstance(ASN1TaggedObject obj, boolean explicit)
     {

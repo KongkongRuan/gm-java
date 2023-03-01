@@ -9,7 +9,11 @@ public class KMRespond extends ASN1Object {
     ASN1OctetString signatureValue;
 
 
-
+    public KMRespond(KSRespond ksRespond,AlgorithmIdentifier signatureAlgorithm,ASN1OctetString signatureValue) {
+        this.ksRespond=ksRespond;
+        this.signatureAlgorithm=signatureAlgorithm;
+        this.signatureValue=signatureValue;
+    }
 
 
     public static KMRespond getInstance(ASN1TaggedObject obj, boolean explicit)

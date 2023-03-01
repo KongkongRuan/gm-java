@@ -6,9 +6,9 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 public class EncryptedContentInfo extends ASN1Object {
     private ASN1ObjectIdentifier contentType;
     private AlgorithmIdentifier contentEncryptionAlgorithm;
-    private ASN1OctetString     encryptedContent;
-    private ASN1OctetString sharedInfo1;
-    private ASN1OctetString sharedInfo2;
+    private ASN1OctetString     encryptedContent; // IMPLICIT OPTIONAL 0
+    private ASN1OctetString sharedInfo1;// IMPLICIT OPTIONAL 1
+    private ASN1OctetString sharedInfo2;//IMPLICIT OPTIONAL 2
 
     public EncryptedContentInfo(
             ASN1ObjectIdentifier contentType,
@@ -20,7 +20,7 @@ public class EncryptedContentInfo extends ASN1Object {
         this.encryptedContent = encryptedContent;
     }
 
-    private EncryptedContentInfo(
+    public EncryptedContentInfo(
             ASN1Sequence seq)
     {
         if (seq.size() < 2)

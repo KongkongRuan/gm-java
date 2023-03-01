@@ -7,6 +7,11 @@ public class IssuerAndSerialNumber extends ASN1Object {
     private X500Name issuer;
     private ASN1Integer serialNumber;
 
+    public IssuerAndSerialNumber(X500Name issuer,ASN1Integer serialNumber) {
+        this.issuer=issuer;
+        this.serialNumber=serialNumber;
+    }
+
     public static IssuerAndSerialNumber getInstance(ASN1TaggedObject obj, boolean explicit)
     {
         return getInstance(ASN1Sequence.getInstance(obj, explicit));
