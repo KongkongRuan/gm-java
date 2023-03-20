@@ -34,6 +34,16 @@ public class SignedAndEnvelopedData extends ASN1Object {
         this.encryptedContentInfo=encryptedContentInfo;
         this.signerInfos=signerInfos;
     }
+
+    public SignedAndEnvelopedData(RecipientInfos recipientInfos,DigestAlgorithmIdentifiers digestAlgorithms,EncryptedContentInfo encryptedContentInfo,ExtendedCertificatesAndCertificates certificates,SignerInfos signerInfos){
+        this.version = new ASN1Integer(new BigInteger("1"));
+        this.recipientInfos=recipientInfos;
+        this.digestAlgorithms=digestAlgorithms;
+        this.encryptedContentInfo=encryptedContentInfo;
+        this.certificates=certificates;
+        this.signerInfos=signerInfos;
+    }
+
     public SignedAndEnvelopedData(ASN1Sequence sequence) {
         version = ASN1Integer.getInstance(sequence.getObjectAt(0));
         recipientInfos = RecipientInfos.getInstance(sequence.getObjectAt(1));

@@ -15,7 +15,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 
-public class CertPaser {
+public class CertResolver {
 
         public static  CertParseVo parseCert(byte[] cert){
             X500NameStyle x500Namestyle = RFC4519Style.INSTANCE;

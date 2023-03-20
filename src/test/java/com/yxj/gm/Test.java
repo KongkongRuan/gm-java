@@ -112,7 +112,7 @@ public class Test {
 
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main3(String[] args) throws IOException {
         byte[] priMingBase64 = FileUtils.readFileToByteArray(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\ca_csr_pri_ming.key"));
         byte[] priMing=Base64.decode(priMingBase64);
         byte[] cert = FileUtils.readFileToByteArray(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\SERIALNUMBER=F30123261097202302160029,OU=CEPRI,O=SGCC,C=CN6324D9DA1E80F0F5.cer"));
@@ -127,6 +127,14 @@ public class Test {
 
         System.out.println(Hex.toHexString(priMing));
 
+    }
+
+    public static void main(String[] args) throws IOException {
+        byte[] cert = FileUtils.readFileToByteArray(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-03\\TestCrt.crt"));
+        byte[] asn1 = FileUtils.pemToASN1ByteArray(cert);
+        FileUtils.writeByteArrayToFile(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-03\\derCert.der"),asn1);
+        String s = FileUtils.ASN1ToPemByteArray(asn1);
+        System.out.println(s);
     }
     public static byte[] geneProtect(){
         UseKey useKey = new UseKey();

@@ -16,6 +16,11 @@
             <version>1.70</version>
         </dependency>
         <dependency>
+            <groupId>com.codahale</groupId>
+            <artifactId>shamir</artifactId>
+            <version>0.7.0</version>
+        </dependency>
+        <dependency>
             <groupId>com.jca</groupId>
             <artifactId>kms</artifactId>
             <version>0.0.1-RELEASE</version>

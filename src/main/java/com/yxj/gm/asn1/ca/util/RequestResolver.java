@@ -10,7 +10,6 @@ import com.yxj.gm.util.FileUtils;
 import com.yxj.gm.util.X509Util;
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.x500.X500Name;
-import org.bouncycastle.asn1.x509.GeneralName;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -101,40 +100,199 @@ public class RequestResolver {
                                         if (primitive instanceof DLTaggedObject) {
                                             DLTaggedObject dlTaggedObject = (DLTaggedObject) primitive;
                                             int tagNo = dlTaggedObject.getTagNo();
-                                            ASN1Object baseObject = dlTaggedObject.getBaseObject();
+                                            //第一个DLTaggedObject是GeneralName
+                                            if(caApplyKeyReq.getEntName()==null&&tagNo==4){
+                                                ASN1Object baseObject = dlTaggedObject.getBaseObject();
+                                                if(baseObject instanceof DLSequence){
+                                                    X500Name x500Name = X500Name.getInstance(baseObject);
+                                                    caApplyKeyReq.setEntName(x500Name.toString());
+//                                                    DLSequence dlSequence=(DLSequence)baseObject;
+//                                                    Iterator<ASN1Encodable> iterator = dlSequence.iterator();
+//                                                    while (iterator.hasNext()){
+//                                                        ASN1Encodable next = iterator.next();
+//                                                        if(next instanceof DLSet){
+//                                                            DLSet dlSet=(DLSet)next;
+//                                                            Iterator<ASN1Encodable> iterator1 = dlSet.iterator();
+//                                                            while (iterator1.hasNext()){
+//                                                                ASN1Encodable next1 = iterator1.next();
+//                                                                System.out.println();
+//
+//                                                            }
+//                                                        }
+//                                                        ASN1Primitive primitive1 = next.toASN1Primitive();
+//                                                    }
+                                                }
+//                                                    X500Name x500Name = new X500Name((DLSequence)baseObject);
+//                                                    caApplyKeyReq.setEntName(x500Name.toString());
+                                            }else  {
+                                                caApplyKeyReq.setApplyType(ApplyTypeEnum.stateOf(tagNo));
+                                                ASN1Object baseObject = dlTaggedObject.getBaseObject();
+                                                if (baseObject instanceof DLSequence) {
+                                                    DLSequence dlSequence=(DLSequence)baseObject;
+                                                    ASN1SequenceParser parser2_1 = dlSequence.parser();
+                                                    ASN1Encodable encodable2_1;
+                                                    while ((encodable2_1 = parser2_1.readObject()) != null) {
+                                                        primitive = encodable2_1.toASN1Primitive();
+                                                        if(tagNo== ApplyKeyReq.tagNo){
+                                                            if (primitive instanceof ASN1Sequence){
+                                                                ASN1Sequence sequence3 = (ASN1Sequence) primitive;
+                                                                ASN1SequenceParser parser3 = sequence3.parser();
+                                                                ASN1Encodable encodable3;
+                                                                while ((encodable3 = parser3.readObject()) != null) {
+                                                                    primitive = encodable3.toASN1Primitive();
+                                                                    if(primitive instanceof ASN1ObjectIdentifier){
+                                                                        ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier) primitive;
+                                                                        String oidDisplayName = X509Util.oidToDisplayName(oid);
+                                                                        if(caApplyKeyReq.getAppKeyType()==null){
+                                                                            caApplyKeyReq.setAppKeyType(oidDisplayName);
+                                                                        }else if(caApplyKeyReq.getRetAsymAlg()==null){
+                                                                            caApplyKeyReq.setRetAsymAlg(oidDisplayName);
+                                                                        }else if(caApplyKeyReq.getRetSymAlg()==null){
+                                                                            caApplyKeyReq.setRetSymAlg(oidDisplayName);
+                                                                        }else if(caApplyKeyReq.getRetHashAlg()==null){
+                                                                            caApplyKeyReq.setRetHashAlg(oidDisplayName);
+                                                                        }
+                                                                    }
+                                                                    //AppUserInfo
+                                                                    if (primitive instanceof ASN1Integer){
+                                                                        ASN1Integer asn1Integer = (ASN1Integer) primitive;
+                                                                        caApplyKeyReq.setUserCertNo(asn1Integer.getValue());
+                                                                    }
+                                                                    if (primitive instanceof ASN1Sequence){
+                                                                        ASN1Sequence sequence4 = (ASN1Sequence) primitive;
+                                                                        ASN1SequenceParser parser4 = sequence4.parser();
+                                                                        ASN1Encodable encodable4;
+                                                                        while ((encodable4 = parser4.readObject()) != null) {
+                                                                            primitive = encodable4.toASN1Primitive();
+                                                                            if (primitive instanceof ASN1Sequence){
+                                                                                ASN1Sequence sequence5 = (ASN1Sequence) primitive;
+                                                                                ASN1SequenceParser parser5 = sequence5.parser();
+                                                                                ASN1Encodable encodable5;
+                                                                                while ((encodable5 = parser5.readObject()) != null) {
+                                                                                    primitive = encodable5.toASN1Primitive();
+                                                                                    if(primitive instanceof ASN1ObjectIdentifier){
+                                                                                        ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier) primitive;
+                                                                                        String oidDisplayName = X509Util.oidToDisplayName(oid);
+                                                                                        if(caApplyKeyReq.getUserPubKeyType()==null){
+                                                                                            caApplyKeyReq.setUserPubKeyType(oidDisplayName);
+                                                                                        }else {
+                                                                                            caApplyKeyReq.setUserPubKeyType(caApplyKeyReq.getUserPubKeyType()+"-"+oidDisplayName);
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                            if(primitive instanceof DERBitString){
+                                                                                DERBitString derBitString = (DERBitString) primitive;
+                                                                                byte[] pubKeyWitchHead=derBitString.getBytes();
+                                                                                if(pubKeyWitchHead[0]==0x04){
+                                                                                    caApplyKeyReq.setUserPubKey(DataConvertUtil.byteToN(pubKeyWitchHead,64));
+                                                                                }else {
+                                                                                    caApplyKeyReq.setUserPubKey(pubKeyWitchHead);
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    if (primitive instanceof ASN1GeneralizedTime){
+                                                                        ASN1GeneralizedTime asn1GeneralizedTime = (ASN1GeneralizedTime)primitive;
+                                                                        String date = df.format(asn1GeneralizedTime.getDate());
+                                                                        if(caApplyKeyReq.getNotBefore()==null){
+                                                                            caApplyKeyReq.setNotBefore(date);
+                                                                        }else {
+                                                                            caApplyKeyReq.setNotAfter(date);
+                                                                        }
+                                                                    }
+                                                                    if(primitive instanceof DLTaggedObject){
+                                                                        DLTaggedObject dlTaggedObject1 = (DLTaggedObject) primitive;
+                                                                        ASN1Object baseObject1 = dlTaggedObject1.getBaseObject();
+                                                                        int tagNo1 = dlTaggedObject1.getTagNo();
+                                                                        if(tagNo1==0){
+                                                                            DEROctetString userName=(DEROctetString)baseObject1;
+                                                                            caApplyKeyReq.setUserName(new String(userName.getOctets()));
+                                                                        }
+                                                                        if(tagNo1==1){
+                                                                            DERIA5String dsCode=(DERIA5String)baseObject1;
+                                                                            caApplyKeyReq.setDsCode(dsCode.toString());
+                                                                        }
+                                                                        if(tagNo1==2){
+                                                                            DERIA5String extendInfo=(DERIA5String)baseObject1;
+                                                                            caApplyKeyReq.setExtendInfo(extendInfo.toString());
+                                                                        }
+                                                                    }
 
-                                            if (tagNo == GeneralName.rfc822Name || tagNo == GeneralName.dNSName || tagNo == GeneralName.uniformResourceIdentifier)
-                                            {
-                                                DEROctetString derOctetString= (DEROctetString)baseObject;
-                                                //todo 目前按照1来算
-                                                caApplyKeyReq.setEntName(new String(derOctetString.getOctets()));
+                                                                }
+                                                            }
+                                                            if (primitive instanceof ASN1Integer){
+                                                                ASN1Integer asn1Integer = (ASN1Integer) primitive;
+                                                                Integer appKeyLen = asn1Integer.getValue().intValue();
+                                                                caApplyKeyReq.setAppKeyLen(appKeyLen);
+                                                            }
+                                                        }
+                                                        if(tagNo== RestoreKeyReq.tagNo){
+                                                            if (primitive instanceof ASN1Sequence) {
+                                                                ASN1Sequence sequence3 = (ASN1Sequence) primitive;
+                                                                ASN1SequenceParser parser3 = sequence3.parser();
+                                                                ASN1Encodable encodable3;
+                                                                while ((encodable3 = parser3.readObject()) != null) {
+                                                                    primitive = encodable3.toASN1Primitive();
+                                                                    if (primitive instanceof ASN1ObjectIdentifier) {
+                                                                        ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier) primitive;
+                                                                        String oidDisplayName = X509Util.oidToDisplayName(oid);
+                                                                        if (caApplyKeyReq.getRetAsymAlg() == null) {
+                                                                            caApplyKeyReq.setRetAsymAlg(oidDisplayName);
+                                                                        } else if (caApplyKeyReq.getRetSymAlg() == null) {
+                                                                            caApplyKeyReq.setRetSymAlg(oidDisplayName);
+                                                                        } else if (caApplyKeyReq.getRetHashAlg() == null) {
+                                                                            caApplyKeyReq.setRetHashAlg(oidDisplayName);
+                                                                        }
+                                                                    }
+                                                                    if (primitive instanceof ASN1Sequence){
+                                                                        ASN1Sequence sequence5 = (ASN1Sequence) primitive;
+                                                                        ASN1SequenceParser parser5 = sequence5.parser();
+                                                                        ASN1Encodable encodable5;
+                                                                        while ((encodable5 = parser5.readObject()) != null) {
+                                                                            primitive = encodable5.toASN1Primitive();
+                                                                            if(primitive instanceof ASN1ObjectIdentifier){
+                                                                                ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier) primitive;
+                                                                                String oidDisplayName = X509Util.oidToDisplayName(oid);
+                                                                                if(caApplyKeyReq.getUserPubKeyType()==null){
+                                                                                    caApplyKeyReq.setUserPubKeyType(oidDisplayName);
+                                                                                }else {
+                                                                                    caApplyKeyReq.setUserPubKeyType(caApplyKeyReq.getUserPubKeyType()+"-"+oidDisplayName);
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    if(primitive instanceof DERBitString){
+                                                                        DERBitString derBitString = (DERBitString) primitive;
+                                                                        byte[] pubKeyWitchHead=derBitString.getBytes();
+                                                                        if(pubKeyWitchHead[0]==0x04){
+                                                                            caApplyKeyReq.setUserPubKey(DataConvertUtil.byteToN(pubKeyWitchHead,64));
+                                                                        }else {
+                                                                            caApplyKeyReq.setUserPubKey(pubKeyWitchHead);
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            if(primitive instanceof ASN1Integer){
+                                                                ASN1Integer asn1Integer = (ASN1Integer) primitive;
+                                                                caApplyKeyReq.setUserCertNo(asn1Integer.getValue());
+                                                            }
+                                                        }
+                                                        if(tagNo== RevokeKeyReq.tagNo){
+                                                            if(primitive instanceof ASN1Integer){
+                                                                ASN1Integer asn1Integer = (ASN1Integer) primitive;
+                                                                caApplyKeyReq.setUserCertNo(asn1Integer.getValue());
+                                                            }
+                                                        }
+                                                    }
+
+                                                }
                                             }
-                                            else if (tagNo == GeneralName.registeredID)
-                                            {
-                                                ASN1ObjectIdentifier asn1ObjectIdentifier = (ASN1ObjectIdentifier)baseObject;
-                                            }
-                                            else if (tagNo == GeneralName.directoryName)
-                                            {
-                                                X500Name x500Name = (X500Name)baseObject;
-                                            }
-                                            else if (tagNo == GeneralName.iPAddress)
-                                            {
-//                                                byte[] enc = toGeneralNameEncoding(name);
-//                                                if (enc != null)
-//                                                {
-                                                DEROctetString derOctetString= (DEROctetString)baseObject;
-                                                //todo 目前按照7来算
-                                                caApplyKeyReq.setEntName(new String(derOctetString.getOctets()));
-//                                                }
-//                                                else
-//                                                {
-//                                                    throw new IllegalArgumentException("IP Address is invalid");
-//                                                }
-                                            }
-                                            else
-                                            {
-                                                throw new IllegalArgumentException("can't process String for tag: " + tag);
-                                            }
+
+
+
+
+
                                         }
                                         if (primitive instanceof DEROctetString) {
                                             DEROctetString derOctetString=(DEROctetString)primitive;
@@ -148,173 +306,13 @@ public class RequestResolver {
                                         }
                                     }
                                 }
+                                //todo  这一层判断不需要了
                                 if(primitive instanceof DLTaggedObject){
                                     //CARequest->KSRequest->requestList
                                     //SEQUENCE->SEQUENCE->Context[0]
                                     DLTaggedObject dlTaggedObject = (DLTaggedObject) primitive;
                                     int tagNo = dlTaggedObject.getTagNo();
-                                    caApplyKeyReq.setApplyType(ApplyTypeEnum.stateOf(tagNo));
-                                    ASN1Object baseObject = dlTaggedObject.getBaseObject();
-                                    if (baseObject instanceof DLSequence) {
-                                        DLSequence dlSequence=(DLSequence)baseObject;
-                                        ASN1SequenceParser parser2 = dlSequence.parser();
-                                        ASN1Encodable encodable2;
-                                        while ((encodable2 = parser2.readObject()) != null) {
-                                            primitive = encodable2.toASN1Primitive();
-                                            if(tagNo== ApplyKeyReq.tagNo){
-                                                if (primitive instanceof ASN1Sequence){
-                                                    ASN1Sequence sequence3 = (ASN1Sequence) primitive;
-                                                    ASN1SequenceParser parser3 = sequence3.parser();
-                                                    ASN1Encodable encodable3;
-                                                    while ((encodable3 = parser3.readObject()) != null) {
-                                                        primitive = encodable3.toASN1Primitive();
-                                                        if(primitive instanceof ASN1ObjectIdentifier){
-                                                            ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier) primitive;
-                                                            String oidDisplayName = X509Util.oidToDisplayName(oid);
-                                                            if(caApplyKeyReq.getAppKeyType()==null){
-                                                                caApplyKeyReq.setAppKeyType(oidDisplayName);
-                                                            }else if(caApplyKeyReq.getRetAsymAlg()==null){
-                                                                caApplyKeyReq.setRetAsymAlg(oidDisplayName);
-                                                            }else if(caApplyKeyReq.getRetSymAlg()==null){
-                                                                caApplyKeyReq.setRetSymAlg(oidDisplayName);
-                                                            }else if(caApplyKeyReq.getRetHashAlg()==null){
-                                                                caApplyKeyReq.setRetHashAlg(oidDisplayName);
-                                                            }
-                                                        }
-                                                        //AppUserInfo
-                                                        if (primitive instanceof ASN1Integer){
-                                                            ASN1Integer asn1Integer = (ASN1Integer) primitive;
-                                                            caApplyKeyReq.setUserCertNo(asn1Integer.getValue());
-                                                        }
-                                                        if (primitive instanceof ASN1Sequence){
-                                                            ASN1Sequence sequence4 = (ASN1Sequence) primitive;
-                                                            ASN1SequenceParser parser4 = sequence4.parser();
-                                                            ASN1Encodable encodable4;
-                                                            while ((encodable4 = parser4.readObject()) != null) {
-                                                                primitive = encodable4.toASN1Primitive();
-                                                                if (primitive instanceof ASN1Sequence){
-                                                                    ASN1Sequence sequence5 = (ASN1Sequence) primitive;
-                                                                    ASN1SequenceParser parser5 = sequence5.parser();
-                                                                    ASN1Encodable encodable5;
-                                                                    while ((encodable5 = parser5.readObject()) != null) {
-                                                                        primitive = encodable5.toASN1Primitive();
-                                                                        if(primitive instanceof ASN1ObjectIdentifier){
-                                                                            ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier) primitive;
-                                                                            String oidDisplayName = X509Util.oidToDisplayName(oid);
-                                                                            if(caApplyKeyReq.getUserPubKeyType()==null){
-                                                                                caApplyKeyReq.setUserPubKeyType(oidDisplayName);
-                                                                            }else {
-                                                                                caApplyKeyReq.setUserPubKeyType(caApplyKeyReq.getUserPubKeyType()+"-"+oidDisplayName);
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                                if(primitive instanceof DERBitString){
-                                                                    DERBitString derBitString = (DERBitString) primitive;
-                                                                    byte[] pubKeyWitchHead=derBitString.getBytes();
-                                                                    if(pubKeyWitchHead[0]==0x04){
-                                                                        caApplyKeyReq.setUserPubKey(DataConvertUtil.byteToN(pubKeyWitchHead,64));
-                                                                    }else {
-                                                                        caApplyKeyReq.setUserPubKey(pubKeyWitchHead);
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                        if (primitive instanceof ASN1GeneralizedTime){
-                                                            ASN1GeneralizedTime asn1GeneralizedTime = (ASN1GeneralizedTime)primitive;
-                                                            String date = df.format(asn1GeneralizedTime.getDate());
-                                                            if(caApplyKeyReq.getNotBefore()==null){
-                                                                caApplyKeyReq.setNotBefore(date);
-                                                            }else {
-                                                                caApplyKeyReq.setNotAfter(date);
-                                                            }
-                                                        }
-                                                        if(primitive instanceof DLTaggedObject){
-                                                            DLTaggedObject dlTaggedObject1 = (DLTaggedObject) primitive;
-                                                            ASN1Object baseObject1 = dlTaggedObject1.getBaseObject();
-                                                            int tagNo1 = dlTaggedObject1.getTagNo();
-                                                            if(tagNo1==0){
-                                                                DEROctetString userName=(DEROctetString)baseObject1;
-                                                                caApplyKeyReq.setUserName(new String(userName.getOctets()));
-                                                            }
-                                                            if(tagNo1==1){
-                                                                DERIA5String dsCode=(DERIA5String)baseObject1;
-                                                                caApplyKeyReq.setDsCode(dsCode.toString());
-                                                            }
-                                                            if(tagNo1==2){
-                                                                DERIA5String extendInfo=(DERIA5String)baseObject1;
-                                                                caApplyKeyReq.setExtendInfo(extendInfo.toString());
-                                                            }
-                                                        }
 
-                                                    }
-                                                }
-                                                if (primitive instanceof ASN1Integer){
-                                                    ASN1Integer asn1Integer = (ASN1Integer) primitive;
-                                                    Integer appKeyLen = asn1Integer.getValue().intValue();
-                                                    caApplyKeyReq.setAppKeyLen(appKeyLen);
-                                                }
-                                            }
-                                            if(tagNo== RestoreKeyReq.tagNo){
-                                                if (primitive instanceof ASN1Sequence) {
-                                                    ASN1Sequence sequence3 = (ASN1Sequence) primitive;
-                                                    ASN1SequenceParser parser3 = sequence3.parser();
-                                                    ASN1Encodable encodable3;
-                                                    while ((encodable3 = parser3.readObject()) != null) {
-                                                        primitive = encodable3.toASN1Primitive();
-                                                        if (primitive instanceof ASN1ObjectIdentifier) {
-                                                            ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier) primitive;
-                                                            String oidDisplayName = X509Util.oidToDisplayName(oid);
-                                                            if (caApplyKeyReq.getRetAsymAlg() == null) {
-                                                                caApplyKeyReq.setRetAsymAlg(oidDisplayName);
-                                                            } else if (caApplyKeyReq.getRetSymAlg() == null) {
-                                                                caApplyKeyReq.setRetSymAlg(oidDisplayName);
-                                                            } else if (caApplyKeyReq.getRetHashAlg() == null) {
-                                                                caApplyKeyReq.setRetHashAlg(oidDisplayName);
-                                                            }
-                                                        }
-                                                        if (primitive instanceof ASN1Sequence){
-                                                            ASN1Sequence sequence5 = (ASN1Sequence) primitive;
-                                                            ASN1SequenceParser parser5 = sequence5.parser();
-                                                            ASN1Encodable encodable5;
-                                                            while ((encodable5 = parser5.readObject()) != null) {
-                                                                primitive = encodable5.toASN1Primitive();
-                                                                if(primitive instanceof ASN1ObjectIdentifier){
-                                                                    ASN1ObjectIdentifier oid = (ASN1ObjectIdentifier) primitive;
-                                                                    String oidDisplayName = X509Util.oidToDisplayName(oid);
-                                                                    if(caApplyKeyReq.getUserPubKeyType()==null){
-                                                                        caApplyKeyReq.setUserPubKeyType(oidDisplayName);
-                                                                    }else {
-                                                                        caApplyKeyReq.setUserPubKeyType(caApplyKeyReq.getUserPubKeyType()+"-"+oidDisplayName);
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                        if(primitive instanceof DERBitString){
-                                                            DERBitString derBitString = (DERBitString) primitive;
-                                                            byte[] pubKeyWitchHead=derBitString.getBytes();
-                                                            if(pubKeyWitchHead[0]==0x04){
-                                                                caApplyKeyReq.setUserPubKey(DataConvertUtil.byteToN(pubKeyWitchHead,64));
-                                                            }else {
-                                                                caApplyKeyReq.setUserPubKey(pubKeyWitchHead);
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                if(primitive instanceof ASN1Integer){
-                                                    ASN1Integer asn1Integer = (ASN1Integer) primitive;
-                                                    caApplyKeyReq.setUserCertNo(asn1Integer.getValue());
-                                                }
-                                            }
-                                            if(tagNo== RevokeKeyReq.tagNo){
-                                                if(primitive instanceof ASN1Integer){
-                                                    ASN1Integer asn1Integer = (ASN1Integer) primitive;
-                                                    caApplyKeyReq.setUserCertNo(asn1Integer.getValue());
-                                                }
-                                            }
-                                        }
-
-                                    }
                                 }
                                 if(primitive instanceof ASN1GeneralizedTime){
                                     ASN1GeneralizedTime asn1GeneralizedTime = (ASN1GeneralizedTime)primitive;
@@ -354,7 +352,9 @@ public class RequestResolver {
     }
 
     public static void main(String[] args) throws IOException {
-        CaApplyKeyReq caApplyKeyReq = parseRequest(FileUtils.readFileToByteArray(new File("D:\\asn1\\RevokeKeyReq.der")));
+        long start = System.currentTimeMillis();
+        CaApplyKeyReq caApplyKeyReq = parseRequest(FileUtils.readFileToByteArray(new File("D:\\asn1\\gl\\request\\gl-requestKey.der")));
+        System.out.println(System.currentTimeMillis()-start);
         System.out.println(caApplyKeyReq);
     }
 }

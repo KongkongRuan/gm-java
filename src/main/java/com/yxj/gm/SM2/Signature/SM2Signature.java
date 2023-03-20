@@ -158,6 +158,7 @@ public class SM2Signature {
         return temp;
     }
     public byte[] signatureByHSM(byte[] msg,int index){
+
         return new byte[0];
     }
     public  boolean verify(byte[] msg,byte[] id,byte[] signature,byte[] pubKey){

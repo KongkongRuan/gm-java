@@ -102,7 +102,6 @@ public class TestSM2 {
         System.out.println("JAVA:");
         long java = System.currentTimeMillis() - l;
         System.out.println(java);
-
 //        long l2 = System.currentTimeMillis();
 
 //        for(int i=0;i<1;i++){

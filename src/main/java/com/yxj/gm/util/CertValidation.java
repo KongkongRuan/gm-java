@@ -5,7 +5,7 @@ import com.yxj.gm.cert.CertParseVo;
 
 public class CertValidation {
     public static boolean selfSignedCaValidation(byte[] cert){
-        CertParseVo certParseVo = CertPaser.parseCert(cert);
+        CertParseVo certParseVo = CertResolver.parseCert(cert);
         SM2Signature signature = new SM2Signature();
         return signature.verify(certParseVo.getTbsCert(), null, certParseVo.getSignatureValue(), certParseVo.getPubKey());
     }
@@ -13,8 +13,8 @@ public class CertValidation {
     public static boolean CertificateChainValidation(byte[]... certs){
         SM2Signature signature = new SM2Signature();
         for (int i = 0; i < certs.length-1; i++) {
-            CertParseVo certParseVo1 = CertPaser.parseCert(certs[i]);
-            CertParseVo certParseVo2 = CertPaser.parseCert(certs[i+1]);
+            CertParseVo certParseVo1 = CertResolver.parseCert(certs[i]);
+            CertParseVo certParseVo2 = CertResolver.parseCert(certs[i+1]);
             if(!signature.verify(certParseVo2.getTbsCert(),null,certParseVo2.getSignatureValue(), certParseVo1.getPubKey())){
                 return false;
             }

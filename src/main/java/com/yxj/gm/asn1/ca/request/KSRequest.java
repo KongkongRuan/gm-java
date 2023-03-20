@@ -1,13 +1,13 @@
 package com.yxj.gm.asn1.ca.request;
 
-import com.yxj.gm.asn1.ca.request.requestList.Request;
+import com.yxj.gm.asn1.ca.request.requestList.RequestList;
 import org.bouncycastle.asn1.*;
 
 public class KSRequest extends ASN1Object {
     //默认值V2   V1:0  V2:1  V3:2
     private ASN1Integer version = new ASN1Integer(1);
     private EntName caName;
-    private Request requestList;
+    private RequestList requestList;
     private ASN1GeneralizedTime requestTime;
     private ASN1Integer taskNo;
 
@@ -27,7 +27,7 @@ public class KSRequest extends ASN1Object {
         if (sequence.size() == 5) {
             this.version = ASN1Integer.getInstance(sequence.getObjectAt(0));
             this.caName = EntName.getInstance(sequence.getObjectAt(1));
-            this.requestList = Request.getInstance(sequence.getObjectAt(2));
+            this.requestList = RequestList.getInstance(sequence.getObjectAt(2));
             this.requestTime = ASN1GeneralizedTime.getInstance(sequence.getObjectAt(3));
             this.taskNo = ASN1Integer.getInstance(sequence.getObjectAt(4));
         } else {

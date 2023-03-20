@@ -1,7 +1,6 @@
 package com.yxj.gm.asn1.ca.response.respond.envelopeddata;
 
 
-import com.yxj.gm.asn1.ca.sm2.ASN1SM2Cipher;
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 
@@ -14,7 +13,7 @@ public class RecipientInfo extends ASN1Object {
     private ASN1Integer version;
     private IssuerAndSerialNumber issuerAndserialNumber;
     private AlgorithmIdentifier keyEncryptionAlgorithmIdentifier;
-    private ASN1SM2Cipher encryptedKey;
+    private ASN1OctetString encryptedKey;
 
     public static RecipientInfo getInstance(ASN1TaggedObject obj, boolean explicit) {
         return getInstance(ASN1Sequence.getInstance(obj, explicit));
@@ -27,7 +26,7 @@ public class RecipientInfo extends ASN1Object {
             return obj != null ? new RecipientInfo(ASN1Sequence.getInstance(obj)) : null;
         }
     }
-    public RecipientInfo(IssuerAndSerialNumber issuerAndserialNumber,AlgorithmIdentifier keyEncryptionAlgorithmIdentifier,ASN1SM2Cipher encryptedKey) {
+    public RecipientInfo(IssuerAndSerialNumber issuerAndserialNumber,AlgorithmIdentifier keyEncryptionAlgorithmIdentifier,DEROctetString encryptedKey) {
         this.version = new ASN1Integer(new BigInteger("1"));
         this.issuerAndserialNumber=issuerAndserialNumber;
         this.keyEncryptionAlgorithmIdentifier=keyEncryptionAlgorithmIdentifier;
@@ -38,7 +37,7 @@ public class RecipientInfo extends ASN1Object {
             this.version = ASN1Integer.getInstance(sequence.getObjectAt(0));
             this.issuerAndserialNumber = IssuerAndSerialNumber.getInstance(sequence.getObjectAt(1));
             this.keyEncryptionAlgorithmIdentifier = AlgorithmIdentifier.getInstance(sequence.getObjectAt(2));
-            this.encryptedKey = ASN1SM2Cipher.getInstance(sequence.getObjectAt(3));
+            this.encryptedKey = ASN1OctetString.getInstance(sequence.getObjectAt(3));
         } else {
             throw new IllegalArgumentException("Bad sequence size: " + sequence.size());
         }

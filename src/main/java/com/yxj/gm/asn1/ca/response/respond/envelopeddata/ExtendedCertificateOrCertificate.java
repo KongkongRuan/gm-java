@@ -7,7 +7,14 @@ public class ExtendedCertificateOrCertificate extends ASN1Object implements ASN1
 
     private int             tagNo;
     private ASN1Encodable    value;
+    private ASN1Primitive certificate;
 
+
+    public ExtendedCertificateOrCertificate(ASN1Primitive    certificate){
+        this.tagNo = -1;
+        this.certificate = certificate;
+
+    }
 
     public ExtendedCertificateOrCertificate(
             int tagNo,
@@ -77,7 +84,11 @@ public class ExtendedCertificateOrCertificate extends ASN1Object implements ASN1
      */
     public ASN1Primitive toASN1Primitive()
     {
-        return new DERTaggedObject(false, tagNo, value);
+        if(tagNo==-1){
+            return certificate;
+        }else {
+            return new DERTaggedObject(false, tagNo, value);
+        }
     }
 
 }

@@ -57,6 +57,8 @@ public class CaApplyKeyReq {
         //扩展信息
         String extendInfo;
 
+        byte[] sigBody;
+
     @Override
     public String toString() {
         return "CaApplyKeyReq{" +
@@ -84,6 +86,14 @@ public class CaApplyKeyReq {
                 ", extendInfo='" + extendInfo + '\'' +
                 ", signatureValue=" + Hex.toHexString(signatureValue==null?new byte[]{}:signatureValue) +
                 '}';
+    }
+
+    public byte[] getSigBody() {
+        return sigBody;
+    }
+
+    public void setSigBody(byte[] sigBody) {
+        this.sigBody = sigBody;
     }
 
     public ApplyTypeEnum getApplyType() {

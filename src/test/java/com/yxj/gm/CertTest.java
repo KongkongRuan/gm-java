@@ -5,9 +5,10 @@ import com.yxj.gm.SM2.Key.SM2PrivateKey;
 import com.yxj.gm.SM2.Key.SM2PublicKey;
 import com.yxj.gm.cert.CertParseVo;
 import com.yxj.gm.cert.SM2CertGenerator;
-import com.yxj.gm.util.CertPaser;
+import com.yxj.gm.util.CertResolver;
 import com.yxj.gm.util.CertValidation;
 import com.yxj.gm.util.FileUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -32,20 +33,20 @@ public class CertTest {
         byte[] bytes = Hex.decode("712f5f88a22806c66af587f8702371e0140ffe888f247dd889caddb3a1ec19a2");
         return new SM2PrivateKey(bytes);
     }
-    public static void main1(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException {
         SM2CertGenerator sm2CertGenerator = new SM2CertGenerator();
          String DN_CA = "CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US";
          String DN_CHILD = "CN=DD,OU=DD,O=DD,L=Linton,ST=Utah,C=CN";
         CertTest certTest = new CertTest();
         byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, certTest.getRootPrivateKey().getEncoded(), certTest.getRootPublicKey().getEncoded(),false,0);
         try {
-            FileUtils.writeFile("D:/certtest/java-ca-3.cer",rootCert);
+            FileUtils.writeFile("D:/certtest/java-ca-3-add0.cer", ArrayUtils.add(rootCert,(byte) 0));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
         byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, certTest.getRootPrivateKey().getEncoded(), certTest.getChildPublicKey().getEncoded(),false,0);
         try {
-            FileUtils.writeFile("D:/certtest/java-ownerCert-3.cer",ownerCert);
+            FileUtils.writeFile("D:/certtest/java-ownerCert-3-add0.cer",ArrayUtils.add(ownerCert,(byte)0));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -53,7 +54,7 @@ public class CertTest {
 
         byte[] fileBytes = FileUtils.readFileToByteArray(new File("D:\\soft\\GenShen\\_.bt.cn.crt"));
 //        byte[] fileBytes = FileUtils.readFileToByteArray(new File("D:\\设备0004_SM2_20220801144024.crt"));
-        CertParseVo certParseVo = CertPaser.parseCert(fileBytes);
+        CertParseVo certParseVo = CertResolver.parseCert(fileBytes);
         System.out.println(certParseVo);
 
 
@@ -69,7 +70,7 @@ public class CertTest {
 
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main1(String[] args) throws IOException {
 //        File ca = new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\SM2CERT_1677218791242\\certAddZero.pem");
 //        File cert = new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\SM2CERT_1677218791242\\SM2CERT.cert");
 //        File ca = new File("D:\\国网正式环境证书以及密钥\\certAndKey\\新建文件夹\\certAddZero.cer");

@@ -2,9 +2,11 @@ package com.yxj.gm.asn1.ca.util;
 
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Cipher;
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Signature;
-import org.bouncycastle.asn1.ASN1Integer;
-import org.bouncycastle.asn1.DEROctetString;
+import com.yxj.gm.util.DataConvertUtil;
+import org.bouncycastle.asn1.*;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.math.BigInteger;
 
 public class ASN1Util {
@@ -41,7 +43,99 @@ public class ASN1Util {
         ASN1Integer asn1S = new ASN1Integer(new BigInteger(s));
         return new ASN1SM2Signature(asn1R,asn1S);
     }
+    public static byte[] HSMAsn1PubKeyToPubKey(byte[] asn1Pub){
+        ByteArrayInputStream bis = new ByteArrayInputStream(asn1Pub) ;
+        ASN1InputStream ais = new ASN1InputStream(bis);;
+        ASN1Primitive primitive;
+        try {
+            while ((primitive = ais.readObject()) != null) {
+                //第一层Sequence
+                if (primitive instanceof ASN1Sequence) {
+                    ASN1Sequence sequence = (ASN1Sequence) primitive;
+                    ASN1SequenceParser parser = sequence.parser();
+                    ASN1Encodable encodable;
+                    while ((encodable = parser.readObject()) != null) {
+                        primitive = encodable.toASN1Primitive();
+                        if (primitive instanceof DERBitString) {
+                            DERBitString derBitString = (DERBitString) primitive;
+                            byte[] pubKeyWitchHead = derBitString.getBytes();
+                            if (pubKeyWitchHead[0] == 0x04) {
+                                return DataConvertUtil.byteToN(pubKeyWitchHead, 64);
+                            } else {
+                                return pubKeyWitchHead;
+                            }
+                        }
+                    }
+                }
 
+            }
+        }catch (IOException e){
+            e.printStackTrace();
+        }finally {
+            try {
+                bis.close();
+                ais.close();
+            }catch (IOException e){
+                throw new RuntimeException(e);
+            }
+        }
+        return new byte[1];
+    }
+    public static byte[] HSMAsn1PriKeyToPriKey(byte[] asn1Pri){
+        ByteArrayInputStream bis = new ByteArrayInputStream(asn1Pri) ;
+        ASN1InputStream ais = new ASN1InputStream(bis);;
+        ASN1Primitive primitive;
+        try {
+            while ((primitive = ais.readObject()) != null) {
+                //第一层Sequence
+                if (primitive instanceof ASN1Sequence) {
+                    ASN1Sequence sequence = (ASN1Sequence) primitive;
+                    ASN1SequenceParser parser = sequence.parser();
+                    ASN1Encodable encodable;
+                    while ((encodable = parser.readObject()) != null) {
+                        primitive = encodable.toASN1Primitive();
+                        if(primitive instanceof DEROctetString){
+                            DEROctetString derOctetString=(DEROctetString) primitive;
+                            byte[] priKeyWitchHead = derOctetString.getOctets();
+                            if (priKeyWitchHead[0] == 0x04) {
+                                return DataConvertUtil.byteToN(priKeyWitchHead, 64);
+                            } else {
+                                return priKeyWitchHead;
+                            }
+                        }
+                        if (primitive instanceof DLTaggedObject) {
+                            DLTaggedObject dlTaggedObject = (DLTaggedObject) primitive;
+                            int tagNo = dlTaggedObject.getTagNo();
+                            if(tagNo==1){
+                                ASN1Object baseObject = dlTaggedObject.getBaseObject();
+//                                ASN1Primitive baseObject = derTaggedObject.getObject();
+                                if(baseObject instanceof DERBitString){
+                                    DERBitString derBitString = (DERBitString) baseObject;
+                                    byte[] priKeyWitchHead = derBitString.getBytes();
+                                    if (priKeyWitchHead[0] == 0x04) {
+                                        return DataConvertUtil.byteToN(priKeyWitchHead, 64);
+                                    } else {
+                                        return priKeyWitchHead;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+        }catch (IOException e){
+            e.printStackTrace();
+        }finally {
+            try {
+                bis.close();
+                ais.close();
+            }catch (IOException e){
+                throw new RuntimeException(e);
+            }
+        }
+        return new byte[1];
+    }
 //    public static void main(String[] args) throws IOException {
 //        byte[] sm2Cipher = new byte[0];
 //        for (int i = 0; i < 32; i++) {
