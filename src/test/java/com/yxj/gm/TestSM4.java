@@ -3,6 +3,7 @@ package com.yxj.gm;
 import com.kms.jca.UseKey;
 import com.kms.provider.key.ZyxxSecretKey;
 import com.yxj.gm.SM4.SM4Cipher;
+import com.yxj.gm.SM4.dto.AEADExecution;
 import com.yxj.gm.enums.ModeEnum;
 import com.yxj.gm.util.FileUtils;
 import org.bouncycastle.util.encoders.Hex;
@@ -15,7 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 
 public class TestSM4 {
-    public static void main1(String[] args) {
+    public static void main(String[] args) {
         UseKey useKey = new UseKey();
         byte[] msg = new byte[]{(byte)0x01,(byte)0x23,(byte)0x45,(byte)0x67,(byte)0x89,(byte)0xAB,(byte)0xCD,(byte)0xEF,(byte)0xFE,(byte)0xDC,(byte)0xBA,(byte)0x98,(byte)0x76,(byte)0x54,(byte)0x32,(byte)0x10,(byte)0x52,(byte)0x52};
         byte[] key = new byte[]{(byte)0x01,(byte)0x23,(byte)0x45,(byte)0x67,(byte)0x89,(byte)0xAB,(byte)0xCD,(byte)0xEF,(byte)0xFE,(byte)0xDC,(byte)0xBA,(byte)0x98,(byte)0x76,(byte)0x54,(byte)0x32,(byte)0x10};
@@ -54,10 +55,16 @@ public class TestSM4 {
         System.out.println("CBC密文："+Hex.toHexString(mi_cbc));
         byte[] ming_cbc = sm4_cbc.cipherDecrypt(key, mi_cbc, new byte[16]);
         System.out.println("CBC明文："+Hex.toHexString(ming_cbc));
+        SM4Cipher sm4_gcm = new SM4Cipher();
+        AEADExecution aeadExecution = sm4_gcm.cipherEncryptGCM(key, msg, new byte[12], "aad".getBytes(), 16);
+        System.out.println("GCM密文："+Hex.toHexString(aeadExecution.getCipherText()));
+        System.out.println("GCMtag："+Hex.toHexString(aeadExecution.getTag()));
+        byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution.getTag());
+        System.out.println("GCM明文："+Hex.toHexString(ming_gcm));
 
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main1(String[] args) throws IOException {
 //        String msg = "XDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYGXDYG";
         SM4Cipher sm4Cipher = new SM4Cipher();
         byte[] key = new byte[16];

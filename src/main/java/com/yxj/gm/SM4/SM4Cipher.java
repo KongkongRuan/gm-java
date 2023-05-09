@@ -1,14 +1,10 @@
 package com.yxj.gm.SM4;
 
-import com.kms.JNI.CallJNI;
-import com.kms.jca.UseKey;
-import com.kms.provider.key.ZyxxSecretKey;
 import com.yxj.gm.SM4.dto.AEADExecution;
 import com.yxj.gm.constant.SM4Constant;
 import com.yxj.gm.enums.ModeEnum;
 import com.yxj.gm.enums.PaddingEnum;
 import com.yxj.gm.util.DataConvertUtil;
-import org.bouncycastle.crypto.modes.gcm.GCMUtil;
 import org.bouncycastle.crypto.modes.gcm.Tables4kGCMMultiplier;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -675,7 +671,7 @@ public class SM4Cipher {
     }
 
     //GCM加密
-    public AEADExecution blockEncryptGCM(byte[] ming, byte[]key, byte[] iv, byte[] aad, int tagLen){
+    public AEADExecution cipherEncryptGCM(byte[]key,byte[] ming , byte[] iv, byte[] aad, int tagLen){
         long l = System.currentTimeMillis();
         byte[][] rks = ext_key_L(key);
         if (DEBUG) {
@@ -738,7 +734,7 @@ public class SM4Cipher {
 
         return new AEADExecution(C,T);
     }
-    public byte[] blockDecryptGCM(byte[] mi,byte[] key,byte[] iv,byte[] aad,byte[] tag){
+    public byte[] cipherDecryptGCM(byte[] key,byte[] mi, byte[] iv, byte[] aad, byte[] tag){
         byte[][] rks = ext_key_L(key);
         byte[] H = cipher(new byte[16], rks);
         initVBox(H);
@@ -792,7 +788,7 @@ public class SM4Cipher {
 
 
         long l = System.currentTimeMillis();
-        AEADExecution aeadExecution = sm4Cipher.blockEncryptGCM(bytes, key, iv, add.getBytes(), 16);
+        AEADExecution aeadExecution = sm4Cipher.cipherEncryptGCM(bytes, key, iv, add.getBytes(), 16);
         System.out.println("加密耗时:"+(System.currentTimeMillis()-l));
 //        System.out.println("C:"+Hex.toHexString(aeadExecution.getCipherText()));
         System.out.println("T:"+Hex.toHexString(aeadExecution.getTag()));
@@ -801,7 +797,6 @@ public class SM4Cipher {
 
 //        byte[] bytes = sm4Cipher.blockDecryptGCM(aeadExecution.getCipherText(), key, iv,add.getBytes(), aeadExecution.getTag());
 //        System.out.println(new String(bytes));
-
 
 
 
