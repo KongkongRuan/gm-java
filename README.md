@@ -108,4 +108,11 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         byte[] ctrmi = sm4CipherCTR.cipherEncrypt(key, msg.getBytes(), iv);
         byte[] ctrming = sm4CipherCTR.cipherDecrypt(key, ctrmi, iv);
         System.out.println("CTR明文："+new String(ctrming));
+        //GCM模式
+        SM4Cipher sm4_gcm = new SM4Cipher();
+        AEADExecution aeadExecution = sm4_gcm.cipherEncryptGCM(key, msg, new byte[12], "aad".getBytes(), 16);
+        System.out.println("GCM密文："+Hex.toHexString(aeadExecution.getCipherText()));
+        System.out.println("GCMtag："+Hex.toHexString(aeadExecution.getTag()));
+        byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution.getTag());
+        System.out.println("GCM明文："+Hex.toHexString(ming_gcm));
 ```
