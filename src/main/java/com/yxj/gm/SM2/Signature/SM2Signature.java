@@ -24,17 +24,27 @@ public class SM2Signature {
         System.arraycopy(pubKey,32,Ya,0,32);
     }
 
+    /**
+     * 生成Za
+     * @param IDa
+     */
     private void initZa(byte[] IDa){
         if(IDa==null){
             IDa="1234567812345678".getBytes();
         }
         short ENTLa  = (short) (IDa.length*8);
         byte[] ENTLaBytes = DataConvertUtil.shortToBytes(new short[]{ENTLa});
+        /**
+         * 以下为Za的计算
+         */
         byte[] ta = DataConvertUtil.oneDel(SM2Constant.getA());
         byte[] tb = DataConvertUtil.oneDel(SM2Constant.getB());
         byte[] txg = DataConvertUtil.oneDel(SM2Constant.getXG());
         byte[] tyg = DataConvertUtil.oneDel(SM2Constant.getYG());
 
+        /**
+         *
+         */
         byte[] ZaMsg = new byte[ENTLaBytes.length+IDa.length+ta.length+tb.length+txg.length+tyg.length+Xa.length+Ya.length];
         byte[][] ZaByteS = new byte[][]{ENTLaBytes,IDa,ta,tb,txg,tyg,Xa,Ya};
         int index=0;

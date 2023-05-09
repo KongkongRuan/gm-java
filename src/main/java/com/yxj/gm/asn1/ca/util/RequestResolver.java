@@ -19,6 +19,7 @@ import java.math.BigInteger;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 
 public class RequestResolver {
     public static CaApplyKeyReq parseRequest(byte[] caRequest){
@@ -194,7 +195,8 @@ public class RequestResolver {
                                                                     }
                                                                     if (primitive instanceof ASN1GeneralizedTime){
                                                                         ASN1GeneralizedTime asn1GeneralizedTime = (ASN1GeneralizedTime)primitive;
-                                                                        String date = df.format(asn1GeneralizedTime.getDate());
+//                                                                        String date = df.format(asn1GeneralizedTime.getDate());
+                                                                        Date date = asn1GeneralizedTime.getDate();
                                                                         if(caApplyKeyReq.getNotBefore()==null){
                                                                             caApplyKeyReq.setNotBefore(date);
                                                                         }else {

@@ -11,11 +11,17 @@ import com.yxj.gm.util.FileUtils;
 import org.apache.commons.lang3.ArrayUtils;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.util.encoders.Hex;
+import sun.security.x509.X509CertInfo;
 
 import java.io.File;
 import java.io.IOException;
+import java.security.cert.CertificateParsingException;
 
 public class CertTest {
+    /**
+     * 获取根证书公钥
+     * @return 根证书公钥
+     */
     SM2PublicKey getRootPublicKey(){
         byte[] decode = Hex.decode("58cd219f08552d940aa6b219513ba1e50063c2f01ad2d1c88b3d931868e0440b73175c092722eac88e90394bfd24005212aab989ba545942cbbeedf8ae42bc84");
         return new SM2PublicKey(decode);
@@ -33,7 +39,13 @@ public class CertTest {
         byte[] bytes = Hex.decode("712f5f88a22806c66af587f8702371e0140ffe888f247dd889caddb3a1ec19a2");
         return new SM2PrivateKey(bytes);
     }
-    public static void main(String[] args) throws IOException {
+
+    /**
+     * 生成根证书
+     * @param args  参数
+     * @throws IOException
+     */
+    public static void main1(String[] args) throws IOException {
         SM2CertGenerator sm2CertGenerator = new SM2CertGenerator();
          String DN_CA = "CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US";
          String DN_CHILD = "CN=DD,OU=DD,O=DD,L=Linton,ST=Utah,C=CN";
@@ -70,7 +82,7 @@ public class CertTest {
 
     }
 
-    public static void main1(String[] args) throws IOException {
+    public static void main2(String[] args) throws IOException {
 //        File ca = new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\SM2CERT_1677218791242\\certAddZero.pem");
 //        File cert = new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\SM2CERT_1677218791242\\SM2CERT.cert");
 //        File ca = new File("D:\\国网正式环境证书以及密钥\\certAndKey\\新建文件夹\\certAddZero.cer");
@@ -87,5 +99,20 @@ public class CertTest {
         System.out.println(i);
 //        CertPaser.parseCert(FileUtils.readFileToByteArray(ca));
 //        CertPaser.parseCert(FileUtils.readFileToByteArray(cert));
+    }
+
+    public static void main(String[] args) throws IOException, CertificateParsingException {
+//        UseKey useKey = new UseKey();
+//        HashMap<String, String> plainMap = new HashMap<>();
+//        plainMap.put("cacert", "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQOgAwIBAgIKvdbGslG3QIaksTAKBggqgRzPVQGDdTApMQswCQYDVQQG\nEwJDTjELMAkGA1UEBwwCQkoxDTALBgNVBAoMBEhOQ0EwHhcNMjEwMzAxMDI1MzMx\nWhcNMzEwMzAxMDI1MzMxWjApMQswCQYDVQQGEwJDTjELMAkGA1UEBwwCQkoxDTAL\nBgNVBAoMBEhOQ0EwWTATBgcqhkjOPQIBBggqgRzPVQGCLQNCAAQEyvJJe/dCtvBk\n/+zkP0WI8Yizlfe7ripxkIxGGGghBs99H0mTjsdcH9bolAnedUpkipgkohfx69OD\nlrYumF7noxMwETAPBgNVHRMECDAGAQH/AgF/MAoGCCqBHM9VAYN1A0kAMEYCIQCm\nPhiYrz8OuW34cj/+Tojzq77jV5k+NBC9+Om3+s3nmAIhAIc4VTj+sRvlLmBaqlKw\ni/e6Hh67hn95DrWKaAAimYH4\n-----END CERTIFICATE-----");
+//        byte[] caCert = Base64.decode(plainMap.get("cacert"));
+//        for (int i = 0; i < 15; i++) {
+//            KeyPair keyPair = useKey.keyPairGenerator("SM2");
+//            useKey.getCert("X509","C=CN,L=BJ,O=KMS","O=HNCA,L=BJ,C=CN",caCert,0,0,new byte[32],keyPair.getPrivate().getEncoded(),keyPair.getPublic().getEncoded(),1,10,0);
+//
+//        }
+        X509CertInfo x509CertInfo = new X509CertInfo(FileUtils.readFileToByteArray(new File("D:\\certtest\\zjhAndJava\\old\\SM2CERT_1_62_1671428432529.pem")));
+        System.out.println(x509CertInfo);
+
     }
 }

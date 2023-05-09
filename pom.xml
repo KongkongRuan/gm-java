@@ -23,7 +23,7 @@
         <dependency>
             <groupId>com.jca</groupId>
             <artifactId>kms</artifactId>
-            <version>0.0.1-RELEASE</version>
+            <version>2.2.5</version>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>

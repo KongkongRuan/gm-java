@@ -1,11 +1,21 @@
 package com.yxj.gm.SM4;
 
+import com.kms.JNI.CallJNI;
+import com.kms.jca.UseKey;
+import com.kms.provider.key.ZyxxSecretKey;
+import com.yxj.gm.SM4.dto.AEADExecution;
 import com.yxj.gm.constant.SM4Constant;
 import com.yxj.gm.enums.ModeEnum;
 import com.yxj.gm.enums.PaddingEnum;
 import com.yxj.gm.util.DataConvertUtil;
+import org.bouncycastle.crypto.modes.gcm.GCMUtil;
+import org.bouncycastle.crypto.modes.gcm.Tables4kGCMMultiplier;
+import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigInteger;
+import java.security.SecureRandom;
+import java.util.Arrays;
+import java.util.concurrent.*;
 
 import static com.yxj.gm.enums.ModeEnum.CTR;
 
@@ -15,7 +25,16 @@ import static com.yxj.gm.enums.ModeEnum.CTR;
  *      PKCS7填充
  */
 public class SM4Cipher {
+    /**
+     * 创建线程池
+     */
+    ExecutorService executorService = Executors.newFixedThreadPool(10);
+    ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executorService;
 
+    /**
+     * 线程数
+     */
+    private int processors = 2 * Runtime.getRuntime().availableProcessors() + 1;
     /**Mode
      * 0 ECB
      * 1 CBC
@@ -25,11 +44,16 @@ public class SM4Cipher {
      */
     private ModeEnum Mode = CTR;
 
+    private byte[][] VBox = new byte[129][16];
+
     /**Padding
      * 0 Pkcs7
      * 1 Pkcs5
      */
     private PaddingEnum Padding =PaddingEnum.Pkcs7;
+
+
+    private boolean DEBUG = false;
 
     public ModeEnum getMode() {
         return Mode;
@@ -61,7 +85,9 @@ public class SM4Cipher {
     }
     public byte[] cipherEncrypt(byte [] key,byte[] ming,byte[] iv){
         //生成轮密钥
+        long l = System.currentTimeMillis();
         byte[][] rks = ext_key_L(key);
+        //System.out.println("生成轮密钥耗时："+(System.currentTimeMillis()-l));
         byte[] result=null;
         switch (Mode){
             case ECB:
@@ -125,9 +151,7 @@ public class SM4Cipher {
         int y=m.length%blockLength;
         int t=blockLength-y;
         byte[] padding = new byte[t];
-        for (int i = 0; i < t; i++) {
-            padding[i]= (byte) t;
-        }
+        Arrays.fill(padding, (byte) t);
         byte[] result = new byte[m.length+t];
         System.arraycopy(m,0,result,0,m.length);
         System.arraycopy(padding,0,result,m.length,padding.length);
@@ -141,7 +165,7 @@ public class SM4Cipher {
     }
     //2. 分组然后根据模式并行加密
     //ECB
-    public byte[] blockEncryptECB(byte[] m, byte[][] rks){
+    private byte[] blockEncryptECB(byte[] m, byte[][] rks){
         //1 填充
         m=padding(m);
         //2 分块
@@ -156,7 +180,7 @@ public class SM4Cipher {
         return merge(result);
     }
     //CBC
-    public byte[] blockEncryptCBC(byte[] m, byte[] iv, byte[][] rks){
+    private byte[] blockEncryptCBC(byte[] m, byte[] iv, byte[][] rks){
         //1 填充
         m=padding(m);
         //2 分块
@@ -174,22 +198,66 @@ public class SM4Cipher {
         return merge(result);
     }
     //CRT
-    public byte[] blockEncryptCTR(byte[] m, byte[] iv, byte[][] rks){
+    private byte[] blockEncryptCTR(byte[] m, byte[] iv, byte[][] rks)  {
         if(iv.length!=16){
             throw new RuntimeException("iv 长度错误 iv len="+iv.length);
         }
+        long l = System.currentTimeMillis();
         byte[][] blocks = block(m);
+        //System.out.println("分块耗时："+(System.currentTimeMillis()-l));
         byte[][] mis = new byte[blocks.length][16];
-        for (int i = 0; i < blocks.length; i++) {
-            byte[] cipher = cipher(iv, rks);
-            if(blocks[i].length!=cipher.length){
-                byte[] tempCipher = new byte[blocks[i].length];
-                System.arraycopy(cipher,0,tempCipher,0,blocks[i].length);
-                cipher=tempCipher;
-            }
-            mis[i]=DataConvertUtil.byteArrayXOR(blocks[i],cipher);
-            iv=byteArrAdd(iv);
+        long l1 = System.currentTimeMillis();
+
+        ////System.out.println(processors);
+        if (blocks.length < processors) {
+            processors = blocks.length;
         }
+        //确定每个线程处理的数据量
+        long size = blocks.length / processors;
+        //确定最后一个线程处理的数据量
+        long remainder = blocks.length % processors;
+        CountDownLatch countDownLatch = new CountDownLatch(processors);
+        for (int i = 0; i < processors; i++) {
+            long start = i * size;
+            long end = (i + 1) * size;
+            if (i == processors - 1) {
+                end += remainder;
+            }
+            long finalEnd = end;
+            long finalStart = start;
+            iv = byteArrAdd(iv,start);
+            byte[] finalIv = iv;
+            threadPoolExecutor.execute(new Runnable() {
+                @Override
+                public void run() {
+                    byte[] startIv = finalIv;
+                    //System.out.println(Thread.currentThread().getName()+"start:"+finalStart+" end:"+ finalEnd + " count:"+(finalEnd-finalStart));
+                    for (int i = (int) finalStart; i < finalEnd-finalStart; i++) {
+
+
+                        byte[] cipher = cipher(startIv, rks);
+                        if(blocks[i].length!=cipher.length){
+                            byte[] tempCipher = new byte[blocks[i].length];
+                            System.arraycopy(cipher,0,tempCipher,0,blocks[i].length);
+                            cipher=tempCipher;
+                        }
+                        mis[i]=DataConvertUtil.byteArrayXOR(blocks[i],cipher);
+                        startIv=byteArrAdd(startIv);
+                        //System.out.println(i+"分块加密耗时："+(System.currentTimeMillis()-l2));
+                    }
+                    countDownLatch.countDown();
+                }
+            });
+        }
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+
+        //System.out.println(blocks.length);
+        //System.out.println("分块加密总耗时："+(System.currentTimeMillis()-l1));
         return merge(mis);
     }
     private byte[] byteArrAdd(byte[] iv){
@@ -197,6 +265,10 @@ public class SM4Cipher {
         BigInteger temp  = new BigInteger(iv);
         temp=temp.add(new BigInteger("1"));
         return DataConvertUtil.byteToN(temp.toByteArray(),16);
+    }
+    private byte[] byteArrAdd(byte[] a,long b){
+        BigInteger add = new BigInteger(a).add(new BigInteger(String.valueOf(b)));
+        return DataConvertUtil.byteToN(add.toByteArray(),16);
     }
     private byte[] cipher(byte[] in,byte[][] rks){
         byte[][] Xs=SM4Pretreatment(in);
@@ -208,7 +280,7 @@ public class SM4Cipher {
 
     //解密
     //ECB
-    public byte[] blockDecryptECB(byte[] m, byte[][] rks){
+    private byte[] blockDecryptECB(byte[] m, byte[][] rks){
         //1 分块
         byte[][] block = block(m);
         //2 解密
@@ -222,7 +294,7 @@ public class SM4Cipher {
         return unPadding(merge);
     }
     //CBC
-    public byte[] blockDecryptCBC(byte[] m, byte[] iv, byte[][] rks){
+    private byte[] blockDecryptCBC(byte[] m, byte[] iv, byte[][] rks){
         //1 分块
         byte[][] block = block(m);
         //2 解密
@@ -265,14 +337,14 @@ public class SM4Cipher {
 
     //分组
     private  byte[][] block(byte[] m){
-        int count = m.length/16;
-        int last = m.length%16;
+        long count = m.length/16;
+        long last = m.length%16;
         if(last!=0)count++;
-        byte[][] result = new byte[count][16];
+        byte[][] result = new byte[(int) count][16];
         for (int i = 0; i < count; i++) {
             byte[] temp;
             if(i==count-1&&last!=0){
-                 temp= new byte[last];
+                 temp= new byte[(int) last];
             }else {
                  temp = new byte[16];
             }
@@ -283,8 +355,8 @@ public class SM4Cipher {
     }
     //合并
     private byte[] merge(byte[][] ms){
-        int len = (ms.length-1)*16+ms[ms.length-1].length;
-        byte[] result = new byte[len];
+        long len = (ms.length-1)*16+ms[ms.length-1].length;
+        byte[] result = new byte[(int) len];
         for (int i = 0; i < ms.length; i++) {
             System.arraycopy(ms[i],0,result,i*16,ms[i].length);
         }
@@ -299,7 +371,7 @@ public class SM4Cipher {
         return out;
     }
     //轮密钥扩展
-    public byte[][] ext_key_L(byte[] in){
+    private byte[][] ext_key_L(byte[] in){
         byte[] MK0 = new byte[4];
         byte[] MK1 = new byte[4];
         byte[] MK2 = new byte[4];
@@ -376,6 +448,365 @@ public class SM4Cipher {
         return out;
     }
 
+
+
+    /************************************GCM相关代码*******************************************/
+    private byte[] byteArrayMultiplePoint(byte[] X ){
+
+
+
+
+
+//        byte[][] ZArray = new byte[129][16];
+//        ZArray[0]=new byte[16];
+        byte[] Y0 = new byte[16];
+        for (int i = 0; i < 128; i++) {
+
+            /**
+             * 1.用位移直接计算出x每一比特位
+             * 2.Y128直接用Y0循环异或取最后一个Y0
+             * 旧代码
+             *         计算X的每一比特位极其耗时（优化后提速96%）
+             *         byte[] XBiteArray =null;
+             *         for (byte b:X) {
+             *             byte[] bytes = DataConvertUtil.byteToBitArray(b);
+             *             XBiteArray = DataConvertUtil.byteArrAdd(XBiteArray, bytes);
+             *         }
+             *
+             *             if(XBiteArray[i]==0){
+             *                 ZArray[i+1]=ZArray[i];
+             *
+             *             }else
+             *             {
+             *                 ZArray[i+1]=DataConvertUtil.byteArrayXOR(ZArray[i],VBox[i]);
+             *             }
+             */
+            if((byte)((X[i/8] >> 7-i%8) & 0x1)==1){
+//                Y0=DataConvertUtil.byteArrayXOR(Y0,VBox[i]);
+                DataConvertUtil.fastByteArrayXOR(Y0,VBox[i]);
+            }
+
+        }
+//        return ZArray[128];
+        return Y0;
+
+    }
+
+    public static void main1(String[] args) {
+
+//        //System.out.println("/****************************byteArrayMultiplePoint***************************************/");
+//        byte[] ghash_key=Hex.decode("00BA5F76F3D8982B199920E3221ED05F");
+//        byte[] ghash_ivin =Hex.decode("384C3CEDE5CBC5560F002F94A8E4205A");
+//        byte[] ghash_din =Hex.decode("3BEA3321BDA9EBF02D5459BCE4295E3A");
+//
+//        SM4Cipher sm4Cipher = new SM4Cipher();
+//        sm4Cipher.byteArrayMultiplePoint(DataConvertUtil.byteArrayXOR(ghash_din,ghash_ivin),ghash_key);
+//
+//
+//
+////            GCMUtil.multiply(bytes,H);
+////            Y0=bytes;
+//        Tables4kGCMMultiplier tables4kGCMMultiplier = new Tables4kGCMMultiplier();
+//        tables4kGCMMultiplier.init(DataConvertUtil.byteArrayXOR(ghash_din,ghash_ivin));
+////            GCMUtil.xor(Y0, blockX[i - 1]);
+////            //System.out.println("YO:"+Hex.toHexString(Y0));
+//        //System.out.println("-----------");
+//        //System.out.println(Hex.toHexString(ghash_key));
+//            tables4kGCMMultiplier.multiplyH(ghash_key);
+//        //System.out.println("@@"+Hex.toHexString(ghash_key));
+//        //System.out.println("/****************************byteArrayMultiplePoint***************************************/");
+
+
+
+    }
+
+
+    private void initVBox(byte[] H){
+        /**初始化VBox*/
+        byte[] R = DataConvertUtil.byteArrAdd(new byte[]{(byte) 225},new byte[15]);
+        VBox[0]=H;
+        for (int i = 0; i < 128; i++) {
+            byte b = (DataConvertUtil.byteToBitArray(VBox[i][15]))[7];
+            if(b==0){
+                VBox[i+1]=DataConvertUtil.byteArrayRight(VBox[i],1);
+            }
+            if(b==1){
+                byte[] tempRight = DataConvertUtil.byteArrayRight(VBox[i], 1);
+                VBox[i+1]=DataConvertUtil.byteArrayXOR(tempRight,R);
+            }
+
+        }
+    }
+    private byte[] GHASH(byte[] X,byte[] H){
+        if(X.length%16!=0){
+            throw new  RuntimeException("X.length%16!=0");
+        }
+
+        byte[][] blockX = block(X);
+        long m = X.length/16;
+        byte[] Y0 = new byte[16];
+        Tables4kGCMMultiplier tables4kGCMMultiplier = new Tables4kGCMMultiplier();
+        tables4kGCMMultiplier.init(H);
+        for (int i = 1; i <= m; i++) {
+            DataConvertUtil.fastByteArrayXOR(Y0,blockX[i-1]);
+            Y0=byteArrayMultiplePoint(Y0);
+
+            //--------------------------------------------------------
+//            byte[] bytes = DataConvertUtil.byteArrayXOR(Y0, blockX[i - 1]);
+//            //System.out.println("bytes:"+Hex.toHexString(bytes));
+////            GCMUtil.multiply(bytes,H);
+////            Y0=bytes;
+//
+            //            //System.out.println("YO:"+Hex.toHexString(Y0));
+
+//            GCMUtil.xor(Y0, blockX[i - 1]);
+//            tables4kGCMMultiplier.multiplyH(Y0);
+
+            //--------------------------------------------------------
+
+        }
+        return Y0;
+    }
+
+    private  byte[] GCTR(byte[] ICB,byte[] X,byte[][] rks){
+        if (DEBUG)System.out.println("ICB:"+new BigInteger(ICB));
+        if(X==null){
+            return null;
+        }
+        long n = (X.length/16);
+        if(X.length%16!=0){
+            n++;
+        }
+        byte[][] blockX = block(X);
+
+//        byte[][] CBArray = new byte[blockX.length+1][16];
+
+        byte[][] YArray = new byte[(int) n][16];
+
+
+//        CBArray[1]=ICB;
+//        for (int i = 2; i <= n; i++) {
+//            //todo inc
+//            CBArray[i]=byteArrAdd(CBArray[i-1]);
+//        }
+//        for (int i = 1; i <= n - 1; i++) {
+//            YArray[i]=DataConvertUtil.byteArrayXOR(blockX[i],cipher(CBArray[i+1],rks));
+//        }
+
+
+        ////System.out.println(processors);
+        if (blockX.length < processors) {
+            processors = blockX.length;
+        }
+        //确定每个线程处理的数据量
+        long size = blockX.length / processors;
+        //确定最后一个线程处理的数据量
+        long remainder = blockX.length % processors;
+        CountDownLatch countDownLatch = new CountDownLatch(processors);
+        for (int j = 0; j < processors; j++) {
+            if(DEBUG) {
+                System.out.println("外i:" + j);
+                System.out.println("外size:" + size);
+                System.out.println("外processors:" + processors);
+            }
+            long start = j * size;
+            long end = (j + 1) * size;
+            if (j == processors - 1) {
+                end += remainder;
+            }
+            long finalEnd = end;
+            long finalStart = start;
+            byte[] finalIv = byteArrAdd(ICB,start);
+            threadPoolExecutor.execute(new Runnable() {
+                @Override
+                public void run() {
+
+                    byte[] startIv = finalIv;
+                    //System.out.println(Thread.currentThread().getName()+"start:"+finalStart+" end:"+ finalEnd + " count:"+(finalEnd-finalStart));
+                    for (int i = (int) finalStart; i < finalEnd; i++) {
+
+
+                        byte[] cipher = cipher(startIv, rks);
+
+                        if(DEBUG){
+                            System.out.println(Thread.currentThread().getName()+"--i:"+i);
+                            System.out.println(Thread.currentThread().getName()+"--finalStart:"+finalStart);
+                            System.out.println(Thread.currentThread().getName()+"--startIv:"+new BigInteger(startIv));
+                            System.out.println(Thread.currentThread().getName()+"--cipher:"+Hex.toHexString(cipher));
+                            System.out.println(Thread.currentThread().getName()+"--blockX[i]:"+Hex.toHexString(blockX[i]));
+                        }
+
+                        if(blockX[i].length!=cipher.length){
+                            if (DEBUG) System.out.println(Thread.currentThread().getName()+"###last--cipher:"+Hex.toHexString(cipher));
+                            if (DEBUG) System.out.println(Thread.currentThread().getName()+"###last--blockX[i]:"+Hex.toHexString(blockX[i]));
+                            byte[] tempCipher = new byte[blockX[i].length];
+                            System.arraycopy(cipher,0,tempCipher,0,blockX[i].length);
+                            cipher=tempCipher;
+                            if (DEBUG) System.out.println(Thread.currentThread().getName()+"###last--tempCipher:"+Hex.toHexString(tempCipher));
+                        }
+                        YArray[i]=DataConvertUtil.byteArrayXOR(blockX[i],cipher);
+                        if(DEBUG) System.out.println(Thread.currentThread().getName()+"--YArray[i]:"+Hex.toHexString(YArray[i]));
+                        startIv=byteArrAdd(startIv);
+                        //System.out.println(i+"分块加密耗时："+(System.currentTimeMillis()-l2));
+                    }
+                    countDownLatch.countDown();
+                }
+            });
+        }
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+
+
+
+
+
+//        long length = blockX[n-1].length;
+//        byte[] cipherCbN = cipher(CBArray[(int) n], rks);
+//        byte[] cipherCbN1 = new byte[length];
+//        System.arraycopy(cipherCbN, 0, cipherCbN1, 0, length);
+//        YArray[n-1]=DataConvertUtil.byteArrayXOR(blockX[ n-1],cipherCbN1);
+
+        return DataConvertUtil.byteArrAdd(YArray);
+
+    }
+
+    //GCM加密
+    public AEADExecution blockEncryptGCM(byte[] ming, byte[]key, byte[] iv, byte[] aad, int tagLen){
+        long l = System.currentTimeMillis();
+        byte[][] rks = ext_key_L(key);
+        if (DEBUG) {
+            System.out.println("ext_key_L:"+(System.currentTimeMillis()-l));
+            l=System.currentTimeMillis();
+        }
+        byte[] H = cipher(new byte[16], rks);
+        if (DEBUG) System.out.println("H:"+Hex.toHexString(H));
+        if (DEBUG) {
+            System.out.println("generateH:"+(System.currentTimeMillis()-l));
+            l=System.currentTimeMillis();
+        }
+        initVBox(H);
+        if (DEBUG) {
+            System.out.println("initVBox:"+(System.currentTimeMillis()-l));
+
+        }
+        byte[] J0 ;
+        if(iv.length==12){
+            J0 = DataConvertUtil.byteArrAdd(iv, new byte[]{0x00,0x00,0x00,0x01});
+        }else {
+            long s1 = (iv.length/16);
+            if(iv.length%16!=0){
+                s1++;
+            }
+            long s = 16*s1-iv.length;
+
+            J0 = GHASH(DataConvertUtil.byteArrAdd(iv,new byte[(int) s+8],DataConvertUtil.byteToN(DataConvertUtil.intToBytes(iv.length),8)),H);
+        }
+        l=System.currentTimeMillis();
+        byte[] C = GCTR(byteArrAdd(J0),ming,rks);
+        if(DEBUG) System.out.println("C hex:"+Hex.toHexString(C));
+
+        if (DEBUG) {
+            System.out.println("GCTR C:"+(System.currentTimeMillis()-l));
+            l=System.currentTimeMillis();
+        }
+
+        int ceilC = (int) Math.ceil(C.length/16.0);
+        int ceilAad = (int) Math.ceil(aad.length/16.0);
+
+        byte[] u = 16 * ceilC - C.length == 0 ? null : new byte[16 * ceilC - C.length];
+        byte[] v = 16 * ceilAad - aad.length == 0 ? null : new byte[16 * ceilAad - aad.length];
+
+        byte[] S = GHASH(DataConvertUtil.byteArrAdd(aad,v,C,u,DataConvertUtil.byteToN(DataConvertUtil.intToBytes(8*aad.length),8),DataConvertUtil.byteToN(DataConvertUtil.intToBytes(8*C.length),8)),H);
+
+        if(DEBUG){
+            System.out.println("GHASH S:"+(System.currentTimeMillis()-l));
+            l=System.currentTimeMillis();
+        }
+
+
+        byte[] T = new byte[tagLen];
+        System.arraycopy(GCTR(J0,S,rks),0,T,0,tagLen);
+
+        if(DEBUG){
+            System.out.println("GCTR T:"+(System.currentTimeMillis()-l));
+            l=System.currentTimeMillis();
+        }
+
+        return new AEADExecution(C,T);
+    }
+    public byte[] blockDecryptGCM(byte[] mi,byte[] key,byte[] iv,byte[] aad,byte[] tag){
+        byte[][] rks = ext_key_L(key);
+        byte[] H = cipher(new byte[16], rks);
+        initVBox(H);
+        byte[] J0 ;
+        if(iv.length==12){
+            J0 = DataConvertUtil.byteArrAdd(iv, new byte[]{0x00,0x00,0x00,0x01});
+        }else {
+            long s1 = (iv.length/16);
+            if(iv.length%16!=0){
+                s1++;
+            }
+            long s = 16*s1-iv.length;
+            J0 = GHASH(DataConvertUtil.byteArrAdd(iv,new byte[(int) s+8],DataConvertUtil.byteToN(DataConvertUtil.intToBytes(iv.length),8)),H);
+        }
+        byte[] P =  GCTR(byteArrAdd(J0),mi,rks);
+        int ceilC = (int) Math.ceil(mi.length/16.0);
+        int ceilAad = (int) Math.ceil(aad.length/16.0);
+        byte[] u = 16 * ceilC - mi.length == 0 ? null : new byte[16 * ceilC - mi.length];
+        byte[] v = 16 * ceilAad - aad.length == 0 ? null : new byte[16 * ceilAad - aad.length];
+
+        byte[] S = GHASH(DataConvertUtil.byteArrAdd(aad,v,mi,u,DataConvertUtil.byteToN(DataConvertUtil.intToBytes(aad.length*8),8),DataConvertUtil.byteToN(DataConvertUtil.intToBytes(mi.length*8),8)),H);
+        byte[] T = new byte[tag.length];
+        System.arraycopy(GCTR(J0,S,rks),0,T,0,tag.length);
+        if(!Arrays.equals(T,tag)){
+            throw new RuntimeException("tag不匹配");
+        }
+        return P;
+    }
+
+
+
+    public static void main(String[] args) {
+        SM4Cipher sm4Cipher = new SM4Cipher();
+
+        byte[] key = new byte[16];
+        SecureRandom secureRandom = new SecureRandom();
+        secureRandom.nextBytes(key);
+        key=Hex.decode("9cc73b4bf64e1eb3e3ae4da62855f13e");
+        String msg = "012345678901234567890123456789012";
+        byte[] bytes = msg.getBytes();
+        bytes=new byte[1930000];
+        secureRandom.nextBytes(bytes);
+        byte [] iv = new byte[16];
+        secureRandom.nextBytes(iv);
+        iv=Hex.decode("0bd1495841bb349c56c7fc86");
+//        iv=Hex.decode("0bd1495841bb349c56c7fc862855f131");
+
+        String add = "kms-soc";
+        System.out.println(Hex.toHexString(iv));
+        System.out.println(Hex.toHexString(key));
+
+
+        long l = System.currentTimeMillis();
+        AEADExecution aeadExecution = sm4Cipher.blockEncryptGCM(bytes, key, iv, add.getBytes(), 16);
+        System.out.println("加密耗时:"+(System.currentTimeMillis()-l));
+//        System.out.println("C:"+Hex.toHexString(aeadExecution.getCipherText()));
+        System.out.println("T:"+Hex.toHexString(aeadExecution.getTag()));
+
+
+
+//        byte[] bytes = sm4Cipher.blockDecryptGCM(aeadExecution.getCipherText(), key, iv,add.getBytes(), aeadExecution.getTag());
+//        System.out.println(new String(bytes));
+
+
+
+
+
+    }
 
 
 

@@ -4,6 +4,7 @@ import com.yxj.gm.asn1.ca.enums.ApplyTypeEnum;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigInteger;
+import java.util.Date;
 
 public class CaApplyKeyReq {
     ApplyTypeEnum applyType;
@@ -47,9 +48,9 @@ public class CaApplyKeyReq {
         //终端用户保护公钥
         byte[] userPubKey;
         //密钥有效起始时间
-        String notBefore;
+        Date notBefore;
         //密钥截止时间
-        String notAfter;
+        Date notAfter;
         //用户姓名
         String userName;
         //地区代码
@@ -172,19 +173,19 @@ public class CaApplyKeyReq {
         this.userPubKey = userPubKey;
     }
 
-    public String getNotBefore() {
+    public Date getNotBefore() {
         return notBefore;
     }
 
-    public void setNotBefore(String notBefore) {
+    public void setNotBefore(Date notBefore) {
         this.notBefore = notBefore;
     }
 
-    public String getNotAfter() {
+    public Date getNotAfter() {
         return notAfter;
     }
 
-    public void setNotAfter(String notAfter) {
+    public void setNotAfter(Date notAfter) {
         this.notAfter = notAfter;
     }
 

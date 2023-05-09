@@ -1,12 +1,15 @@
 package com.yxj.gm;
 
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
+import org.bouncycastle.util.encoders.Hex;
 
+import java.io.IOException;
 import java.security.KeyPair;
+import java.util.Base64;
 
 
 public class TestSM2 {
-    public static void main(String[] args) {
+    public static void main1(String[] args) {
 
 //  BigInteger bigInteger = new BigInteger(XG);
 //  byte[] testbigbarr= new byte[]{(byte)0x15,(byte)0xCE,(byte)0x7B,(byte)0xC3,(byte)0x2D,(byte)0x29};
@@ -123,6 +126,36 @@ public class TestSM2 {
 //        System.out.println(java/zjh);
 //        System.out.println(Hex.toHexString(keyPair.getPublic().getEncoded()));
 //        System.out.println(Hex.toHexString(keyPair.getPrivate().getEncoded()));
+
+
+    }
+
+    public static void main(String[] args) throws IOException {
+        byte[] pubKey = Hex.decode("E543ABCEBA68AAD81F31FB92A81D84EEBB0A7A0737F73399515274F07D085BB951C7E1DE565BB992C69F195C24F8AFDABE74DEAF61942207ABF4CAB62F133B00");
+//        byte[] msg = Hex.decode("80206ab8ff860ecdd73bdc236194a95279bb885f34406395caac075545282c053085");
+//        byte[] signature = Hex.decode("880dc422466fefa738b6659731bc204984b108abdaf4efebe2dce339a523374d311a6bfddafea6b80fa671d3b6b79bba993dbe210a72763b08135396542cd6f8");
+//        SM2Signature sm2Signature = new SM2Signature();
+//        boolean verify = sm2Signature.verify(msg, null, signature, pubKey);
+//        System.out.println(verify);
+//
+//
+//        SM4Cipher sm4Cipher = new SM4Cipher(ModeEnum.CTR);
+//        SecureRandom secureRandom = new SecureRandom();
+//        UseKey useKey = new UseKey();
+//        byte[] key = new byte[16];
+//        byte[] testMsg = FileUtils.readFileToByteArray(new File("D:\\GMT正式标准\\GMT 0028-2014 密码模块安全技术要求.PDF"));
+//        secureRandom.nextBytes(key);
+//
+//        long l = System.currentTimeMillis();
+//        sm4Cipher.cipherEncrypt(key,testMsg,new byte[16]);
+////        useKey.cipherEncrypt("SM4",new ZyxxSecretKey(key),testMsg);
+//        System.out.println(System.currentTimeMillis()-l);
+        /**
+         * 公钥数据转换为pem格式
+         */
+        Base64.Encoder encoder = Base64.getEncoder();
+        String pem = "-----BEGIN PUBLIC KEY-----\r"+encoder.encodeToString(pubKey)+"\r-----END PUBLIC KEY-----";
+        System.out.println(pem);
 
 
     }

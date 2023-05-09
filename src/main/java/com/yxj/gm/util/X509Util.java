@@ -16,7 +16,7 @@ import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.math.ec.ECCurve;
 import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.util.BigIntegers;
-import sun.security.mscapi.SunMSCAPI;
+
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -106,7 +106,7 @@ public class X509Util {
     public static String oidToDisplayName(ASN1ObjectIdentifier oid){
         X500NameStyle rFC4519Style = RFC4519Style.INSTANCE;
         X500NameStyle bcStyle = BCStyle.INSTANCE;
-        SunMSCAPI sunMSCAPI =new SunMSCAPI();
+        SunOidMap sunOidMap =new SunOidMap();
         //RSA oidMap
         HashMap<Object,Object> sunRsaSignEntriesMap = new HashMap<>();
         SunRsaSignEntries.putEntries(sunRsaSignEntriesMap);
@@ -130,7 +130,7 @@ public class X509Util {
             return o.toString();
         }
         //如果全部查不到再去SunMSCAPI解析
-         o = sunMSCAPI.get("Alg.Alias.Signature.OID." + oid.getId());
+         o = sunOidMap.get("Alg.Alias.Signature.OID." + oid.getId());
         if(o!=null){
             return o.toString();
         }

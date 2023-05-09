@@ -21,6 +21,49 @@ public class DataConvertUtil {
                 (byte)((b >> 1) & 0x1) +
                 (byte)((b) & 0x1);
     }
+
+    /**
+     * Byte转Bit
+     */
+//    public static byte[] byteToBitArray(byte b) {
+//        if(b==0)return new byte[]{0,0,0,0,0,0,0,0};
+//        String string = new BigInteger(b+"").toString(2);
+//        if(string.length()<7){
+//            int length = 7 - string.length();
+//            for(int i=0;i<length;i++){
+//                string = "0"+string;
+//            }
+//        }
+//        if(b>0){
+//            string= "1"+string;
+//        }else {
+//            string= "0"+string;
+//        }
+//
+//        char[] charArray = string.toCharArray();
+//        byte[] bytes = new byte[charArray.length];
+//        for (int i = 0; i < charArray.length; i++) {
+//            if(charArray[i]=='1'){
+//                bytes[i] = 1;
+//            }else {
+//                bytes[i] = 0;
+//            }
+//        }
+//        return bytes;
+//    }
+
+    public static byte[] byteToBitArray(byte b) {
+        byte[] bytes = new byte[8];
+        bytes[0]=(byte)((b >> 7) & 0x1);
+        bytes[1]=(byte)((b >> 6) & 0x1);
+        bytes[2]=(byte)((b >> 5) & 0x1);
+        bytes[3]=(byte)((b >> 4) & 0x1);
+        bytes[4]=(byte)((b >> 3) & 0x1);
+        bytes[5]=(byte)((b >> 2) & 0x1);
+        bytes[6]=(byte)((b >> 1) & 0x1);
+        bytes[7]=(byte)((b) & 0x1);
+        return bytes;
+    }
     /**
      * Bit转Byte
      */
@@ -45,14 +88,21 @@ public class DataConvertUtil {
         return (byte) re;
     }
 
+
     public static byte[] byteArrAdd(byte[]... bytesArr){
         int allLength=0;
         for (byte[] value : bytesArr) {
+            if(value==null){
+                continue;
+            }
             allLength += value.length;
         }
         byte[] resultBytes = new byte[allLength];
         int count =0;
         for (byte[] bytes : bytesArr) {
+            if(bytes==null){
+                continue;
+            }
             System.arraycopy(bytes, 0, resultBytes, count, bytes.length);
             count += bytes.length;
         }
@@ -101,8 +151,10 @@ public class DataConvertUtil {
     }
 
 
+
     private static byte[] bitSmall8CycleLeft(byte[] in, int len)
     {
+        //定义一个和输入长度一致的byte数组
         byte[] tmp = new byte[in.length];
         int t1, t2, t3;
         for (int i = 0; i < tmp.length; i++)
@@ -123,6 +175,53 @@ public class DataConvertUtil {
         System.arraycopy(in, 0, tmp, in.length - byteLen, byteLen);
         return tmp;
     }
+
+    public static byte[] byteArrayLeft(byte[] in, int len)
+    {
+        BigInteger bigInteger = new BigInteger(in).shiftLeft(len);
+        return byteToN(bigInteger.toByteArray(), in.length);
+    }
+    public static byte[] byteArrayRight(byte[] in, int len)
+    {
+        byte[] tempByteArr = null;
+        for (byte b:in) {
+            tempByteArr = byteArrAdd(tempByteArr,byteToBitArray(b));
+        }
+
+        byte[] tempByteArr2 = new byte[tempByteArr.length];
+        System.arraycopy(tempByteArr, 0, tempByteArr2, len, tempByteArr.length-len);
+
+
+        byte[] result = new byte[in.length];
+
+        for (int i = 0; i < tempByteArr2.length/8; i++) {
+            byte temp = 0;
+            for (int j = 0; j < 8; j++) {
+                temp= (byte) (tempByteArr2[8*i+j]<<(7-j)^temp);
+            }
+            result[i] = temp;
+        }
+        return result;
+
+
+
+
+//        BigInteger bigInteger = new BigInteger(in).shiftRight(len);
+//        return byteToN(bigInteger.toByteArray(), in.length);
+    }
+
+    public static void main(String[] args) {
+        byte[] bytes = byteArrayRight(new byte[]{0x12}, 1);
+        System.out.println(Hex.toHexString(bytes));
+    }
+    public static String ToByteString(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(b);
+        }
+        return sb.toString();
+    }
+
     /**
      * 字节数组逆序
      *
@@ -182,6 +281,13 @@ public class DataConvertUtil {
 
         return bytes;
     }
+
+    public static void fastByteArrayXOR(byte[] bytes1, byte[] bytes2){
+        for (int i = 0; i < bytes1.length; i++) {
+            bytes1[i]=(byte)(bytes1[i]^bytes2[i]);
+        }
+    }
+
     //非
     public static byte[] byteArrayNOT(byte[] bytes1){
         int length = bytes1.length;
@@ -366,7 +472,7 @@ public class DataConvertUtil {
         return bytes;
     }
 
-    public static void main(String[] args) {
+    public static void main1(String[] args) {
 
 //        long a=511;
 //        long b=13;
