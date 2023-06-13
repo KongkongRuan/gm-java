@@ -44,7 +44,7 @@ public class GenerateRSACert {
 
 
         KeyPair terminalPair = generateRSAKeyPair();
-        X509Certificate terminalCert = generateTerminalCert(terminalPair.getPublic(),subCAPair.getPrivate(),subCaCert);
+        X509Certificate terminalCert = generateTerminalCert(terminalPair.getPublic(),subCAPair.getPrivate(),subCaCert,"192.168.0.97");
         String pemTerminalCert = FileUtils.ASN1ToPemByteArray(terminalCert.getEncoded());
         KeyStore terminalStore = createKeyStore("terminal", "123456", terminalPair.getPrivate(), terminalCert,terminalCert);
         terminalStore.store(new FileOutputStream("D:\\certtest\\rsa\\terminalCert.jks"),"123456".toCharArray());
@@ -52,12 +52,12 @@ public class GenerateRSACert {
 
 
     }
-    private static KeyPair generateRSAKeyPair()throws Exception{
+    public static KeyPair generateRSAKeyPair()throws Exception{
         KeyPairGenerator rsa = KeyPairGenerator.getInstance("RSA");
         rsa.initialize(2048,new SecureRandom());
         return rsa.generateKeyPair();
     }
-    private static X509Certificate generateRootCert(KeyPair keyPair)throws Exception{
+    public static X509Certificate generateRootCert(KeyPair keyPair)throws Exception{
         X500Name subject = new X500Name("C=CN,CN=Root");
         BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
         Date notBefore = new Date();
@@ -74,7 +74,7 @@ public class GenerateRSACert {
         X509CertificateHolder build = jcaX509v3CertificateBuilder.build(signer);
         return new JcaX509CertificateConverter().getCertificate(build);
     }
-    private static X509Certificate generateSubCaCert(PublicKey subCAPublicKey, PrivateKey rootPrivateKey,X509Certificate rootCert)throws Exception{
+    public static X509Certificate generateSubCaCert(PublicKey subCAPublicKey, PrivateKey rootPrivateKey,X509Certificate rootCert)throws Exception{
         X500Name subject = new X500Name("C=CN,CN=SubCA");
         BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
         Date notBefore = new Date();
@@ -93,21 +93,21 @@ public class GenerateRSACert {
         X509CertificateHolder build = jcaX509v3CertificateBuilder.build(signer);
         return new JcaX509CertificateConverter().getCertificate(build);
     }
-    private static X509Certificate generateTerminalCert(PublicKey terminalPublicKey, PrivateKey subCAPrivateKey,X509Certificate subCACert)throws Exception{
-        X500Name subject = new X500Name("C=CN,CN=192.168.0.184");
+    public static X509Certificate generateTerminalCert(PublicKey terminalPublicKey, PrivateKey subCAPrivateKey,X509Certificate subCACert,String terminalIp)throws Exception{
+        X500Name subject = new X500Name("C=CN,CN=KMS");
         BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
         Date notBefore = new Date();
         Date notAfter = new Date(notBefore.getTime()+365*24*60*60*1000L);
         JcaX509v3CertificateBuilder jcaX509v3CertificateBuilder = new JcaX509v3CertificateBuilder(new X500Name("C=CN,CN=SubCA"), serial, notBefore, notAfter, subject,terminalPublicKey);
 
-        GeneralNames generalNames = new GeneralNames(new GeneralName(GeneralName.iPAddress, "192.168.0.184"));
+        GeneralNames generalNames = new GeneralNames(new GeneralName(GeneralName.iPAddress, terminalIp));
         jcaX509v3CertificateBuilder.addExtension(Extension.subjectAlternativeName,false,generalNames);
 
         ContentSigner signer = new JcaContentSignerBuilder("SHA256withRSA").build(subCAPrivateKey);
         X509CertificateHolder build = jcaX509v3CertificateBuilder.build(signer);
         return new JcaX509CertificateConverter().getCertificate(build);
     }
-    private static KeyStore createKeyStore(String alias,String password,PrivateKey privateKey,X509Certificate cert,X509Certificate... chain)throws Exception{
+    public static KeyStore createKeyStore(String alias,String password,PrivateKey privateKey,X509Certificate cert,X509Certificate... chain)throws Exception{
         KeyStore jks = KeyStore.getInstance("JKS");
         jks.load(null,null);
         jks.setKeyEntry(alias,privateKey,password.toCharArray(),chain);

@@ -40,4 +40,13 @@ public class ASN1SM2Signature extends ASN1Object {
         vec.add(this.S);
         return new DERSequence(vec);
     }
+    public byte[] toSignatureByteArray(){
+        byte[] r = this.R.getPositiveValue().toByteArray();
+        byte[] s = this.S.getPositiveValue().toByteArray();
+        byte[] signature = new byte[64];
+        System.arraycopy(r,0,signature,32-r.length,r.length);
+        System.arraycopy(s,0,signature,64-s.length,s.length);
+        return signature;
+    }
+
 }

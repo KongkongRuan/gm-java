@@ -1,5 +1,6 @@
 package com.yxj.gm.SM4;
 
+import com.sun.org.apache.xerces.internal.impl.dv.util.HexBin;
 import com.yxj.gm.SM4.dto.AEADExecution;
 import com.yxj.gm.constant.SM4Constant;
 import com.yxj.gm.enums.ModeEnum;
@@ -31,6 +32,7 @@ public class SM4Cipher {
      * 线程数
      */
     private int processors = 2 * Runtime.getRuntime().availableProcessors() + 1;
+//    private int processors = Runtime.getRuntime().availableProcessors();
     /**Mode
      * 0 ECB
      * 1 CBC
@@ -50,6 +52,7 @@ public class SM4Cipher {
 
 
     private boolean DEBUG = false;
+    private boolean TIME = false;
 
     public ModeEnum getMode() {
         return Mode;
@@ -573,8 +576,13 @@ public class SM4Cipher {
         if(X.length%16!=0){
             n++;
         }
-        byte[][] blockX = block(X);
+        long l = System.currentTimeMillis();
 
+        byte[][] blockX = block(X);
+        if(TIME){
+            System.out.println("--GCTR blockX:"+ (System.currentTimeMillis()-l));
+            l = System.currentTimeMillis();
+        }
 //        byte[][] CBArray = new byte[blockX.length+1][16];
 
         byte[][] YArray = new byte[(int) n][16];
@@ -594,6 +602,18 @@ public class SM4Cipher {
         if (blockX.length < processors) {
             processors = blockX.length;
         }
+        /**
+         * 2  3140
+         * 3  2540
+         * 4  2229
+         * 5  1963
+         * 7  1892  1975 1894
+         * 8  1814  1786 1811 1746 1745 1758 1799 1818 1880 2390
+         * 9  1894  1823 1805 1841 1743 1806 1818 1822
+         * 10 1900
+         * 14 1898 2092
+         * 17 1859 1854 1831 1806 1842
+         */
         //确定每个线程处理的数据量
         long size = blockX.length / processors;
         //确定最后一个线程处理的数据量
@@ -654,7 +674,9 @@ public class SM4Cipher {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-
+        if(TIME){
+            System.out.println("--GCTR cipher:"+(System.currentTimeMillis()-l));
+        }
 
 
 
@@ -674,18 +696,18 @@ public class SM4Cipher {
     public AEADExecution cipherEncryptGCM(byte[]key,byte[] ming , byte[] iv, byte[] aad, int tagLen){
         long l = System.currentTimeMillis();
         byte[][] rks = ext_key_L(key);
-        if (DEBUG) {
+        if (TIME) {
             System.out.println("ext_key_L:"+(System.currentTimeMillis()-l));
             l=System.currentTimeMillis();
         }
         byte[] H = cipher(new byte[16], rks);
         if (DEBUG) System.out.println("H:"+Hex.toHexString(H));
-        if (DEBUG) {
+        if (TIME) {
             System.out.println("generateH:"+(System.currentTimeMillis()-l));
             l=System.currentTimeMillis();
         }
         initVBox(H);
-        if (DEBUG) {
+        if (TIME) {
             System.out.println("initVBox:"+(System.currentTimeMillis()-l));
 
         }
@@ -705,7 +727,7 @@ public class SM4Cipher {
         byte[] C = GCTR(byteArrAdd(J0),ming,rks);
         if(DEBUG) System.out.println("C hex:"+Hex.toHexString(C));
 
-        if (DEBUG) {
+        if (TIME) {
             System.out.println("GCTR C:"+(System.currentTimeMillis()-l));
             l=System.currentTimeMillis();
         }
@@ -718,7 +740,7 @@ public class SM4Cipher {
 
         byte[] S = GHASH(DataConvertUtil.byteArrAdd(aad,v,C,u,DataConvertUtil.byteToN(DataConvertUtil.intToBytes(8*aad.length),8),DataConvertUtil.byteToN(DataConvertUtil.intToBytes(8*C.length),8)),H);
 
-        if(DEBUG){
+        if(TIME){
             System.out.println("GHASH S:"+(System.currentTimeMillis()-l));
             l=System.currentTimeMillis();
         }
@@ -727,9 +749,8 @@ public class SM4Cipher {
         byte[] T = new byte[tagLen];
         System.arraycopy(GCTR(J0,S,rks),0,T,0,tagLen);
 
-        if(DEBUG){
+        if(TIME){
             System.out.println("GCTR T:"+(System.currentTimeMillis()-l));
-            l=System.currentTimeMillis();
         }
 
         return new AEADExecution(C,T);
@@ -765,37 +786,42 @@ public class SM4Cipher {
     }
 
 
-
+    public static void main2(String[] args) {
+        System.out.println("123");
+    }
     public static void main(String[] args) {
         SM4Cipher sm4Cipher = new SM4Cipher();
 
         byte[] key = new byte[16];
         SecureRandom secureRandom = new SecureRandom();
         secureRandom.nextBytes(key);
-        key=Hex.decode("9cc73b4bf64e1eb3e3ae4da62855f13e");
+        key= HexBin.decode("9cc73b4bf64e1eb3e3ae4da62855f13e");
         String msg = "012345678901234567890123456789012";
         byte[] bytes = msg.getBytes();
-        bytes=new byte[1930000];
+        bytes=new byte[3000000*2];
         secureRandom.nextBytes(bytes);
         byte [] iv = new byte[16];
         secureRandom.nextBytes(iv);
-        iv=Hex.decode("0bd1495841bb349c56c7fc86");
+        iv=HexBin.decode("0bd1495841bb349c56c7fc86");
 //        iv=Hex.decode("0bd1495841bb349c56c7fc862855f131");
 
         String add = "kms-soc";
-        System.out.println(Hex.toHexString(iv));
-        System.out.println(Hex.toHexString(key));
+//        System.out.println(HexBin.toHexString(iv));
+//        System.out.println(HexBin.toHexString(key));
 
 
         long l = System.currentTimeMillis();
-        AEADExecution aeadExecution = sm4Cipher.cipherEncryptGCM(bytes, key, iv, add.getBytes(), 16);
+
+            AEADExecution aeadExecution = sm4Cipher.cipherEncryptGCM(key, bytes, iv, add.getBytes(), 16);
+
+
         System.out.println("加密耗时:"+(System.currentTimeMillis()-l));
 //        System.out.println("C:"+Hex.toHexString(aeadExecution.getCipherText()));
-        System.out.println("T:"+Hex.toHexString(aeadExecution.getTag()));
+//        System.out.println("T:"+Hex.toHexString(aeadExecution.getTag()));
 
 
 
-//        byte[] bytes = sm4Cipher.blockDecryptGCM(aeadExecution.getCipherText(), key, iv,add.getBytes(), aeadExecution.getTag());
+//        byte[] bytes = sm4Cipher.blockDecryptGCM(key, aeadExecution.getCipherText(), iv,add.getBytes(), aeadExecution.getTag());
 //        System.out.println(new String(bytes));
 
 

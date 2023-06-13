@@ -283,9 +283,19 @@ public class DataConvertUtil {
     }
 
     public static void fastByteArrayXOR(byte[] bytes1, byte[] bytes2){
-        for (int i = 0; i < bytes1.length; i++) {
-            bytes1[i]=(byte)(bytes1[i]^bytes2[i]);
-        }
+//        for (int i = 0; i < bytes1.length; i++) {
+//            bytes1[i]=(byte)(bytes1[i]^bytes2[i]);
+//
+//        }
+
+        int i=0;
+        do {
+            bytes1[i]^=bytes2[i];i++;
+            bytes1[i]^=bytes2[i];i++;
+            bytes1[i]^=bytes2[i];i++;
+            bytes1[i]^=bytes2[i];i++;
+        }while (i<bytes1.length);
+
     }
 
     //非
