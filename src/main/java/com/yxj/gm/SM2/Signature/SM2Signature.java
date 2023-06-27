@@ -1,7 +1,7 @@
 package com.yxj.gm.SM2.Signature;
 
 
-import com.yxj.gm.SM3.SM3;
+import com.yxj.gm.SM3.SM3Digest;
 import com.yxj.gm.constant.SM2Constant;
 import com.yxj.gm.util.DataConvertUtil;
 import com.yxj.gm.util.SM2Util;
@@ -24,17 +24,27 @@ public class SM2Signature {
         System.arraycopy(pubKey,32,Ya,0,32);
     }
 
+    /**
+     * 生成Za
+     * @param IDa
+     */
     private void initZa(byte[] IDa){
         if(IDa==null){
             IDa="1234567812345678".getBytes();
         }
         short ENTLa  = (short) (IDa.length*8);
         byte[] ENTLaBytes = DataConvertUtil.shortToBytes(new short[]{ENTLa});
+        /**
+         * 以下为Za的计算
+         */
         byte[] ta = DataConvertUtil.oneDel(SM2Constant.getA());
         byte[] tb = DataConvertUtil.oneDel(SM2Constant.getB());
         byte[] txg = DataConvertUtil.oneDel(SM2Constant.getXG());
         byte[] tyg = DataConvertUtil.oneDel(SM2Constant.getYG());
 
+        /**
+         *
+         */
         byte[] ZaMsg = new byte[ENTLaBytes.length+IDa.length+ta.length+tb.length+txg.length+tyg.length+Xa.length+Ya.length];
         byte[][] ZaByteS = new byte[][]{ENTLaBytes,IDa,ta,tb,txg,tyg,Xa,Ya};
         int index=0;
@@ -42,10 +52,10 @@ public class SM2Signature {
             System.arraycopy(zaByte, 0, ZaMsg, index, zaByte.length);
             index += zaByte.length;
         }
-        SM3 sm3 = new SM3();
-        sm3.update(ZaMsg);
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(ZaMsg);
 
-        Za = sm3.doFinal();
+        Za = sm3Digest.doFinal();
 
     }
 
@@ -53,9 +63,9 @@ public class SM2Signature {
         byte[] M_= new byte[Za.length+msg.length];
         System.arraycopy(Za,0,M_,0,Za.length);
         System.arraycopy(msg,0,M_,Za.length,msg.length);
-        SM3 sm3 = new SM3();
-        sm3.update(M_);
-        byte[] e = sm3.doFinal();
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(M_);
+        byte[] e = sm3Digest.doFinal();
         //转biginteger之前补0
         e=DataConvertUtil.oneAdd(e);
         BigInteger bigE = new BigInteger(e);
@@ -69,14 +79,10 @@ public class SM2Signature {
             bytes[0]=keyPairBytes[1];
             bytes[1]=keyPairBytes[2];
             k=DataConvertUtil.oneAdd(k);
-
             // 倍点运算出来的x1需要补0
             BigInteger bigx1 = new BigInteger(DataConvertUtil.oneAdd(bytes[0]));
-
-
             BigInteger r1=bigE.add(bigx1);
             r = r1.mod(bigN);
-
         }
         // 如果是生成的密钥k，则需要补0
         BigInteger bigK = new BigInteger(k);
@@ -112,9 +118,9 @@ public class SM2Signature {
         System.arraycopy(Za,0,M_,0,Za.length);
         System.arraycopy(M,0,M_,Za.length,M.length);
 
-        SM3 sm3 = new SM3();
-        sm3.update(M_);
-        byte[] e = sm3.doFinal();
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(M_);
+        byte[] e = sm3Digest.doFinal();
         BigInteger bigE = new BigInteger(DataConvertUtil.oneAdd(e));
         BigInteger bigR = new BigInteger(radd);
         BigInteger bigS = new BigInteger(sadd);
@@ -156,6 +162,10 @@ public class SM2Signature {
         System.arraycopy(bytes[0],0,temp,0,bytes[0].length);
         System.arraycopy(bytes[1],0,temp,bytes[0].length,bytes[1].length);
         return temp;
+    }
+    public byte[] signatureByHSM(byte[] msg,int index){
+
+        return new byte[0];
     }
     public  boolean verify(byte[] msg,byte[] id,byte[] signature,byte[] pubKey){
         initXaYa(pubKey);

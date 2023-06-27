@@ -1,11 +1,9 @@
 package com.yxj.gm;
 
-import com.kms.jca.UseKey;
-import com.yxj.gm.SM2.Cipher.SM2Cipher;
-import com.yxj.gm.SM2.Key.SM2;
-import org.bouncycastle.util.encoders.Hex;
 
-import java.math.BigInteger;
+import com.yxj.gm.SM2.Cipher.SM2Cipher;
+import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
+
 import java.security.*;
 import java.util.concurrent.CountDownLatch;
 
@@ -56,14 +54,14 @@ public class TestMultithreading {
     static class WorkerThread implements Runnable{
         CountDownLatch c;
         WorkerThread(){};
-        UseKey useKey = new UseKey();
+
         WorkerThread(CountDownLatch c){
             this.c=c;
         }
         public void run(){
             SM2Cipher cipher = new SM2Cipher();
             for (int i = 0; i < 250000000; i++) {
-                KeyPair keyPair = SM2.generateSM2KeyPair();
+                KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
 //                KeyPair keyPair = useKey.keyPairGenerator("SM2");
 //                System.out.println(Hex.toHexString(keyPair.getPublic().getEncoded()));
 //                System.out.println(Hex.toHexString(keyPair.getPrivate().getEncoded()));

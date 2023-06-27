@@ -1,211 +1,156 @@
 package com.yxj.gm;
 
 import com.kms.jca.UseKey;
+import com.kms.provider.key.ZyxxSecretKey;
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
-import com.yxj.gm.SM2.Key.SM2;
+import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM2.Signature.SM2Signature;
+import com.yxj.gm.SM3.SM3Digest;
+import com.yxj.gm.SM4.SM4Cipher;
+import com.yxj.gm.cert.SM2CertGenerator;
+import com.yxj.gm.enums.ModeEnum;
+import com.yxj.gm.util.FileUtils;
+import org.apache.commons.lang3.ArrayUtils;
+import org.bouncycastle.asn1.x509.KeyUsage;
+import org.bouncycastle.util.encoders.Base64;
 import org.bouncycastle.util.encoders.Hex;
+
+import java.io.File;
+import java.io.IOException;
 import java.security.KeyPair;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.SecureRandom;
+
 public class Test {
-    public static void main(String[] args) {
-        System.out.println("1232");
-        String msg = "message digest";
-        System.out.println("密钥生成");
-        KeyPair keyPair = SM2.generateSM2KeyPair();
-        System.out.println("公钥："+Hex.toHexString(keyPair.getPublic().getEncoded()));
-        System.out.println("私钥："+Hex.toHexString(keyPair.getPrivate().getEncoded()));
-        System.out.println("签名验签测试");
-            SM2Signature sm2Signature = new SM2Signature();
-            byte[] signature = sm2Signature.signature(msg.getBytes(), null, keyPair.getPrivate().getEncoded());
-            SM2Signature sm2Verify = new SM2Signature();
-            boolean verify = sm2Verify.verify(msg.getBytes(), null, signature, keyPair.getPublic().getEncoded());
-            if(!verify){
-                System.err.println("错误");
-            }else {
-                System.out.println("java 验签通过");
-            }
-        UseKey useKey = new UseKey();
-        boolean b = useKey.verifySignature(keyPair.getPublic(), msg.getBytes(), signature);
-        if(b){
-            System.out.println("C 验签通过");
-        }
-        System.out.println("加解密测试");
+    public static void main1(String[] args) {
+        String msg = "gm-java-1.0";
+        //SM2密钥对生成
+        KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+        //SM2加解密
         SM2Cipher sm2Cipher = new SM2Cipher();
         byte[] mi = sm2Cipher.SM2CipherEncrypt(msg.getBytes(), keyPair.getPublic().getEncoded());
-        System.out.println("java加密后密文："+Hex.toHexString(mi));
         byte[] ming = sm2Cipher.SM2CipherDecrypt(mi, keyPair.getPrivate().getEncoded());
-        System.out.println("java解密后明文："+new String(ming));
-        byte[] bytes = useKey.cipherDecrypeKeyPair("SM2", keyPair.getPrivate(), mi);
-        System.out.println("C解密后明文："+new String(bytes));
+        System.out.println("SM2解密结果："+new String(ming));
+        //SM2签名验签
+        SM2Signature signature = new SM2Signature();
+        byte[] signature1 = signature.signature(msg.getBytes(), null, keyPair.getPrivate().getEncoded());
+        boolean b = signature.verify(msg.getBytes(), null, signature1, keyPair.getPublic().getEncoded());
+        System.out.println("SM2验签结果："+b);
+        //制作SM2证书
+        //ca证书密钥
+        KeyPair caKeyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+        //终端证书密钥
+        KeyPair equipKeyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+
+        SM2CertGenerator sm2CertGenerator = new SM2CertGenerator();
+        String DN_CA = "CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US";
+        String DN_CHILD = "CN=DD,OU=DD,O=DD,L=Linton,ST=Utah,C=CN";
+
+        byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded(),false,0);
+        try {
+            FileUtils.writeFile("D:/certtest/java-ca-3.cer",rootCert);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, caKeyPair.getPrivate().getEncoded(), equipKeyPair.getPublic().getEncoded(),false,0);
+        try {
+            FileUtils.writeFile("D:/certtest/java-ownerCert-3.cer",ownerCert);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        //使用HSM签名制作SM2证书
+        int hsmSigPriIndex=0;
+//        rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded(),true,hsmSigPriIndex);
+        //SM3摘要计算
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(msg.getBytes());
+        byte[] md = sm3Digest.doFinal();
+        byte[] md2 = sm3Digest.doFinal(msg.getBytes());
+        sm3Digest.update("gm-java-".getBytes());
+        sm3Digest.update("1.0".getBytes());
+        byte[] md3 = sm3Digest.doFinal();
+        System.out.println(Hex.toHexString(md));
+        System.out.println(Hex.toHexString(md2));
+        System.out.println(Hex.toHexString(md3));
+        //SM4加解密
+        SecureRandom secureRandom = new SecureRandom();
+        byte[] key = new byte[16];
+        byte[] iv = new byte[16];
+        secureRandom.nextBytes(key);
+        secureRandom.nextBytes(iv);
+        //ECB模式
+        SM4Cipher sm4CipherECB = new SM4Cipher(ModeEnum.ECB);
+        byte[] ecbmi = sm4CipherECB.cipherEncrypt(key, msg.getBytes(), null);
+        byte[] ecbming = sm4CipherECB.cipherDecrypt(key, ecbmi, iv);
+        System.out.println("ECB明文："+new String(ecbming));
+        //CBC模式
+        SM4Cipher sm4CipherCBC = new SM4Cipher(ModeEnum.CBC);
+        byte[] cbcmi = sm4CipherCBC.cipherEncrypt(key, msg.getBytes(), iv);
+        byte[] cbcming = sm4CipherCBC.cipherDecrypt(key, cbcmi, iv);
+        System.out.println("CBC明文："+new String(cbcming));
+        //CTR模式
+        SM4Cipher sm4CipherCTR = new SM4Cipher(ModeEnum.CTR);
+        byte[] ctrmi = sm4CipherCTR.cipherEncrypt(key, msg.getBytes(), iv);
+        byte[] ctrming = sm4CipherCTR.cipherDecrypt(key, ctrmi, iv);
+        System.out.println("CTR明文："+new String(ctrming));
+
     }
 
-//    public static void main(String[] args) {
-//        int sum = 100;
-//        String msg = "message digest";
-//        int javacount =0;
-//        int ccount = 0;
-//        int count = 0;
-//        KeyPair keyPair = SM2.generateSM2KeyPair();
-//        System.out.println("公钥："+Hex.toHexString(keyPair.getPublic().getEncoded()));
-//        System.out.println("私钥："+Hex.toHexString(keyPair.getPrivate().getEncoded()));
-//
-//
-//        /*******************************************************************************************测速*****************************************************************/
-//            byte[] priKey = Hex.decode("DE960E60B70E61CF9F567D08544C488D1DBDE06603F1999DBD1B6BC85DD3283E");
-//            byte[] pubkey = Hex.decode("51E3B4E62B8B63CAD2ABC65302E88E542DF0EEFA6913E78B3AFCFDFEB1CB926801C6676BF71A85059AD83A266E1D641B8D69F3EDEE0B524D18154FBD19BD4214");
-//            KeyPair keyPair1 = new KeyPair(new SM2PublicKey(pubkey),new SM2PrivateKey(priKey));
-//        long start = System.currentTimeMillis();
-//        for (int i = 0; i < sum; i++) {
-//            SM2Signature sm2Signature = new SM2Signature();
-//            byte[] signature = sm2Signature.signature(msg.getBytes(), null, priKey);
-////            SM2Signature sm2Verify = new SM2Signature();
-////            boolean verify = sm2Verify.verify(msg.getBytes(), null, signature, pubkey);
-////            if(!verify){
-////                System.err.println("错误");
-////            }
-//        }
-//        System.out.println("JAVA签名:"+(System.currentTimeMillis()-start));
-//
-//
-////         start = System.currentTimeMillis();
-////        for (int i = 0; i < sum; i++) {
-////
-////            UseKey useKey = new UseKey();
-////            byte[] signature = useKey.signature(keyPair1,msg.getBytes());
-//////
-//////            boolean verify = useKey.verifySignature(keyPair1.getPublic(), msg.getBytes(), signature);
-//////            if(!verify){
-//////                System.err.println("错误");
-//////            }
-////        }
-////        System.out.println("C签名:"+(System.currentTimeMillis()-start));
-//
-//
-//         start = System.currentTimeMillis();
-//        SM2Signature sm2Signature = new SM2Signature();
-//        byte[] signature = sm2Signature.signature(msg.getBytes(), null, priKey);
-//        for (int i = 0; i < sum; i++) {
-//            SM2Signature sm2Verify = new SM2Signature();
-//            boolean verify = sm2Verify.verify(msg.getBytes(), null, signature, pubkey);
-//            if(!verify){
-//                System.err.println("错误");
-//            }
-//        }
-//        System.out.println("JAVA验签:"+(System.currentTimeMillis()-start));
-//
-////        start = System.currentTimeMillis();
-////        UseKey useKey = new UseKey();
-////         signature = useKey.signature(keyPair1,msg.getBytes());
-////        for (int i = 0; i < sum; i++) {
-////            boolean verify = useKey.verifySignature(keyPair1.getPublic(), msg.getBytes(), signature);
-////            if(!verify){
-////                System.err.println("错误");
-////            }
-////        }
-////        System.out.println("C验签:"+(System.currentTimeMillis()-start));
-//        /*******************************************************************************************测速*****************************************************************/
-//
-/////*******************************************************************************************正确性验证*****************************************************************/
-////        for (int i = 0; i < 1000; i++) {
-////            // System.out.println("*****************************************************************************************开始****************************************************************************************************************");
-////            SM2Signature sm2Signature = new SM2Signature();
-////            UseKey useKey = new UseKey();
-//////            byte[] priKey = Hex.decode("DE960E60B70E61CF9F567D08544C488D1DBDE06603F1999DBD1B6BC85DD3283E");
-//////            byte[] pubkey = Hex.decode("51E3B4E62B8B63CAD2ABC65302E88E542DF0EEFA6913E78B3AFCFDFEB1CB926801C6676BF71A85059AD83A266E1D641B8D69F3EDEE0B524D18154FBD19BD4214");
-//////            KeyPair keyPair1 = new KeyPair(new ZyxxPublicKey(pubkey),new ZyxxPrivateKey(priKey));
-////
-////            KeyPair keyPair1 = SM2.generateSM2KeyPair();
-////
-////            // // System.out.println("生成的公钥："+Hex.toHexString(keyPair1.getPublic().getEncoded()));
-////            // // System.out.println("生成的私钥："+Hex.toHexString(keyPair1.getPrivate().getEncoded()));
-////             // System.out.println("**************************************************JAVA签名********************************************************************************************");
-////            byte[] signature = sm2Signature.signature(msg.getBytes(), null, keyPair1.getPrivate().getEncoded());
-////            // // System.out.println("java signature HEX:"+Hex.toHexString(signature));
-////            // // System.out.println(signature.length);
-////
-////             // System.out.println("**************************************************JAVA签名组件化验签********************************************************************************************");
-////            boolean b = useKey.verifySignature(keyPair1.getPublic(), msg.getBytes(), signature);
-////            if(b){
-////                ccount++;
-////            }
-////            else {
-////                System.err.println("**************************************************JAVA签名组件化验签********************************************************************************************");
-////                System.err.println("java签名C验签失败");
-////                 System.err.println("生成的公钥："+Hex.toHexString(keyPair1.getPublic().getEncoded()));
-////                 System.err.println("生成的私钥："+Hex.toHexString(keyPair1.getPrivate().getEncoded()));
-////            }
-////            // // System.out.println(b);
-////            SM2Signature sm2Verify = new SM2Signature();
-////
-////             // System.out.println("**************************************************JAVA签名JAVA验签********************************************************************************************");
-////            // // System.out.println();
-////            boolean javaB = sm2Verify.verify(msg.getBytes(), null, signature, keyPair1.getPublic().getEncoded());
-////            if(javaB){
-////                javacount++;
-////            }
-////            else {
-////                 System.err.println("**************************************************JAVA验签失败********************************************************************************************");
-////                System.err.println("java签名java验签失败");
-////                System.err.println("生成的公钥："+Hex.toHexString(keyPair1.getPublic().getEncoded()));
-////                System.err.println("生成的私钥："+Hex.toHexString(keyPair1.getPrivate().getEncoded()));
-////            }
-////
-////            byte[] signature1 = useKey.signature(keyPair1, msg.getBytes());
-////            sm2Verify = new SM2Signature();
-////            boolean verify = sm2Verify.verify(msg.getBytes(), null, signature1, keyPair1.getPublic().getEncoded());
-////            if(verify){
-////                count++;
-////            }else {
-////                 System.err.println("**************************************************C签名JAVA验签********************************************************************************************");
-////                System.err.println("C签名java验签失败");
-////                System.err.println("生成的公钥："+Hex.toHexString(keyPair1.getPublic().getEncoded()));
-////                System.err.println("生成的私钥："+Hex.toHexString(keyPair1.getPrivate().getEncoded()));
-////                System.err.println("c验签");
-////                boolean b1 = useKey.verifySignature(keyPair1.getPublic(), msg.getBytes(), signature1);
-////                System.out.println("b1:"+b1);
-////            }
-////             System.out.println("java签名C验签："+ccount+"--java签名java验签："+javacount+"--C签名java验签："+count+"--总数："+(i+1));
-////
-////        }
-////
-////        /*******************************************************************************************正确性验证*****************************************************************/
-//
-//    }
+    public static void main2(String[] args) throws Exception {
+        byte[] bytes = FileUtils.readFileToByteArray(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\ca_csr1.key"));
 
+        byte[] ming = Base64.decode(bytes);
+        System.out.println(Hex.toHexString(ming));
+        byte[] bhmy = geneProtect();
 
+        UseKey useKey = new UseKey();
+        byte[] mi = useKey.cipherEncrypt("SM4", new ZyxxSecretKey(bhmy), ming);
+        FileUtils.writeFile("D:\\gw-cert-key\\prikey-mi1.key",mi);
+//        byte[] pubkey = Hex.decode("74DBBCC0BB8994EF116B8BFE817A0AB5CB32F312F752725B3179672A171886F1494B8809B2A542DF508DA1FEB1595C20AF2A9F287FF8FBF28AA7CBA2948B6A6D");
+//        FileUtils.writeFile("D:\\gw-cert-key\\pubkey-ming.key",pubkey);
 
-//    public static void main(String[] args) {
-//        String msg = "message digest";
-//
-//        SM2Signature sm2Signature = new SM2Signature();
-//        UseKey useKey = new UseKey();
-//        byte[] pubKey = new byte[64];
-//        System.arraycopy(DataConvertUtil.oneDel(SM2Constant.getxA()),0,pubKey,0,32);
-//        System.arraycopy(DataConvertUtil.oneDel(SM2Constant.getyA()),0,pubKey,32,32);
-//
-////        KeyPair keyPair1 = SM2.generateSM2KeyPair();
-//
-//        // // System.out.println("**************************************************JAVA签名********************************************************************************************");
-//        byte[] signature = sm2Signature.signature(msg.getBytes(), "ALICE123@YAHOO.COM".getBytes(), SM2Constant.getdA());
-//        // // System.out.println("java signature HEX:"+Hex.toHexString(signature));
-//        // // System.out.println(signature.length);
-//        KeyPair keyPair = new KeyPair(new ZyxxPublicKey(pubKey),new ZyxxPrivateKey(SM2Constant.getdA()));
-//
-////        byte[] signature1 = useKey.signature(keyPair, msg.getBytes());
-////        // // System.out.println("C signature    HEX:"+Hex.toHexString(signature1));
-////        // // System.out.println(signature1.length);
-//
-//        // // System.out.println("**************************************************组件化验签********************************************************************************************");
-//        boolean b = useKey.verifySignature(new ZyxxPublicKey(pubKey), msg.getBytes(), signature);
-////        // // System.out.println(b);
-//         sm2Signature = new SM2Signature();
-//
-//        // // System.out.println("**************************************************JAVA验签********************************************************************************************");
-//        // // System.out.println(sm2Signature.verify("message digest".getBytes(),"ALICE123@YAHOO.COM".getBytes(),signature,pubKey));
-//
-////        // // System.out.println(Hex.toHexString("1234567812345678".getBytes()));
-//
-//    }
+    }
 
+    public static void main3(String[] args) throws IOException {
+        byte[] priMingBase64 = FileUtils.readFileToByteArray(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\ca_csr_pri_ming.key"));
+        byte[] priMing=Base64.decode(priMingBase64);
+        byte[] cert = FileUtils.readFileToByteArray(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\SERIALNUMBER=F30123261097202302160029,OU=CEPRI,O=SGCC,C=CN6324D9DA1E80F0F5.cer"));
+        byte[] bhmy = geneProtect();
+        UseKey useKey = new UseKey();
+        byte[] pubkey = Hex.decode("C217B42678763542DCC9A9367C7A2FE3F34DE8F36D120E9F799FD4402FBAD82D4E02BDA3245FB48332C37050FD785546F5020A47026F84302C1DB9E6A68EE092");
+        byte[] priMi = useKey.cipherEncrypt("SM4", new ZyxxSecretKey(bhmy), priMing);
+        byte[] certAddZero = ArrayUtils.add(cert, (byte) 0);
+        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\certAddZero.cer"),certAddZero);
+        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\pubkey.key"),pubkey);
+        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\priMi.key"),priMi);
+
+        System.out.println(Hex.toHexString(priMing));
+
+    }
+
+    public static void main(String[] args) throws IOException {
+        byte[] cert = FileUtils.readFileToByteArray(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-03\\TestCrt.crt"));
+        byte[] asn1 = FileUtils.pemToASN1ByteArray(cert);
+        FileUtils.writeByteArrayToFile(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-03\\derCert.der"),asn1);
+        String s = FileUtils.ASN1ToPemByteArray(asn1);
+        System.out.println(s);
+    }
+    public static byte[] geneProtect(){
+        UseKey useKey = new UseKey();
+        byte[] s = "KMS_S".getBytes();
+        byte[] in = "KMS_Feature".getBytes();
+        byte[] info = "KMS_START".getBytes();
+        int ol = 16;
+        try {
+            byte[] bytes = useKey.generateProtectedKey(s, in, info, ol);
+            return bytes;
+        } catch (NoSuchProviderException e) {
+            e.printStackTrace();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 
 }
