@@ -200,11 +200,9 @@ public class SM4Cipher {
         if(iv.length!=16){
             throw new RuntimeException("iv 长度错误 iv len="+iv.length);
         }
-        long l = System.currentTimeMillis();
         byte[][] blocks = block(m);
         //System.out.println("分块耗时："+(System.currentTimeMillis()-l));
         byte[][] mis = new byte[blocks.length][16];
-        long l1 = System.currentTimeMillis();
 
         ////System.out.println(processors);
         if (blocks.length < processors) {
@@ -214,23 +212,29 @@ public class SM4Cipher {
         long size = blocks.length / processors;
         //确定最后一个线程处理的数据量
         long remainder = blocks.length % processors;
+        processors++;
+//        System.out.println("processors:"+processors+",size:"+size+",remainder:"+remainder);
         CountDownLatch countDownLatch = new CountDownLatch(processors);
         for (int i = 0; i < processors; i++) {
             long start = i * size;
-            long end = (i + 1) * size;
+            long end = 0;
             if (i == processors - 1) {
-                end += remainder;
+                end =(i*size)+remainder;
+            }else {
+                end = (i + 1) * size;
             }
             long finalEnd = end;
             long finalStart = start;
-            iv = byteArrAdd(iv,start);
+            if(i!=0){
+                iv = byteArrAdd(iv,size);
+            }
             byte[] finalIv = iv;
             threadPoolExecutor.execute(new Runnable() {
                 @Override
                 public void run() {
                     byte[] startIv = finalIv;
-                    //System.out.println(Thread.currentThread().getName()+"start:"+finalStart+" end:"+ finalEnd + " count:"+(finalEnd-finalStart));
-                    for (int i = (int) finalStart; i < finalEnd-finalStart; i++) {
+//                    System.out.println(Thread.currentThread().getName()+"start:"+finalStart+" end:"+ finalEnd + " count:"+(finalEnd-finalStart));
+                    for (int i = (int) finalStart; i < finalEnd; i++) {
 
 
                         byte[] cipher = cipher(startIv, rks);
@@ -239,6 +243,7 @@ public class SM4Cipher {
                             System.arraycopy(cipher,0,tempCipher,0,blocks[i].length);
                             cipher=tempCipher;
                         }
+//                        System.out.println(Thread.currentThread().getName()+",i:"+i);
                         mis[i]=DataConvertUtil.byteArrayXOR(blocks[i],cipher);
                         startIv=byteArrAdd(startIv);
                         //System.out.println(i+"分块加密耗时："+(System.currentTimeMillis()-l2));
@@ -342,9 +347,9 @@ public class SM4Cipher {
         for (int i = 0; i < count; i++) {
             byte[] temp;
             if(i==count-1&&last!=0){
-                 temp= new byte[(int) last];
+                temp= new byte[(int) last];
             }else {
-                 temp = new byte[16];
+                temp = new byte[16];
             }
             System.arraycopy(m,i*16,temp,0,temp.length);
             result[i]=temp;
