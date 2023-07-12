@@ -1,6 +1,5 @@
 package com.yxj.gm.SM4;
 
-import com.sun.org.apache.xerces.internal.impl.dv.util.HexBin;
 import com.yxj.gm.SM4.dto.AEADExecution;
 import com.yxj.gm.constant.SM4Constant;
 import com.yxj.gm.enums.ModeEnum;
@@ -164,7 +163,7 @@ public class SM4Cipher {
     }
     //2. 分组然后根据模式并行加密
     //ECB
-    private byte[] blockEncryptECB(byte[] m, byte[][] rks){
+    public byte[] blockEncryptECB(byte[] m, byte[][] rks){
         //1 填充
         m=padding(m);
         //2 分块
@@ -179,7 +178,7 @@ public class SM4Cipher {
         return merge(result);
     }
     //CBC
-    private byte[] blockEncryptCBC(byte[] m, byte[] iv, byte[][] rks){
+    public byte[] blockEncryptCBC(byte[] m, byte[] iv, byte[][] rks){
         //1 填充
         m=padding(m);
         //2 分块
@@ -197,15 +196,13 @@ public class SM4Cipher {
         return merge(result);
     }
     //CRT
-    private byte[] blockEncryptCTR(byte[] m, byte[] iv, byte[][] rks)  {
+    public byte[] blockEncryptCTR(byte[] m, byte[] iv, byte[][] rks)  {
         if(iv.length!=16){
             throw new RuntimeException("iv 长度错误 iv len="+iv.length);
         }
-        long l = System.currentTimeMillis();
         byte[][] blocks = block(m);
         //System.out.println("分块耗时："+(System.currentTimeMillis()-l));
         byte[][] mis = new byte[blocks.length][16];
-        long l1 = System.currentTimeMillis();
 
         ////System.out.println(processors);
         if (blocks.length < processors) {
@@ -215,23 +212,29 @@ public class SM4Cipher {
         long size = blocks.length / processors;
         //确定最后一个线程处理的数据量
         long remainder = blocks.length % processors;
+        processors++;
+//        System.out.println("processors:"+processors+",size:"+size+",remainder:"+remainder);
         CountDownLatch countDownLatch = new CountDownLatch(processors);
         for (int i = 0; i < processors; i++) {
             long start = i * size;
-            long end = (i + 1) * size;
+            long end = 0;
             if (i == processors - 1) {
-                end += remainder;
+                end =(i*size)+remainder;
+            }else {
+                end = (i + 1) * size;
             }
             long finalEnd = end;
             long finalStart = start;
-            iv = byteArrAdd(iv,start);
+            if(i!=0){
+                iv = byteArrAdd(iv,size);
+            }
             byte[] finalIv = iv;
             threadPoolExecutor.execute(new Runnable() {
                 @Override
                 public void run() {
                     byte[] startIv = finalIv;
-                    //System.out.println(Thread.currentThread().getName()+"start:"+finalStart+" end:"+ finalEnd + " count:"+(finalEnd-finalStart));
-                    for (int i = (int) finalStart; i < finalEnd-finalStart; i++) {
+//                    System.out.println(Thread.currentThread().getName()+"start:"+finalStart+" end:"+ finalEnd + " count:"+(finalEnd-finalStart));
+                    for (int i = (int) finalStart; i < finalEnd; i++) {
 
 
                         byte[] cipher = cipher(startIv, rks);
@@ -240,6 +243,7 @@ public class SM4Cipher {
                             System.arraycopy(cipher,0,tempCipher,0,blocks[i].length);
                             cipher=tempCipher;
                         }
+//                        System.out.println(Thread.currentThread().getName()+",i:"+i);
                         mis[i]=DataConvertUtil.byteArrayXOR(blocks[i],cipher);
                         startIv=byteArrAdd(startIv);
                         //System.out.println(i+"分块加密耗时："+(System.currentTimeMillis()-l2));
@@ -279,7 +283,7 @@ public class SM4Cipher {
 
     //解密
     //ECB
-    private byte[] blockDecryptECB(byte[] m, byte[][] rks){
+    public byte[] blockDecryptECB(byte[] m, byte[][] rks){
         //1 分块
         byte[][] block = block(m);
         //2 解密
@@ -293,7 +297,7 @@ public class SM4Cipher {
         return unPadding(merge);
     }
     //CBC
-    private byte[] blockDecryptCBC(byte[] m, byte[] iv, byte[][] rks){
+    public byte[] blockDecryptCBC(byte[] m, byte[] iv, byte[][] rks){
         //1 分块
         byte[][] block = block(m);
         //2 解密
@@ -343,9 +347,9 @@ public class SM4Cipher {
         for (int i = 0; i < count; i++) {
             byte[] temp;
             if(i==count-1&&last!=0){
-                 temp= new byte[(int) last];
+                temp= new byte[(int) last];
             }else {
-                 temp = new byte[16];
+                temp = new byte[16];
             }
             System.arraycopy(m,i*16,temp,0,temp.length);
             result[i]=temp;
@@ -370,7 +374,7 @@ public class SM4Cipher {
         return out;
     }
     //轮密钥扩展
-    private byte[][] ext_key_L(byte[] in){
+    public byte[][] ext_key_L(byte[] in){
         byte[] MK0 = new byte[4];
         byte[] MK1 = new byte[4];
         byte[] MK2 = new byte[4];
@@ -786,48 +790,6 @@ public class SM4Cipher {
     }
 
 
-    public static void main2(String[] args) {
-        System.out.println("123");
-    }
-    public static void main(String[] args) {
-        SM4Cipher sm4Cipher = new SM4Cipher();
-
-        byte[] key = new byte[16];
-        SecureRandom secureRandom = new SecureRandom();
-        secureRandom.nextBytes(key);
-        key= HexBin.decode("9cc73b4bf64e1eb3e3ae4da62855f13e");
-        String msg = "012345678901234567890123456789012";
-        byte[] bytes = msg.getBytes();
-        bytes=new byte[3000000*2];
-        secureRandom.nextBytes(bytes);
-        byte [] iv = new byte[16];
-        secureRandom.nextBytes(iv);
-        iv=HexBin.decode("0bd1495841bb349c56c7fc86");
-//        iv=Hex.decode("0bd1495841bb349c56c7fc862855f131");
-
-        String add = "kms-soc";
-//        System.out.println(HexBin.toHexString(iv));
-//        System.out.println(HexBin.toHexString(key));
-
-
-        long l = System.currentTimeMillis();
-
-            AEADExecution aeadExecution = sm4Cipher.cipherEncryptGCM(key, bytes, iv, add.getBytes(), 16);
-
-
-        System.out.println("加密耗时:"+(System.currentTimeMillis()-l));
-//        System.out.println("C:"+Hex.toHexString(aeadExecution.getCipherText()));
-//        System.out.println("T:"+Hex.toHexString(aeadExecution.getTag()));
-
-
-
-//        byte[] bytes = sm4Cipher.blockDecryptGCM(key, aeadExecution.getCipherText(), iv,add.getBytes(), aeadExecution.getTag());
-//        System.out.println(new String(bytes));
-
-
-
-
-    }
 
 
 
