@@ -13,11 +13,11 @@ public class SM3Digest {
     private static final byte[] T1byte =new byte[]{(byte) 0x79,(byte) 0xcc,(byte) 0x45,(byte) 0x19};
     private static final byte[] T2byte = new byte[]{(byte) 0x7a,(byte) 0x87,(byte) 0x9d,(byte) 0x8a};
 
-    private static final byte[][] WAArray= new byte[68][4];
-    private static final byte[][] WBArray= new byte[64][4];
+    private  final byte[][] WAArray= new byte[68][4];
+    private  final byte[][] WBArray= new byte[64][4];
 
 //    static String strM = "616263";
-    private static byte[] msgAll=null;
+    private   byte[] msgAll=null;
     
 
     //0-15
@@ -81,7 +81,7 @@ public class SM3Digest {
 
 
     //压缩函数
-    private static byte[] CF(byte[] V,byte[] BI){
+    private  byte[] CF(byte[] V,byte[] BI){
         if(V==null){
             V=IVbyte;
         }
@@ -155,7 +155,7 @@ public class SM3Digest {
         return DataConvertUtil.byteArrayXOR(VIABC, V);
     }
     //扩展(压缩函数需要调用扩展)
-    private static void expand(byte[] BI){
+    private  void expand(byte[] BI){
         //第一步将消息分组B划分为16个字
         for (int i = 0; i <16 ; i++) {
             byte[] temByte = new byte[4];
@@ -174,7 +174,7 @@ public class SM3Digest {
 
 
     //2.迭代
-    private static byte[] iteration(){
+    private  byte[] iteration(){
         if(msgAll==null){
             throw new RuntimeException("请添加要计算的值");
         }

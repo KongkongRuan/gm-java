@@ -24,12 +24,16 @@ public class TestSM4 {
         SecureRandom secureRandom = new SecureRandom();
         byte[] key = new byte[16];
         secureRandom.nextBytes(key);
-        byte[] msg = new byte[9956];
+        byte[] msg = new byte[99560];
         secureRandom.nextBytes(msg);
 
         SM4Cipher sm4Cipher = new SM4Cipher();
+        long l = System.currentTimeMillis();
         byte[] bytes = sm4Cipher.cipherEncrypt(key, msg, new byte[16]);
+        System.out.println("加密耗时："+(System.currentTimeMillis()-l));
+        l=System.currentTimeMillis();
         byte[] sm4s = useKey.cipherEncrypt("SM4", new ZyxxSecretKey(key), msg);
+        System.out.println("加密耗时："+(System.currentTimeMillis()-l));
         System.out.println(Hex.toHexString(sm4s));
 
 

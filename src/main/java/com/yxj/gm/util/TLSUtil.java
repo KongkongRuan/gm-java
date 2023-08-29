@@ -7,6 +7,8 @@ import com.yxj.gm.provider.XaProvider;
 import com.yxj.gm.provider.mac.XaHMac;
 import org.bouncycastle.util.encoders.Hex;
 
+import java.io.File;
+import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
@@ -72,24 +74,29 @@ public class TLSUtil {
 
 
 
-    public static void main(String[] args) throws NoSuchAlgorithmException, NoSuchProviderException {
+    public static void main(String[] args) throws NoSuchAlgorithmException, NoSuchProviderException, IOException {
         byte[] key =new byte[]{0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x01,0x02,0x03,0x04,0x05,0x06,0x07};
 //        UseKey useKey = new UseKey();
 //        byte[] prf = useKey.prf(new ZyxxSecretKey(key), "123".getBytes(), "123".getBytes(), 32);
 //        System.out.println(Hex.toHexString(prf));
         Security.addProvider(new XaProvider());
         MessageDigest xaMd = MessageDigest.getInstance("SM3", "XaProvider");
-//        byte[] prf = TLSUtil.prf(xaMd, key, "123".getBytes(), "123".getBytes(), 32);
+        byte[] prf = TLSUtil.prf(xaMd, key, "123".getBytes(), "123".getBytes(), 130000);
 //        System.out.println(Hex.toHexString(prf));
+        FileUtils.writeByteArrayToFile(new File("D:\\prf.txt"),prf);
 
-        byte[] hkdf = TLSUtil.hkdf(xaMd, null, key, "1234".getBytes(), 32);
-        System.out.println(Hex.toHexString(hkdf));
+        byte[] hkdf = TLSUtil.hkdf(xaMd, null, key, "1234".getBytes(), 130000);
+//        System.out.println(Hex.toHexString(hkdf));
+        FileUtils.writeByteArrayToFile(new File("D:\\hkdf.txt"),hkdf);
 
         CallJNI callJNI = new CallJNI();
         byte[] okm = new byte[32];
         callJNI.hkdf(985,null,0,key, key.length,"1234".getBytes(),4,okm,okm.length);
         System.out.println(Hex.toHexString(okm));
         //180-55-x=a   180-125=a    180-55-x=180-125   70
+
+
+
 
     }
 

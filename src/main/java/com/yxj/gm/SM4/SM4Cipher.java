@@ -257,7 +257,7 @@ public class SM4Cipher {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-
+        threadPoolExecutor.shutdown();
 
         //System.out.println(blocks.length);
         //System.out.println("分块加密总耗时："+(System.currentTimeMillis()-l1));
@@ -632,10 +632,13 @@ public class SM4Cipher {
             long start = j * size;
             long end = (j + 1) * size;
             if (j == processors - 1) {
+
+
                 end += remainder;
             }
             long finalEnd = end;
             long finalStart = start;
+            //todo iv计算可能有问题
             byte[] finalIv = byteArrAdd(ICB,start);
             threadPoolExecutor.execute(new Runnable() {
                 @Override
@@ -678,6 +681,7 @@ public class SM4Cipher {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
+        threadPoolExecutor.shutdown();
         if(TIME){
             System.out.println("--GCTR cipher:"+(System.currentTimeMillis()-l));
         }
