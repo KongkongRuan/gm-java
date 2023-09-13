@@ -13,6 +13,34 @@ import java.io.InputStream;
 import java.math.BigInteger;
 
 public class ASN1Util {
+
+    public static byte[] GetContent(InputStream inputStream){
+        try {
+            int tag = inputStream.read();
+            if(tag!=4){
+                throw new RuntimeException("输入的asn1编码有误");
+            }
+            int ltag = inputStream.read();
+            byte[] bytes = DataConvertUtil.byteToBitArray((byte) ltag);
+            if(bytes[0]!=1){
+                byte[] bytes1 = new byte[ltag];
+                inputStream.read(bytes1);
+                return  bytes1;
+            }else {
+                bytes[0]=0;
+                byte b = DataConvertUtil.BitArrayTobyte(bytes);
+                byte[] lenbytes = new byte[b];
+                inputStream.read(lenbytes);
+                long len = DataConvertUtil.byteArrayToUnsignedInt(lenbytes);
+                byte[] content = new byte[(int)len];
+                inputStream.read(content);
+                return content;
+
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
     public static ASN1SM2Cipher SM2CipherToASN1SM2Cipher(byte[] sm2Cipher){
         if(sm2Cipher.length<96){
             throw new RuntimeException("输入的密文长度有误");

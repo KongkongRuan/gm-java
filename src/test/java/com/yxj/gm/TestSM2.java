@@ -1,5 +1,6 @@
 package com.yxj.gm;
 
+import com.kms.jca.UseKey;
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM2.Signature.SM2Signature;
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Signature;
@@ -170,7 +171,7 @@ public class TestSM2 {
 
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main3(String[] args) throws IOException {
 
         byte[] pubKey = Hex.decode("815cdb69ed648bb27deffca2ad8b1d42a44be9f4f26eaacd6b42e0c62c1de290fe7c84527af1e6a7bffed018a62aed9aa04bff01e6adb36c084c5b917efa34d1");
         System.out.println(pubKey.length);
@@ -187,5 +188,16 @@ public class TestSM2 {
 
         byte[] sm2Signature = ASN1Util.asn1SignatureToSM2Signature(asn1SM2Signature1.getEncoded());
         System.out.println(Hex.toHexString(sm2Signature));
+    }
+
+    public static void main(String[] args) {
+        KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+        String msg = "xdyg";
+        UseKey useKey = new UseKey();
+        byte[] signature = useKey.signature(keyPair, msg.getBytes());
+        SM2Signature sm2Signature   = new SM2Signature();
+        signature[0]=0;
+        boolean verify = sm2Signature.verify(msg.getBytes(), null, signature, keyPair.getPublic().getEncoded());
+        System.out.println(verify);
     }
 }
