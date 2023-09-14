@@ -20,7 +20,7 @@ public class FileUtils extends org.apache.commons.io.FileUtils {
         }
 
 
-        String[] stra = new String(pem).split("-----BEGIN CERTIFICATE-----"+lineSeparator)[1].split("-----END CERTIFICATE-----"+lineSeparator);
+        String[] stra = new String(pem).split("-----BEGIN CERTIFICATE-----"+lineSeparator)[1].split("-----END CERTIFICATE-----");
         return Base64.decode(stra[0].replace(lineSeparator,""));
     }
     public static String ASN1ToPemByteArray(byte[] asn1){

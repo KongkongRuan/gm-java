@@ -287,14 +287,8 @@ public class RequestResolver {
                                                             }
                                                         }
                                                     }
-
                                                 }
                                             }
-
-
-
-
-
                                         }
                                         if (primitive instanceof DEROctetString) {
                                             DEROctetString derOctetString=(DEROctetString)primitive;

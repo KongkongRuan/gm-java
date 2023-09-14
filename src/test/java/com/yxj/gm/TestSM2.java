@@ -1,6 +1,11 @@
 package com.yxj.gm;
 
+import com.kms.jca.UseKey;
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
+import com.yxj.gm.SM2.Signature.SM2Signature;
+import com.yxj.gm.asn1.ca.sm2.ASN1SM2Signature;
+import com.yxj.gm.asn1.ca.util.ASN1Util;
+import com.yxj.gm.util.SM2Util;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.io.IOException;
@@ -130,7 +135,7 @@ public class TestSM2 {
 
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main2(String[] args) throws IOException {
         byte[] pubKey = Hex.decode("E543ABCEBA68AAD81F31FB92A81D84EEBB0A7A0737F73399515274F07D085BB951C7E1DE565BB992C69F195C24F8AFDABE74DEAF61942207ABF4CAB62F133B00");
 //        byte[] msg = Hex.decode("80206ab8ff860ecdd73bdc236194a95279bb885f34406395caac075545282c053085");
 //        byte[] signature = Hex.decode("880dc422466fefa738b6659731bc204984b108abdaf4efebe2dce339a523374d311a6bfddafea6b80fa671d3b6b79bba993dbe210a72763b08135396542cd6f8");
@@ -158,5 +163,41 @@ public class TestSM2 {
         System.out.println(pem);
 
 
+        SM2Signature sm2Signature = new SM2Signature();
+        KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+        byte[] signature = sm2Signature.signature("123".getBytes(), null, keyPair.getPrivate().getEncoded());
+        System.out.println(Hex.toHexString(signature));
+
+
+    }
+
+    public static void main3(String[] args) throws IOException {
+
+        byte[] pubKey = Hex.decode("815cdb69ed648bb27deffca2ad8b1d42a44be9f4f26eaacd6b42e0c62c1de290fe7c84527af1e6a7bffed018a62aed9aa04bff01e6adb36c084c5b917efa34d1");
+        System.out.println(pubKey.length);
+        byte[] x = new byte[32];
+        byte[] y = new byte[32];
+        System.arraycopy(pubKey,0,x,0,32);
+        System.arraycopy(pubKey,32,y,0,32);
+
+        boolean b = SM2Util.checkPubKey(new byte[][]{x, y});
+        System.out.println(b);
+        ASN1SM2Signature asn1SM2Signature1 = ASN1Util.SM2SignatureToASN1SM2Signature(pubKey);
+
+        System.out.println(Hex.toHexString(asn1SM2Signature1.getEncoded()));
+
+        byte[] sm2Signature = ASN1Util.asn1SignatureToSM2Signature(asn1SM2Signature1.getEncoded());
+        System.out.println(Hex.toHexString(sm2Signature));
+    }
+
+    public static void main(String[] args) {
+        KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+        String msg = "xdyg";
+        UseKey useKey = new UseKey();
+        byte[] signature = useKey.signature(keyPair, msg.getBytes());
+        SM2Signature sm2Signature   = new SM2Signature();
+        signature[0]=0;
+        boolean verify = sm2Signature.verify(msg.getBytes(), null, signature, keyPair.getPublic().getEncoded());
+        System.out.println(verify);
     }
 }

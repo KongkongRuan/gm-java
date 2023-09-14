@@ -9,24 +9,56 @@ import com.yxj.gm.util.SM2Util;
 import java.math.BigInteger;
 
 
+public class SM2SignatureBack {
 
-public class SM2Signature {
-
-//    byte[] Za;
-//    byte[] Xa;
-//    byte[] Ya;
-
-
-//    private void initXaYa(byte[] pubKey){
-//        Xa = new byte[32];
-//        Ya = new byte[32];
-//        System.arraycopy(pubKey,0,Xa,0,32);
-//        System.arraycopy(pubKey,32,Ya,0,32);
-//    }
+    byte[] Za;
+    byte[] Xa;
+    byte[] Ya;
 
 
+    private void initXaYa(byte[] pubKey){
+        Xa = new byte[32];
+        Ya = new byte[32];
+        System.arraycopy(pubKey,0,Xa,0,32);
+        System.arraycopy(pubKey,32,Ya,0,32);
+    }
 
-    private byte[][] internalSignature(byte[] msg,byte[] dA,byte[] Za){
+    /**
+     * 生成Za
+     * @param IDa
+     */
+    private void initZa(byte[] IDa){
+        if(IDa==null){
+            IDa="1234567812345678".getBytes();
+        }
+        short ENTLa  = (short) (IDa.length*8);
+        byte[] ENTLaBytes = DataConvertUtil.shortToBytes(new short[]{ENTLa});
+        /**
+         * 以下为Za的计算
+         */
+        byte[] ta = DataConvertUtil.oneDel(SM2Constant.getA());
+        byte[] tb = DataConvertUtil.oneDel(SM2Constant.getB());
+        byte[] txg = DataConvertUtil.oneDel(SM2Constant.getXG());
+        byte[] tyg = DataConvertUtil.oneDel(SM2Constant.getYG());
+
+        /**
+         *
+         */
+        byte[] ZaMsg = new byte[ENTLaBytes.length+IDa.length+ta.length+tb.length+txg.length+tyg.length+Xa.length+Ya.length];
+        byte[][] ZaByteS = new byte[][]{ENTLaBytes,IDa,ta,tb,txg,tyg,Xa,Ya};
+        int index=0;
+        for (byte[] zaByte : ZaByteS) {
+            System.arraycopy(zaByte, 0, ZaMsg, index, zaByte.length);
+            index += zaByte.length;
+        }
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(ZaMsg);
+
+        Za = sm3Digest.doFinal();
+
+    }
+
+    private byte[][] internalSignature(byte[] msg,byte[] dA){
         byte[] M_= new byte[Za.length+msg.length];
         System.arraycopy(Za,0,M_,0,Za.length);
         System.arraycopy(msg,0,M_,Za.length,msg.length);
@@ -74,11 +106,8 @@ public class SM2Signature {
         return new byte[][]{rbytes,sbytes};
     }
 
-    private boolean internalVerify(byte[] M,byte[][] rs,byte[] Za,byte[] pubKey){
-        byte[] Xa = new byte[32];
-        byte[] Ya = new byte[32];
-        System.arraycopy(pubKey,0,Xa,0,32);
-        System.arraycopy(pubKey,32,Ya,0,32);
+    private boolean internalVerify(byte[] M,byte[][] rs){
+
         byte[] radd = DataConvertUtil.oneAdd(rs[0]);
         byte[] sadd = DataConvertUtil.oneAdd(rs[1]);
         byte[] paxadd = DataConvertUtil.oneAdd(Xa);
@@ -124,9 +153,10 @@ public class SM2Signature {
     public byte[] signature(byte[] msg,byte[] id,byte[] priKey){
 
         byte[][] puba = SM2Util.MultiplePointOperation(SM2Constant.getXG(), SM2Constant.getYG(), priKey, SM2Constant.getA(), SM2Constant.getP());
-
-        byte[] za = SM2Util.initZa(id, DataConvertUtil.byteArrAdd(puba[0], puba[1]));
-        byte[][] bytes = internalSignature(msg, priKey,za);
+        Xa=puba[0];
+        Ya=puba[1];
+        initZa(id);
+        byte[][] bytes = internalSignature(msg, priKey);
         byte[] temp = new byte[bytes[0].length+bytes[1].length];
         System.arraycopy(bytes[0],0,temp,0,bytes[0].length);
         System.arraycopy(bytes[1],0,temp,bytes[0].length,bytes[1].length);
@@ -137,12 +167,13 @@ public class SM2Signature {
         return new byte[0];
     }
     public  boolean verify(byte[] msg,byte[] id,byte[] signature,byte[] pubKey){
-        byte[] Za = SM2Util.initZa(id,pubKey);
+        initXaYa(pubKey);
+        initZa(id);
         byte[] r = new byte[32];
         byte[] s = new byte[32];
         System.arraycopy(signature,0,r,0,32);
         System.arraycopy(signature,32,s,0,32);
-        return internalVerify(msg,new byte[][]{r,s},Za,pubKey);
+        return internalVerify(msg,new byte[][]{r,s});
     }
 
 

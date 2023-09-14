@@ -1,5 +1,6 @@
 package com.yxj.gm.util;
 
+import com.yxj.gm.SM3.SM3Digest;
 import com.yxj.gm.constant.SM2Constant;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.gm.GMNamedCurves;
@@ -9,6 +10,9 @@ import org.bouncycastle.crypto.params.ECDomainParameters;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigInteger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
 
 public class SM2Util {
@@ -52,6 +56,64 @@ public class SM2Util {
             System.err.println("公钥验证失败："+Hex.toHexString(random));
         }
     }
+    public static byte[] KeyExchange(byte[] peerPubKey,byte[] priKey,int len){
+        byte[] random = Hex.decode("dffcd0d719295a37b9bc19eed2f9923a");
+        byte[] PX = new byte[32];
+        byte[] PY = new byte[32];
+        System.arraycopy(peerPubKey,0,PX,0,32);
+        System.arraycopy(peerPubKey,32,PY,0,32);
+
+        byte[][] bytes = MultiplePointOperation(PX, PY, priKey, SM2Constant.getA(), SM2Constant.getP());
+        try {
+            MessageDigest xaMd = MessageDigest.getInstance("SM3", "XaProvider");
+            return TLSUtil.prf(xaMd,random,bytes[0],bytes[1],len);
+
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        } catch (NoSuchProviderException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    /**
+     * 生成Za
+     * @param IDa
+     */
+    public static byte[] initZa(byte[] IDa,byte[] pubKey){
+        byte[] Xa = new byte[32];
+        byte[] Ya = new byte[32];
+        System.arraycopy(pubKey,0,Xa,0,32);
+        System.arraycopy(pubKey,32,Ya,0,32);
+
+        if(IDa==null){
+            IDa="1234567812345678".getBytes();
+        }
+        short ENTLa  = (short) (IDa.length*8);
+        byte[] ENTLaBytes = DataConvertUtil.shortToBytes(new short[]{ENTLa});
+        /**
+         * 以下为Za的计算
+         */
+        byte[] ta = DataConvertUtil.oneDel(SM2Constant.getA());
+        byte[] tb = DataConvertUtil.oneDel(SM2Constant.getB());
+        byte[] txg = DataConvertUtil.oneDel(SM2Constant.getXG());
+        byte[] tyg = DataConvertUtil.oneDel(SM2Constant.getYG());
+
+        /**
+         *
+         */
+        byte[] ZaMsg = new byte[ENTLaBytes.length+IDa.length+ta.length+tb.length+txg.length+tyg.length+Xa.length+Ya.length];
+        byte[][] ZaByteS = new byte[][]{ENTLaBytes,IDa,ta,tb,txg,tyg,Xa,Ya};
+        int index=0;
+        for (byte[] zaByte : ZaByteS) {
+            System.arraycopy(zaByte, 0, ZaMsg, index, zaByte.length);
+            index += zaByte.length;
+        }
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(ZaMsg);
+
+        return sm3Digest.doFinal();
+
+    }
+
     public static ECDomainParameters toDomainParams(X9ECParameters x9ECParameters) {
         return new ECDomainParameters(x9ECParameters.getCurve(), x9ECParameters.getG(), x9ECParameters.getN(), x9ECParameters.getH());
     }

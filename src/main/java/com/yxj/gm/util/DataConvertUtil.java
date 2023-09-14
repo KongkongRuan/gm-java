@@ -1,7 +1,10 @@
 package com.yxj.gm.util;
 
+import com.kms.common.utils.ByteUtils;
 import org.bouncycastle.util.encoders.Hex;
 
+import java.io.File;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -63,6 +66,40 @@ public class DataConvertUtil {
         bytes[6]=(byte)((b >> 1) & 0x1);
         bytes[7]=(byte)((b) & 0x1);
         return bytes;
+    }
+    public static byte BitArrayTobyte(byte[] bytes) {
+        String s="";
+        for (byte b:bytes) {
+            s+=b;
+        }
+        return BitToByte(s);
+    }
+
+
+    public static void main(String[] args) throws IOException {
+//        byte[] bytes = byteToBitArray(130);
+        String s = "02b1";
+        byte[] decode = Hex.decode(s);
+        System.out.println(byteArrayToUnsignedInt(decode));
+        int result = ( (  (decode[0] & 0xFF)|(decode[1] & 0xFF) << 8));
+        System.out.println(result);
+        //130
+        //-126
+        //+256
+        System.out.println();
+        Long aLong = new Long(System.currentTimeMillis());
+
+    }
+
+    public static long byteArrayToUnsignedInt(byte[] byteArray) {
+        if (byteArray.length == 0) {
+            throw new IllegalArgumentException("字节数组不能为空");
+        }
+        long result = 0;
+        for (int i = 0; i < byteArray.length; i++) {
+            result = (result << 8) | (byteArray[i] & 0xFF);
+        }
+        return result;
     }
     /**
      * Bit转Byte
@@ -181,6 +218,12 @@ public class DataConvertUtil {
         BigInteger bigInteger = new BigInteger(in).shiftLeft(len);
         return byteToN(bigInteger.toByteArray(), in.length);
     }
+
+    public static double log2(double N) {
+
+        return Math.log10(N) / Math.log10(2);
+
+    }
     public static byte[] byteArrayRight(byte[] in, int len)
     {
         byte[] tempByteArr = null;
@@ -210,10 +253,7 @@ public class DataConvertUtil {
 //        return byteToN(bigInteger.toByteArray(), in.length);
     }
 
-    public static void main(String[] args) {
-        byte[] bytes = byteArrayRight(new byte[]{0x12}, 1);
-        System.out.println(Hex.toHexString(bytes));
-    }
+
     public static String ToByteString(byte[] bytes) {
         StringBuilder sb = new StringBuilder();
         for (byte b : bytes) {
