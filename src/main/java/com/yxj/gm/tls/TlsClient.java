@@ -22,12 +22,27 @@ import java.net.Socket;
 import java.security.*;
 
 public class TlsClient {
-    int tlsPort = 443;
-    byte[] random;
+    private int tlsPort = 443;
+    private byte[] random;
+    private String serverIp = "";
+    private boolean DEBUG =false;
     public TlsClient(String serverIp) throws IOException {
         Security.addProvider(new XaProvider());
-        System.out.println("clientStart");
-        Socket socket = new Socket(serverIp, tlsPort);
+
+    }
+    public TlsClient(String serverIp,int serverPort) throws IOException {
+        Security.addProvider(new XaProvider());
+        this.serverIp = serverIp;
+        this.tlsPort = serverPort;
+    }
+    public void start(){
+        System.out.println("gm-java client:clientStart");
+        Socket socket = null;
+        try {
+            socket = new Socket(serverIp, tlsPort);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         ClientHello clientHello = new ClientHello();
         clientHello.setVersion("v1");
         byte[] randomC = Random.RandomBySM3(32);
@@ -36,24 +51,38 @@ public class TlsClient {
         CipherSuites cipherSuites = new CipherSuites("SM4", "SM2", "SM3");
         clientHello.setCipherSuites(cipherSuites);
         clientHello.setCompressionMethods(null);
-        OutputStream outputStream = socket.getOutputStream();
+        OutputStream outputStream = null;
+        try {
+            outputStream = socket.getOutputStream();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         DEROctetString derOctetString = new DEROctetString(JSON.toJSONString(clientHello).getBytes());
-        outputStream.write(derOctetString.getEncoded());
-        System.out.println("client:clientHello发送完毕");
+        try {
+            outputStream.write(derOctetString.getEncoded());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        if(DEBUG) System.out.println("client:clientHello发送完毕");
 
 
-        InputStream inputStream = socket.getInputStream();
+        InputStream inputStream = null;
+        try {
+            inputStream = socket.getInputStream();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         byte[] content = ASN1Util.GetContent(inputStream);
         ServerHello serverHello = JSON.parseObject(new String(content), ServerHello.class);
-        System.out.println("client:serverHello"+serverHello);
+        if(DEBUG) System.out.println("client:serverHello"+serverHello);
 
         byte[] serverCert = ASN1Util.GetContent(inputStream);
 
-        System.out.println("client:serverCert"+new String(serverCert));
+        if(DEBUG) System.out.println("client:serverCert"+new String(serverCert));
         byte[] serverKeyExchangeECDHEBytes = ASN1Util.GetContent(inputStream);
         //todo verify certificate
         ServerKeyExchangeECDHE serverKeyExchangeECDHE = JSON.parseObject(new String(serverKeyExchangeECDHEBytes), ServerKeyExchangeECDHE.class);
-        System.out.println("client:serverKeyExchangeECDHE"+serverKeyExchangeECDHE);
+        if(DEBUG) System.out.println("client:serverKeyExchangeECDHE"+serverKeyExchangeECDHE);
 
         byte[] signature = serverKeyExchangeECDHE.getSignature();
         ServerKeyExchange serverKeyExchange = serverKeyExchangeECDHE.getServerKeyExchange();
@@ -64,15 +93,19 @@ public class TlsClient {
             throw new RuntimeException("serverKeyExchangeECDHE verify failed");
         }
         byte[] serverHelloDoneBytes = ASN1Util.GetContent(inputStream);
-        System.out.println("client:serverHelloDone"+new String(serverHelloDoneBytes));
+        if(DEBUG) System.out.println("client:serverHelloDone"+new String(serverHelloDoneBytes));
         //ECDHE（E为ephemeral（临时性的）
         KeyPair clientKeyPairTemp = SM2KeyPairGenerate.generateSM2KeyPair();
         ClientKeyExchange clientKeyExchange = new ClientKeyExchange(clientKeyPairTemp.getPublic().getEncoded());
         byte[] clientKeyExchangeBytes = JSON.toJSONString(clientKeyExchange).getBytes();
-        outputStream.write(new DEROctetString(clientKeyExchangeBytes).getEncoded());
-        System.out.println("client:clientKeyExchange发送完毕");
+        try {
+            outputStream.write(new DEROctetString(clientKeyExchangeBytes).getEncoded());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        if(DEBUG) System.out.println("client:clientKeyExchange发送完毕");
         byte[] PreMaster = SM2Util.KeyExchange(serverKeyExchange.getServerPubKey(), clientKeyPairTemp.getPrivate().getEncoded(), 16);
-        System.out.println("client:PreMaster"+Hex.toHexString(PreMaster));
+        if(DEBUG) System.out.println("client:PreMaster"+Hex.toHexString(PreMaster));
         MessageDigest xaMd = null;
         try {
             xaMd = MessageDigest.getInstance("SM3", "XaProvider");
@@ -81,15 +114,29 @@ public class TlsClient {
         } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
             throw new RuntimeException(e);
         }
-        System.out.println("client:结束");
-        inputStream.close();
-        outputStream.close();
-        socket.close();
+        if(DEBUG) System.out.println("client:结束");
+        try {
+            inputStream.close();
+            outputStream.close();
+            socket.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+    }
+    public void setDEBUG(boolean DEBUG) {
+        this.DEBUG = DEBUG;
+    }
+    public byte[] getRandom() {
+        return random;
     }
 
+
     public static void main(String[] args) throws IOException {
-        TlsClient tlsClient = new TlsClient("127.0.0.1");
+        TlsClient tlsClient = new TlsClient("127.0.0.1",447);
+        tlsClient.setDEBUG(true);
+        tlsClient.start();
         System.out.println("握手完成！");
-        System.out.println("客户端随机数："+Hex.toHexString(tlsClient.random));
+        System.out.println("客户端随机数："+Hex.toHexString(tlsClient.getRandom()));
     }
 }
