@@ -119,7 +119,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         System.out.println("GCM明文："+new String(ming_gcm));
 ```
 ### 模拟TLS密钥协商
-## 服务端（默认使用443端口）
+#### 服务端（默认使用443端口）
 ```java
         TlsServer tlsServer = new TlsServer();
         tlsServer.setDEBUG(true);
@@ -127,7 +127,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         System.out.println("握手完成！");
         System.out.println("服务端随机数："+Hex.toHexString(tlsServer.getRandom()));
 ```
-## 客户端
+#### 客户端
 ```java
         TlsClient tlsClient = new TlsClient("127.0.0.1");
         tlsClient.setDEBUG(true);
@@ -136,7 +136,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         System.out.println("客户端随机数："+Hex.toHexString(tlsClient.getRandom()));
 ```
 
-## 服务端（使用私有服务端证书以及自定义端口）
+#### 服务端（使用私有服务端证书以及自定义端口）
 ```java
         TlsServer tlsServer = new TlsServer(serverCert,serverCertPriKey,447);
         tlsServer.setDEBUG(true);
@@ -144,7 +144,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         System.out.println("握手完成！");
         System.out.println("服务端随机数："+Hex.toHexString(tlsServer.getRandom()));
 ```
-## 客户端
+#### 客户端
 ```java
         TlsClient tlsClient = new TlsClient("127.0.0.1",447);
         tlsClient.setDEBUG(true);
