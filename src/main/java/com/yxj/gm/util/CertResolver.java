@@ -256,7 +256,7 @@ public class CertResolver {
                                                                             // System.out.println(objectIdentifier.getId() + "->" + name + ":" + value);
                                                                         }
                                                                         //每解析一条就放到stringBuild里面
-                                                                        sb.append(name).append(":").append(value);
+                                                                        sb.append(name).append("=").append(value);
                                                                         sb.append(",");
                                                                     }
                                                                 }
