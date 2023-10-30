@@ -17,13 +17,15 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 ## 主要功能
 ### 密码算法
 
- - 对称密码算法 SM4（ECB/CBC/CTR）
+ - 对称密码算法 SM4（ECB/CBC/CTR/GCM）
  - 非对称密码算法 SM2（加解密/签名验签）
  - Hash算法 SM3
 ### 证书
  - 证书解析以及证书SHA1指纹计算
  - SM2证书生成
- 
+### 密钥协商
+- 模拟TLS握手协议，通信双方协商会话密钥
+
 ## 快速使用
 ```java
         String msg = "gm-java-1.0";
@@ -115,4 +117,38 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         System.out.println("GCMtag："+Hex.toHexString(aeadExecution.getTag()));
         byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution.getTag());
         System.out.println("GCM明文："+new String(ming_gcm));
+```
+### 模拟TLS密钥协商
+#### 服务端（默认使用443端口）
+```java
+        TlsServer tlsServer = new TlsServer();
+        tlsServer.setDEBUG(true);
+        tlsServer.start();
+        System.out.println("握手完成！");
+        System.out.println("服务端随机数："+Hex.toHexString(tlsServer.getRandom()));
+```
+#### 客户端
+```java
+        TlsClient tlsClient = new TlsClient("127.0.0.1");
+        tlsClient.setDEBUG(true);
+        tlsClient.start();
+        System.out.println("握手完成！");
+        System.out.println("客户端随机数："+Hex.toHexString(tlsClient.getRandom()));
+```
+
+#### 服务端（使用私有服务端证书以及自定义端口）
+```java
+        TlsServer tlsServer = new TlsServer(serverCert,serverCertPriKey,447);
+        tlsServer.setDEBUG(true);
+        tlsServer.start();
+        System.out.println("握手完成！");
+        System.out.println("服务端随机数："+Hex.toHexString(tlsServer.getRandom()));
+```
+#### 客户端
+```java
+        TlsClient tlsClient = new TlsClient("127.0.0.1",447);
+        tlsClient.setDEBUG(true);
+        tlsClient.start();
+        System.out.println("握手完成！");
+        System.out.println("客户端随机数："+Hex.toHexString(tlsClient.getRandom()));
 ```
