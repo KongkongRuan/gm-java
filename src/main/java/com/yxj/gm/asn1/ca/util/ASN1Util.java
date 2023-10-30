@@ -11,6 +11,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
+import java.security.PublicKey;
 
 public class ASN1Util {
 
@@ -53,13 +54,28 @@ public class ASN1Util {
         System.arraycopy(sm2Cipher,32,y,0,32);
         System.arraycopy(sm2Cipher,64,hash,0,32);
         System.arraycopy(sm2Cipher,96,cipherText,0,sm2Cipher.length-96);
-        ASN1Integer asn1X = new ASN1Integer(new BigInteger(x));
-        ASN1Integer asn1Y = new ASN1Integer(new BigInteger(y));
+        ASN1Integer asn1X = new ASN1Integer(new BigInteger(1,x));
+        ASN1Integer asn1Y = new ASN1Integer(new BigInteger(1,y));
         DEROctetString asn1Hash = new DEROctetString(hash);
         DEROctetString asn1CipherText = new DEROctetString(cipherText);
 
         return new ASN1SM2Cipher(asn1X,asn1Y,asn1Hash,asn1CipherText);
 
+    }
+    public static byte[] ASN1SM2CipherToSM2Cipher(ASN1SM2Cipher asn1SM2Cipher){
+        byte[] x = asn1SM2Cipher.getX().getPositiveValue().toByteArray();
+        byte[] y = asn1SM2Cipher.getY().getPositiveValue().toByteArray();
+        byte[] hash = asn1SM2Cipher.getHash().getOctets();
+        byte[] cipherText = asn1SM2Cipher.getCipherText().getOctets();
+        x=DataConvertUtil.byteToN(x,32);
+        y=DataConvertUtil.byteToN(y,32);
+        hash=DataConvertUtil.byteToN(hash,32);
+        byte[] sm2Cipher = new byte[x.length+y.length+hash.length+cipherText.length];
+        System.arraycopy(x,0,sm2Cipher,0,x.length);
+        System.arraycopy(y,0,sm2Cipher,x.length,y.length);
+        System.arraycopy(hash,0,sm2Cipher,x.length+y.length,hash.length);
+        System.arraycopy(cipherText,0,sm2Cipher,x.length+y.length+hash.length,cipherText.length);
+        return sm2Cipher;
     }
 
     public static byte[] asn1SignatureToSM2Signature(byte[] asn1Signature){
@@ -196,7 +212,7 @@ public class ASN1Util {
         ASN1Integer asn1S = new ASN1Integer(new BigInteger(1,s));
         return new ASN1SM2Signature(asn1R,asn1S);
     }
-    public static byte[] HSMAsn1PubKeyToPubKey(byte[] asn1Pub){
+    public static byte[] Asn1PubKeyToPubKey(byte[] asn1Pub){
         ByteArrayInputStream bis = new ByteArrayInputStream(asn1Pub) ;
         ASN1InputStream ais = new ASN1InputStream(bis);;
         ASN1Primitive primitive;
@@ -234,7 +250,7 @@ public class ASN1Util {
         }
         return new byte[1];
     }
-    public static byte[] HSMAsn1PriKeyToPriKey(byte[] asn1Pri){
+    public static byte[] Asn1PriKeyToPriKey(byte[] asn1Pri){
         ByteArrayInputStream bis = new ByteArrayInputStream(asn1Pri) ;
         ASN1InputStream ais = new ASN1InputStream(bis);;
         ASN1Primitive primitive;

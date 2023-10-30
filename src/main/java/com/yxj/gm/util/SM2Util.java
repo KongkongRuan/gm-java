@@ -10,10 +10,7 @@ import org.bouncycastle.crypto.params.ECDomainParameters;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigInteger;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.SecureRandom;
+import java.security.*;
 
 public class SM2Util {
     public static final ECDomainParameters SM2_DOMAIN_PARAMS = SM2Util.toDomainParams(GMNamedCurves.getByName("sm2p256v1"));
@@ -23,6 +20,14 @@ public class SM2Util {
 
 
 
+
+    public static byte[] generatePubKeyByPriKey(byte[] priKey){
+        byte[][] puba = SM2Util.MultiplePointOperation(SM2Constant.getXG(), SM2Constant.getYG(), priKey, SM2Constant.getA(), SM2Constant.getP());
+        byte[] pub = new byte[64];
+        System.arraycopy(puba[0],0,pub,0,32);
+        System.arraycopy(puba[1],0,pub,32,32);
+        return pub;
+    }
 
     public static byte[][] generatePubKey(){
         byte[][] bytes;

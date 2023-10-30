@@ -8,11 +8,38 @@ public class ASN1SM2Cipher extends ASN1Object {
     private ASN1OctetString hash;
     private ASN1OctetString cipherText;
 
+    public ASN1Integer getX() {
+        return x;
+    }
+
+    public ASN1Integer getY() {
+        return y;
+    }
+
+    public ASN1OctetString getHash() {
+        return hash;
+    }
+
+    public ASN1OctetString getCipherText() {
+        return cipherText;
+    }
+
     public static ASN1SM2Cipher getInstance(ASN1TaggedObject obj, boolean explicit)
     {
         return getInstance(ASN1Sequence.getInstance(obj, explicit));
     }
-
+    public byte[] sm2CipherToByte(){
+        byte[] xBytes = this.x.getPositiveValue().toByteArray();
+        byte[] yBytes = this.y.getPositiveValue().toByteArray();
+        byte[] hashBytes = this.hash.getOctets();
+        byte[] cipherTextBytes = this.cipherText.getOctets();
+        byte[] result = new byte[xBytes.length + yBytes.length + hashBytes.length + cipherTextBytes.length];
+        System.arraycopy(xBytes, 0, result, 0, xBytes.length);
+        System.arraycopy(yBytes, 0, result, xBytes.length, yBytes.length);
+        System.arraycopy(hashBytes, 0, result, xBytes.length + yBytes.length, hashBytes.length);
+        System.arraycopy(cipherTextBytes, 0, result, xBytes.length + yBytes.length + hashBytes.length, cipherTextBytes.length);
+        return result;
+    }
     public static ASN1SM2Cipher getInstance(Object obj) {
         if (obj instanceof ASN1SM2Cipher) {
             return (ASN1SM2Cipher) obj;

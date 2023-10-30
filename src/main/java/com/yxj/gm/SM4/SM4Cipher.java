@@ -164,8 +164,8 @@ public class SM4Cipher {
     //2. 分组然后根据模式并行加密
     //ECB
     public byte[] blockEncryptECB(byte[] m, byte[][] rks){
-        //1 填充
-        m=padding(m);
+//        //1 填充
+//        m=padding(m);
         //2 分块
         byte[][] block = block(m);
         //3 加密
@@ -294,7 +294,8 @@ public class SM4Cipher {
         //3 合并
         byte[] merge = merge(result);
         //4 去除填充
-        return unPadding(merge);
+//        return unPadding(merge);
+        return merge;
     }
     //CBC
     public byte[] blockDecryptCBC(byte[] m, byte[] iv, byte[][] rks){
