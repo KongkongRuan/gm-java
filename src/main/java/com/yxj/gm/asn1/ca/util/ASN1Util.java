@@ -53,8 +53,8 @@ public class ASN1Util {
         System.arraycopy(sm2Cipher,32,y,0,32);
         System.arraycopy(sm2Cipher,64,hash,0,32);
         System.arraycopy(sm2Cipher,96,cipherText,0,sm2Cipher.length-96);
-        ASN1Integer asn1X = new ASN1Integer(new BigInteger(x));
-        ASN1Integer asn1Y = new ASN1Integer(new BigInteger(y));
+        ASN1Integer asn1X = new ASN1Integer(new BigInteger(1,x));
+        ASN1Integer asn1Y = new ASN1Integer(new BigInteger(1,y));
         DEROctetString asn1Hash = new DEROctetString(hash);
         DEROctetString asn1CipherText = new DEROctetString(cipherText);
 
