@@ -1,6 +1,5 @@
 package com.yxj.gm.provider.mac;
 
-import com.kms.JNI.CallJNI;
 import com.yxj.gm.provider.XaProvider;
 import com.yxj.gm.util.DataConvertUtil;
 import org.bouncycastle.util.encoders.Hex;
@@ -81,11 +80,11 @@ public class XaHMac  {
         System.out.println(Hex.toHexString(bytes));
 
 
-        /**C组件化**/
-        byte[] result = new byte[32];
-        CallJNI callJNI = new CallJNI();
-        callJNI.kmsMAC(985,key,key.length,"123".getBytes(),3,result,result.length);
-        System.out.println(Hex.toHexString(result));
+//        /**C组件化**/
+//        byte[] result = new byte[32];
+//        CallJNI callJNI = new CallJNI();
+//        callJNI.kmsMAC(985,key,key.length,"123".getBytes(),3,result,result.length);
+//        System.out.println(Hex.toHexString(result));
     }
 
 }

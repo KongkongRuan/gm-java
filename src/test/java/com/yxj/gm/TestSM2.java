@@ -1,6 +1,5 @@
 package com.yxj.gm;
 
-import com.kms.jca.UseKey;
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM2.Signature.SM2Signature;
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Signature;
@@ -190,14 +189,14 @@ public class TestSM2 {
         System.out.println(Hex.toHexString(sm2Signature));
     }
 
-    public static void main(String[] args) {
-        KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
-        String msg = "xdyg";
-        UseKey useKey = new UseKey();
-        byte[] signature = useKey.signature(keyPair, msg.getBytes());
-        SM2Signature sm2Signature   = new SM2Signature();
-        signature[0]=0;
-        boolean verify = sm2Signature.verify(msg.getBytes(), null, signature, keyPair.getPublic().getEncoded());
-        System.out.println(verify);
-    }
+//    public static void main(String[] args) {
+//        KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+//        String msg = "xdyg";
+//        UseKey useKey = new UseKey();
+//        byte[] signature = useKey.signature(keyPair, msg.getBytes());
+//        SM2Signature sm2Signature   = new SM2Signature();
+//        signature[0]=0;
+//        boolean verify = sm2Signature.verify(msg.getBytes(), null, signature, keyPair.getPublic().getEncoded());
+//        System.out.println(verify);
+//    }
 }

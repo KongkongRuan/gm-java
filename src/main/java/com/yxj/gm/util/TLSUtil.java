@@ -1,8 +1,5 @@
 package com.yxj.gm.util;
 
-import com.kms.JNI.CallJNI;
-import com.kms.jca.UseKey;
-import com.kms.provider.key.ZyxxSecretKey;
 import com.yxj.gm.provider.XaProvider;
 import com.yxj.gm.provider.mac.XaHMac;
 import org.bouncycastle.util.encoders.Hex;
@@ -89,11 +86,11 @@ public class TLSUtil {
 //        System.out.println(Hex.toHexString(hkdf));
         FileUtils.writeByteArrayToFile(new File("D:\\hkdf.txt"),hkdf);
 
-        CallJNI callJNI = new CallJNI();
-        byte[] okm = new byte[32];
-        callJNI.hkdf(985,null,0,key, key.length,"1234".getBytes(),4,okm,okm.length);
-        System.out.println(Hex.toHexString(okm));
-        //180-55-x=a   180-125=a    180-55-x=180-125   70
+//        CallJNI callJNI = new CallJNI();
+//        byte[] okm = new byte[32];
+//        callJNI.hkdf(985,null,0,key, key.length,"1234".getBytes(),4,okm,okm.length);
+//        System.out.println(Hex.toHexString(okm));
+//        //180-55-x=a   180-125=a    180-55-x=180-125   70
 
 
 

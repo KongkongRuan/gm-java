@@ -1,6 +1,5 @@
 package com.yxj.gm;
 
-import com.kms.JNI.CallJNI;
 import com.yxj.gm.SM2.Key.SM2PrivateKey;
 import com.yxj.gm.SM2.Key.SM2PublicKey;
 import com.yxj.gm.cert.CertParseVo;
@@ -82,24 +81,24 @@ public class CertTest {
 
     }
 
-    public static void main2(String[] args) throws IOException {
-//        File ca = new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\SM2CERT_1677218791242\\certAddZero.pem");
-//        File cert = new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\SM2CERT_1677218791242\\SM2CERT.cert");
-//        File ca = new File("D:\\国网正式环境证书以及密钥\\certAndKey\\新建文件夹\\certAddZero.cer");
-//        File cert = new File("D:\\国网正式环境证书以及密钥\\certAndKey\\新建文件夹\\SM2CERT_1.pem");
-        File ca = new File("D:\\certtest\\zjhAndJava\\old\\ca.pem");
-        File cert = new File("D:\\certtest\\zjhAndJava\\old\\SM2CERT_1_62_1671428432529.pem");
-
-        boolean b = CertValidation.CertificateChainValidation(FileUtils.readFileToByteArray(ca), FileUtils.readFileToByteArray(cert));
-        System.out.println(b);
-        CallJNI callJNI = new CallJNI();
-        byte[] caByte=FileUtils.readFileToByteArray(ca);
-        byte[] certByte=FileUtils.readFileToByteArray(cert);
-        int i = callJNI.kmsVerifyCertificate(caByte, caByte.length, certByte, certByte.length);
-        System.out.println(i);
-//        CertPaser.parseCert(FileUtils.readFileToByteArray(ca));
-//        CertPaser.parseCert(FileUtils.readFileToByteArray(cert));
-    }
+//    public static void main2(String[] args) throws IOException {
+////        File ca = new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\SM2CERT_1677218791242\\certAddZero.pem");
+////        File cert = new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\SM2CERT_1677218791242\\SM2CERT.cert");
+////        File ca = new File("D:\\国网正式环境证书以及密钥\\certAndKey\\新建文件夹\\certAddZero.cer");
+////        File cert = new File("D:\\国网正式环境证书以及密钥\\certAndKey\\新建文件夹\\SM2CERT_1.pem");
+//        File ca = new File("D:\\certtest\\zjhAndJava\\old\\ca.pem");
+//        File cert = new File("D:\\certtest\\zjhAndJava\\old\\SM2CERT_1_62_1671428432529.pem");
+//
+//        boolean b = CertValidation.CertificateChainValidation(FileUtils.readFileToByteArray(ca), FileUtils.readFileToByteArray(cert));
+//        System.out.println(b);
+//        CallJNI callJNI = new CallJNI();
+//        byte[] caByte=FileUtils.readFileToByteArray(ca);
+//        byte[] certByte=FileUtils.readFileToByteArray(cert);
+//        int i = callJNI.kmsVerifyCertificate(caByte, caByte.length, certByte, certByte.length);
+//        System.out.println(i);
+////        CertPaser.parseCert(FileUtils.readFileToByteArray(ca));
+////        CertPaser.parseCert(FileUtils.readFileToByteArray(cert));
+//    }
 
     public static void main(String[] args) throws IOException, CertificateParsingException {
 //        UseKey useKey = new UseKey();

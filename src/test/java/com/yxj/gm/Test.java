@@ -1,7 +1,5 @@
 package com.yxj.gm;
 
-import com.kms.jca.UseKey;
-import com.kms.provider.key.ZyxxSecretKey;
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM2.Signature.SM2Signature;
@@ -97,37 +95,37 @@ public class Test {
 
     }
 
-    public static void main2(String[] args) throws Exception {
-        byte[] bytes = FileUtils.readFileToByteArray(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\ca_csr1.key"));
-
-        byte[] ming = Base64.decode(bytes);
-        System.out.println(Hex.toHexString(ming));
-        byte[] bhmy = geneProtect();
-
-        UseKey useKey = new UseKey();
-        byte[] mi = useKey.cipherEncrypt("SM4", new ZyxxSecretKey(bhmy), ming);
-        FileUtils.writeFile("D:\\gw-cert-key\\prikey-mi1.key",mi);
-//        byte[] pubkey = Hex.decode("74DBBCC0BB8994EF116B8BFE817A0AB5CB32F312F752725B3179672A171886F1494B8809B2A542DF508DA1FEB1595C20AF2A9F287FF8FBF28AA7CBA2948B6A6D");
-//        FileUtils.writeFile("D:\\gw-cert-key\\pubkey-ming.key",pubkey);
-
-    }
-
-    public static void main3(String[] args) throws IOException {
-        byte[] priMingBase64 = FileUtils.readFileToByteArray(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\ca_csr_pri_ming.key"));
-        byte[] priMing=Base64.decode(priMingBase64);
-        byte[] cert = FileUtils.readFileToByteArray(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\SERIALNUMBER=F30123261097202302160029,OU=CEPRI,O=SGCC,C=CN6324D9DA1E80F0F5.cer"));
-        byte[] bhmy = geneProtect();
-        UseKey useKey = new UseKey();
-        byte[] pubkey = Hex.decode("C217B42678763542DCC9A9367C7A2FE3F34DE8F36D120E9F799FD4402FBAD82D4E02BDA3245FB48332C37050FD785546F5020A47026F84302C1DB9E6A68EE092");
-        byte[] priMi = useKey.cipherEncrypt("SM4", new ZyxxSecretKey(bhmy), priMing);
-        byte[] certAddZero = ArrayUtils.add(cert, (byte) 0);
-        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\certAddZero.cer"),certAddZero);
-        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\pubkey.key"),pubkey);
-        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\priMi.key"),priMi);
-
-        System.out.println(Hex.toHexString(priMing));
-
-    }
+//    public static void main2(String[] args) throws Exception {
+//        byte[] bytes = FileUtils.readFileToByteArray(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-02\\ca_csr1.key"));
+//
+//        byte[] ming = Base64.decode(bytes);
+//        System.out.println(Hex.toHexString(ming));
+//        byte[] bhmy = geneProtect();
+//
+//        UseKey useKey = new UseKey();
+//        byte[] mi = useKey.cipherEncrypt("SM4", new ZyxxSecretKey(bhmy), ming);
+//        FileUtils.writeFile("D:\\gw-cert-key\\prikey-mi1.key",mi);
+////        byte[] pubkey = Hex.decode("74DBBCC0BB8994EF116B8BFE817A0AB5CB32F312F752725B3179672A171886F1494B8809B2A542DF508DA1FEB1595C20AF2A9F287FF8FBF28AA7CBA2948B6A6D");
+////        FileUtils.writeFile("D:\\gw-cert-key\\pubkey-ming.key",pubkey);
+//
+//    }
+//
+//    public static void main3(String[] args) throws IOException {
+//        byte[] priMingBase64 = FileUtils.readFileToByteArray(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\ca_csr_pri_ming.key"));
+//        byte[] priMing=Base64.decode(priMingBase64);
+//        byte[] cert = FileUtils.readFileToByteArray(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\SERIALNUMBER=F30123261097202302160029,OU=CEPRI,O=SGCC,C=CN6324D9DA1E80F0F5.cer"));
+//        byte[] bhmy = geneProtect();
+//        UseKey useKey = new UseKey();
+//        byte[] pubkey = Hex.decode("C217B42678763542DCC9A9367C7A2FE3F34DE8F36D120E9F799FD4402FBAD82D4E02BDA3245FB48332C37050FD785546F5020A47026F84302C1DB9E6A68EE092");
+//        byte[] priMi = useKey.cipherEncrypt("SM4", new ZyxxSecretKey(bhmy), priMing);
+//        byte[] certAddZero = ArrayUtils.add(cert, (byte) 0);
+//        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\certAddZero.cer"),certAddZero);
+//        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\pubkey.key"),pubkey);
+//        FileUtils.writeByteArrayToFile(new File("D:\\国网正式环境证书以及密钥\\certAndKey\\priMi.key"),priMi);
+//
+//        System.out.println(Hex.toHexString(priMing));
+//
+//    }
 
     public static void main(String[] args) throws IOException {
         byte[] cert = FileUtils.readFileToByteArray(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-03\\TestCrt.crt"));
@@ -136,21 +134,21 @@ public class Test {
         String s = FileUtils.ASN1ToPemByteArray(asn1);
         System.out.println(s);
     }
-    public static byte[] geneProtect(){
-        UseKey useKey = new UseKey();
-        byte[] s = "KMS_S".getBytes();
-        byte[] in = "KMS_Feature".getBytes();
-        byte[] info = "KMS_START".getBytes();
-        int ol = 16;
-        try {
-            byte[] bytes = useKey.generateProtectedKey(s, in, info, ol);
-            return bytes;
-        } catch (NoSuchProviderException e) {
-            e.printStackTrace();
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
+//    public static byte[] geneProtect(){
+//        UseKey useKey = new UseKey();
+//        byte[] s = "KMS_S".getBytes();
+//        byte[] in = "KMS_Feature".getBytes();
+//        byte[] info = "KMS_START".getBytes();
+//        int ol = 16;
+//        try {
+//            byte[] bytes = useKey.generateProtectedKey(s, in, info, ol);
+//            return bytes;
+//        } catch (NoSuchProviderException e) {
+//            e.printStackTrace();
+//        } catch (NoSuchAlgorithmException e) {
+//            e.printStackTrace();
+//        }
+//        return null;
+//    }
 
 }

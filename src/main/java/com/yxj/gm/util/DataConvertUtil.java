@@ -1,6 +1,6 @@
 package com.yxj.gm.util;
 
-import com.kms.common.utils.ByteUtils;
+import com.yxj.gm.random.Random;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.io.File;
@@ -76,20 +76,7 @@ public class DataConvertUtil {
     }
 
 
-    public static void main(String[] args) throws IOException {
-//        byte[] bytes = byteToBitArray(130);
-        String s = "02b1";
-        byte[] decode = Hex.decode(s);
-        System.out.println(byteArrayToUnsignedInt(decode));
-        int result = ( (  (decode[0] & 0xFF)|(decode[1] & 0xFF) << 8));
-        System.out.println(result);
-        //130
-        //-126
-        //+256
-        System.out.println();
-        Long aLong = new Long(System.currentTimeMillis());
 
-    }
 
     public static long byteArrayToUnsignedInt(byte[] byteArray) {
         if (byteArray.length == 0) {
@@ -101,29 +88,60 @@ public class DataConvertUtil {
         }
         return result;
     }
+    public static void main(String[] args) throws IOException {
+        long count = 0;
+        byte[] bytes = Random.RandomBySM3(5000000);
+
+        for (int j = 0; j < 100; j++) {
+            //        byte[] decode = Hex.decode("8263cd768bb278737336e47dfec23ffc8a4a02c673de1994aa3eefd532c82db1ba1684736502793c21ee8d04cf01f3d6de1c7cbd3fbb5187415b3dc26db034561554e340423449bb522bba46d42c28b961fed408480fdd190cf3dc9ded16f10818fc0f30");
+            String a = Hex.toHexString(bytes);
+//        System.out.println();
+            StringBuilder sb = new StringBuilder();
+            long l = System.currentTimeMillis();
+            for (int i = 0; i < bytes.length; i++) {
+                sb.append(Hex.toHexString(new byte[]{BitToByte(byteToBit(bytes[i]))}));
+            }
+            long time=System.currentTimeMillis()-l;
+            System.out.println(time);
+            count+=time;
+            String b = sb.toString();
+            System.out.println(a.equals(b));
+        }
+        System.out.println(count/100.0);
+
+
+    }
     /**
      * Bit转Byte
      */
     public static byte BitToByte(String byteStr) {
-        int re, len;
-        if (null == byteStr) {
-            return 0;
+        int result = 0;
+        for (int i = 0; i < byteStr.length(); i++) {
+            result = (result << 1) | (byteStr.charAt(i) - '0');
         }
-        len = byteStr.length();
-        if (len != 4 && len != 8) {
-            return 0;
-        }
-        if (len == 8) {// 8 bit处理
-            if (byteStr.charAt(0) == '0') {// 正数
-                re = Integer.parseInt(byteStr, 2);
-            } else {// 负数
-                re = Integer.parseInt(byteStr, 2) - 256;
-            }
-        } else {//4 bit处理
-            re = Integer.parseInt(byteStr, 2);
-        }
-        return (byte) re;
+        return (byte) result;
     }
+//    public static byte BitToByte(String byteStr) {
+//        int re, len;
+//        if (null == byteStr) {
+//            return 0;
+//        }
+//        len = byteStr.length();
+//        if (len != 4 && len != 8) {
+//            return 0;
+//        }
+//        if (len == 8) {// 8 bit处理
+//            if (byteStr.charAt(0) == '0') {// 正数
+//                re = Integer.parseInt(byteStr, 2);
+//            } else {// 负数
+//                re = Integer.parseInt(byteStr, 2) - 256;
+//            }
+//        } else {//4 bit处理
+//            re = Integer.parseInt(byteStr, 2);
+//        }
+//        return (byte) re;
+//    }
+
 
 
     public static byte[] byteArrAdd(byte[]... bytesArr){

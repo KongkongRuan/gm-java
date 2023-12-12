@@ -1,14 +1,9 @@
 package com.yxj.gm.random;
 
-import com.kms.jca.UseKey;
 import com.yxj.gm.SM3.SM3Digest;
 import com.yxj.gm.provider.XaProvider;
-import com.yxj.gm.util.FileUtils;
 import com.yxj.gm.util.TLSUtil;
-import org.bouncycastle.util.encoders.Hex;
 
-import javax.crypto.SecretKey;
-import java.io.File;
 import java.io.IOException;
 import java.security.*;
 import java.util.concurrent.CountDownLatch;
@@ -95,7 +90,7 @@ public class Random {
             return myRandomBySM3Thread(length);
         }
     }
-    public static byte[] myRandomBySM3(int length){
+    private static byte[] myRandomBySM3(int length){
 
         byte[] result = new byte[length];
         int x=length/32;
@@ -118,7 +113,7 @@ public class Random {
         return result;
 
     }
-    public static byte[] myRandomBySM3Thread(int length){
+    private static byte[] myRandomBySM3Thread(int length){
 
         byte[] result = new byte[length];
         int x=length/32;
