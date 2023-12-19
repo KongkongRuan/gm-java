@@ -28,7 +28,7 @@ public class TlsServer {
     private byte[] serverCert;
     private byte[] serverPriKey;
     private boolean DEBUG =false;
-    public TlsServer() throws IOException {
+    public TlsServer()  {
         Security.addProvider(new XaProvider());
         this.serverCert = ("-----BEGIN CERTIFICATE-----\n" +
                 "MIIBxjCCAWygAwIBAgIIP/aSt00fQz8wCgYIKoEcz1UBg3UwZjERMA8GA1UEAwwI\n" +
@@ -151,6 +151,9 @@ public class TlsServer {
         byte[] clientKeyExchangeBytes = ASN1Util.GetContent(inputStream);
         ClientKeyExchange clientKeyExchange = JSON.parseObject(new String(clientKeyExchangeBytes), ClientKeyExchange.class);
         if(DEBUG) System.out.println("server:clientKeyExchange:"+clientKeyExchange);
+        /**
+         * cPub * sPri = G * cPri * sPri
+         */
         byte[] PreMaster = SM2Util.KeyExchange(clientKeyExchange.getClientPubKey(), serverKeyPairTemp.getPrivate().getEncoded(), 16);
         if(DEBUG) System.out.println("server:PreMaster:"+Hex.toHexString(PreMaster));
 

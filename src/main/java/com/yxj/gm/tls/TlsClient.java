@@ -26,11 +26,11 @@ public class TlsClient {
     private byte[] random;
     private String serverIp = "";
     private boolean DEBUG =false;
-    public TlsClient(String serverIp) throws IOException {
+    public TlsClient(String serverIp)  {
         Security.addProvider(new XaProvider());
 
     }
-    public TlsClient(String serverIp,int serverPort) throws IOException {
+    public TlsClient(String serverIp,int serverPort)  {
         Security.addProvider(new XaProvider());
         this.serverIp = serverIp;
         this.tlsPort = serverPort;
@@ -104,10 +104,15 @@ public class TlsClient {
             throw new RuntimeException(e);
         }
         if(DEBUG) System.out.println("client:clientKeyExchange发送完毕");
+        /**
+         * sPub* cPri = G* sPri * cPri
+         */
         byte[] PreMaster = SM2Util.KeyExchange(serverKeyExchange.getServerPubKey(), clientKeyPairTemp.getPrivate().getEncoded(), 16);
         if(DEBUG) System.out.println("client:PreMaster"+Hex.toHexString(PreMaster));
         MessageDigest xaMd = null;
+
         try {
+
             xaMd = MessageDigest.getInstance("SM3", "XaProvider");
             random=TLSUtil.prf(xaMd,PreMaster,"master secret".getBytes(), DataConvertUtil.byteArrAdd(randomC,serverHello.getRandomS()),16);
 
