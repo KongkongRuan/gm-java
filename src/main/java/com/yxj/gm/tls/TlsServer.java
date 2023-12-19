@@ -22,44 +22,37 @@ import java.nio.charset.StandardCharsets;
 import java.security.*;
 
 public class TlsServer {
-    private int tlsPort = 443;
+    private int tlsPort = 4433;
     private byte[] random;
 
     private byte[] serverCert;
     private byte[] serverPriKey;
     private boolean DEBUG =false;
+
+    private boolean FirstPrint = true;
+    private String tempCert = "-----BEGIN CERTIFICATE-----\n" +
+            "MIIBxjCCAWygAwIBAgIIP/aSt00fQz8wCgYIKoEcz1UBg3UwZjERMA8GA1UEAwwI\n" +
+            "RGlnaWNlcnQxETAPBgNVBAsMCERpZ2ljZXJ0MREwDwYDVQQKDAhEaWdpY2VydDEP\n" +
+            "MA0GA1UEBwwGTGludG9uMQ0wCwYDVQQIDARVdGFoMQswCQYDVQQGEwJVUzAeFw0y\n" +
+            "MzAzMjIwNjUzNDlaFw0zMzAzMTkwNjUzNDlaMFgxDzANBgNVBAMMBlRFU1RDQTEL\n" +
+            "MAkGA1UECwwCREQxCzAJBgNVBAoMAkREMQ8wDQYDVQQHDAZMaW50b24xDTALBgNV\n" +
+            "BAgMBFV0YWgxCzAJBgNVBAYTAkNOMFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAE\n" +
+            "RAEMvj4XhVoAd82+gsi9y8WsF2M6k8Q5JVWkT2yepKlfU5OlSqtXDJUsDKv2H+Yl\n" +
+            "Ueyw0/wmwp/0+crz/scoaqMSMBAwDgYDVR0PAQH/BAQDAgKEMAoGCCqBHM9VAYN1\n" +
+            "A0gAMEUCIQCA6wJ+LI9JpEuixkv08hTsRfp7EiS3YEMC2wchH0QFIAIgQgiaagM3\n" +
+            "L5rTNfhPCxVTI6GwweppYkIQ3vyp2KPYP0A=\n" +
+            "-----END CERTIFICATE-----";
+    private String tempPriKey = "47aaf29d5dde9956f0784a1f17778eede518a03171b36ff8992f226929c48504";
     public TlsServer()  {
         Security.addProvider(new XaProvider());
-        this.serverCert = ("-----BEGIN CERTIFICATE-----\n" +
-                "MIIBxjCCAWygAwIBAgIIP/aSt00fQz8wCgYIKoEcz1UBg3UwZjERMA8GA1UEAwwI\n" +
-                "RGlnaWNlcnQxETAPBgNVBAsMCERpZ2ljZXJ0MREwDwYDVQQKDAhEaWdpY2VydDEP\n" +
-                "MA0GA1UEBwwGTGludG9uMQ0wCwYDVQQIDARVdGFoMQswCQYDVQQGEwJVUzAeFw0y\n" +
-                "MzAzMjIwNjUzNDlaFw0zMzAzMTkwNjUzNDlaMFgxDzANBgNVBAMMBlRFU1RDQTEL\n" +
-                "MAkGA1UECwwCREQxCzAJBgNVBAoMAkREMQ8wDQYDVQQHDAZMaW50b24xDTALBgNV\n" +
-                "BAgMBFV0YWgxCzAJBgNVBAYTAkNOMFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAE\n" +
-                "RAEMvj4XhVoAd82+gsi9y8WsF2M6k8Q5JVWkT2yepKlfU5OlSqtXDJUsDKv2H+Yl\n" +
-                "Ueyw0/wmwp/0+crz/scoaqMSMBAwDgYDVR0PAQH/BAQDAgKEMAoGCCqBHM9VAYN1\n" +
-                "A0gAMEUCIQCA6wJ+LI9JpEuixkv08hTsRfp7EiS3YEMC2wchH0QFIAIgQgiaagM3\n" +
-                "L5rTNfhPCxVTI6GwweppYkIQ3vyp2KPYP0A=\n" +
-                "-----END CERTIFICATE-----").getBytes();
-        this.serverPriKey = Hex.decode("47aaf29d5dde9956f0784a1f17778eede518a03171b36ff8992f226929c48504");
+        this.serverCert = tempCert.getBytes();
+        this.serverPriKey = Hex.decode(tempPriKey);
     }
 
     public TlsServer(int port)  {
         Security.addProvider(new XaProvider());
-        this.serverCert = ("-----BEGIN CERTIFICATE-----\n" +
-                "MIIBxjCCAWygAwIBAgIIP/aSt00fQz8wCgYIKoEcz1UBg3UwZjERMA8GA1UEAwwI\n" +
-                "RGlnaWNlcnQxETAPBgNVBAsMCERpZ2ljZXJ0MREwDwYDVQQKDAhEaWdpY2VydDEP\n" +
-                "MA0GA1UEBwwGTGludG9uMQ0wCwYDVQQIDARVdGFoMQswCQYDVQQGEwJVUzAeFw0y\n" +
-                "MzAzMjIwNjUzNDlaFw0zMzAzMTkwNjUzNDlaMFgxDzANBgNVBAMMBlRFU1RDQTEL\n" +
-                "MAkGA1UECwwCREQxCzAJBgNVBAoMAkREMQ8wDQYDVQQHDAZMaW50b24xDTALBgNV\n" +
-                "BAgMBFV0YWgxCzAJBgNVBAYTAkNOMFkwEwYHKoZIzj0CAQYIKoEcz1UBgi0DQgAE\n" +
-                "RAEMvj4XhVoAd82+gsi9y8WsF2M6k8Q5JVWkT2yepKlfU5OlSqtXDJUsDKv2H+Yl\n" +
-                "Ueyw0/wmwp/0+crz/scoaqMSMBAwDgYDVR0PAQH/BAQDAgKEMAoGCCqBHM9VAYN1\n" +
-                "A0gAMEUCIQCA6wJ+LI9JpEuixkv08hTsRfp7EiS3YEMC2wchH0QFIAIgQgiaagM3\n" +
-                "L5rTNfhPCxVTI6GwweppYkIQ3vyp2KPYP0A=\n" +
-                "-----END CERTIFICATE-----").getBytes();
-        this.serverPriKey = Hex.decode("47aaf29d5dde9956f0784a1f17778eede518a03171b36ff8992f226929c48504");
+        this.serverCert = tempCert.getBytes();
+        this.serverPriKey = Hex.decode(tempPriKey);
         this.tlsPort = port;
     }
 
@@ -79,7 +72,7 @@ public class TlsServer {
     private InputStream inputStream = null;
     public void start(){
         destroy();
-        System.out.println("gm-java server:server start");
+        if (FirstPrint)System.out.println("gm-java server:server start port:"+tlsPort);
 //        ServerSocket serverSocket= null;
         try {
             serverSocket = new ServerSocket(tlsPort);
@@ -198,7 +191,9 @@ public class TlsServer {
     public void setDEBUG(boolean DEBUG) {
         this.DEBUG = DEBUG;
     }
-
+    public void setFirstPrint(boolean firstPrint) {
+        FirstPrint = firstPrint;
+    }
     public static void main(String[] args) throws IOException {
         byte[] cert = FileUtils.readFileToByteArray(new File("D:\\certtest\\ca\\java-caCert-add0.cer"));
         byte[] priKey = FileUtils.readFileToByteArray(new File("D:\\certtest\\ca\\priKey.key"));

@@ -22,11 +22,14 @@ import java.net.Socket;
 import java.security.*;
 
 public class TlsClient {
-    private int tlsPort = 443;
+    private int tlsPort = 4433;
     private byte[] random;
     private String serverIp = "";
     private boolean DEBUG =false;
+
+    private boolean FirstPrint = true;
     public TlsClient(String serverIp)  {
+        this.serverIp = serverIp;
         Security.addProvider(new XaProvider());
 
     }
@@ -36,7 +39,7 @@ public class TlsClient {
         this.tlsPort = serverPort;
     }
     public void start(){
-        System.out.println("gm-java client:clientStart");
+        if(FirstPrint)System.out.println("gm-java client:clientStart");
         Socket socket = null;
         try {
             socket = new Socket(serverIp, tlsPort);
@@ -128,6 +131,11 @@ public class TlsClient {
     public void setDEBUG(boolean DEBUG) {
         this.DEBUG = DEBUG;
     }
+
+    public void setFirstPrint(boolean firstPrint) {
+        FirstPrint = firstPrint;
+    }
+
     public byte[] getRandom() {
         return random;
     }
