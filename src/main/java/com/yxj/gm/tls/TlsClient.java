@@ -110,12 +110,9 @@ public class TlsClient {
         byte[] PreMaster = SM2Util.KeyExchange(serverKeyExchange.getServerPubKey(), clientKeyPairTemp.getPrivate().getEncoded(), 16);
         if(DEBUG) System.out.println("client:PreMaster"+Hex.toHexString(PreMaster));
         MessageDigest xaMd = null;
-
         try {
-
             xaMd = MessageDigest.getInstance("SM3", "XaProvider");
             random=TLSUtil.prf(xaMd,PreMaster,"master secret".getBytes(), DataConvertUtil.byteArrAdd(randomC,serverHello.getRandomS()),16);
-
         } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
             throw new RuntimeException(e);
         }
@@ -127,7 +124,6 @@ public class TlsClient {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
     }
     public void setDEBUG(boolean DEBUG) {
         this.DEBUG = DEBUG;

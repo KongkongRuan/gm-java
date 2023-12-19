@@ -45,7 +45,7 @@ public class TlsServer {
         this.serverPriKey = Hex.decode("47aaf29d5dde9956f0784a1f17778eede518a03171b36ff8992f226929c48504");
     }
 
-    public TlsServer(int port) throws IOException {
+    public TlsServer(int port)  {
         Security.addProvider(new XaProvider());
         this.serverCert = ("-----BEGIN CERTIFICATE-----\n" +
                 "MIIBxjCCAWygAwIBAgIIP/aSt00fQz8wCgYIKoEcz1UBg3UwZjERMA8GA1UEAwwI\n" +
@@ -73,22 +73,27 @@ public class TlsServer {
         this.serverPriKey = serverPriKey;
         this.tlsPort = port;
     }
+    private  ServerSocket serverSocket= null;
+    private Socket socket = null;
+
+    private InputStream inputStream = null;
     public void start(){
+        destroy();
         System.out.println("gm-java server:server start");
-        ServerSocket serverSocket= null;
+//        ServerSocket serverSocket= null;
         try {
             serverSocket = new ServerSocket(tlsPort);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        Socket socket = null;
+
         try {
             socket = serverSocket.accept();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         // 建立好连接后，从socket中获取输入流，并建立缓冲区进行读取
-        InputStream inputStream = null;
+
         try {
             inputStream = socket.getInputStream();
         } catch (IOException e) {
@@ -169,6 +174,22 @@ public class TlsServer {
             inputStream.close();
             socket.close();
             serverSocket.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void destroy(){
+        try {
+            if(inputStream!=null){
+                inputStream.close();
+            }
+            if (socket!=null){
+                socket.close();
+            }
+            if (serverSocket!=null){
+                serverSocket.close();
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
