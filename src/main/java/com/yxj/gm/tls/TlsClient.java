@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.security.*;
 
 public class TlsClient {
@@ -38,6 +39,7 @@ public class TlsClient {
         this.serverIp = serverIp;
         this.tlsPort = serverPort;
     }
+    private final byte[] clientHead = "gm-java-tls-client".getBytes(StandardCharsets.UTF_8);
     public void start(){
         if(FirstPrint)System.out.println("gm-java client:clientStart");
         Socket socket = null;
@@ -63,6 +65,7 @@ public class TlsClient {
         DEROctetString derOctetString = new DEROctetString(JSON.toJSONString(clientHello).getBytes());
         try {
             outputStream.write(derOctetString.getEncoded());
+//            writeAddHead(outputStream,derOctetString.getEncoded());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -103,6 +106,7 @@ public class TlsClient {
         byte[] clientKeyExchangeBytes = JSON.toJSONString(clientKeyExchange).getBytes();
         try {
             outputStream.write(new DEROctetString(clientKeyExchangeBytes).getEncoded());
+//            writeAddHead(outputStream,new DEROctetString(clientKeyExchangeBytes).getEncoded());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -128,6 +132,11 @@ public class TlsClient {
             throw new RuntimeException(e);
         }
     }
+    private void writeAddHead(OutputStream outputStream,byte[] bytes) throws IOException {
+        byte[] bytes1 = DataConvertUtil.byteArrAdd(clientHead, bytes);
+        outputStream.write(bytes1);
+
+    }
     public void setDEBUG(boolean DEBUG) {
         this.DEBUG = DEBUG;
     }
@@ -142,10 +151,7 @@ public class TlsClient {
 
 
     public static void main(String[] args) throws IOException {
-        TlsClient tlsClient = new TlsClient("127.0.0.1",447);
-        tlsClient.setDEBUG(true);
-        tlsClient.start();
-        System.out.println("握手完成！");
-        System.out.println("客户端随机数："+Hex.toHexString(tlsClient.getRandom()));
+         String clientHead = "gm-java-tls-client";
+        System.out.println(clientHead.length());
     }
 }

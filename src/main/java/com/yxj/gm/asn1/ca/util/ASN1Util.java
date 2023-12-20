@@ -11,11 +11,56 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.security.PublicKey;
 
 public class ASN1Util {
 
     public static byte[] GetContent(InputStream inputStream){
+        try {
+            int tag = inputStream.read();
+            if(tag!=4){
+                throw new RuntimeException("输入的asn1编码有误");
+            }
+            int ltag = inputStream.read();
+            byte[] bytes = DataConvertUtil.byteToBitArray((byte) ltag);
+            if(bytes[0]!=1){
+                byte[] bytes1 = new byte[ltag];
+                inputStream.read(bytes1);
+                return  bytes1;
+            }else {
+                bytes[0]=0;
+                byte b = DataConvertUtil.BitArrayTobyte(bytes);
+                byte[] lenbytes = new byte[b];
+                inputStream.read(lenbytes);
+                long len = DataConvertUtil.byteArrayToUnsignedInt(lenbytes);
+                byte[] content = new byte[(int)len];
+                inputStream.read(content);
+                return content;
+
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    private static final String clientHead = "gm-java-tls-client";
+    public static byte[] ServerGetContent(InputStream inputStream){
+        StringBuffer sb = new StringBuffer();
+        while (true){
+            try {
+                int read = inputStream.read();
+                System.out.println(read);
+                if(read==-1)return null;
+                sb.append((char)read);
+                System.out.println(sb);
+                if(sb.toString().contains(clientHead)){
+                    break;
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         try {
             int tag = inputStream.read();
             if(tag!=4){
