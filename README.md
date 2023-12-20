@@ -119,7 +119,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         System.out.println("GCM明文："+new String(ming_gcm));
 ```
 ### 模拟TLS握手进行密钥协商
-#### 服务端（默认使用443端口）
+#### 服务端（默认使用4433端口）
 ```java
         TlsServer tlsServer = new TlsServer();
         tlsServer.setDEBUG(true);
