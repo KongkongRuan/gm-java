@@ -20,11 +20,15 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
  - 对称密码算法 SM4（ECB/CBC/CTR/GCM）
  - 非对称密码算法 SM2（加解密/签名验签）
  - Hash算法 SM3
+ - 基于SM3实现的随机数生成器（多线程加速）
 ### 证书
  - 证书解析以及证书SHA1指纹计算
  - SM2证书生成
 ### 密钥协商
 - 模拟TLS握手协议，通信双方协商会话密钥
+
+## 整体功能基准测试
+### test目录下com.yxj.gm包Benchmarking类
 
 ## 快速使用
 ```java
@@ -87,6 +91,11 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         System.out.println(Hex.toHexString(md));
         System.out.println(Hex.toHexString(md2));
         System.out.println(Hex.toHexString(md3));
+```
+### 随机数生成（通过SM3实现）
+```java
+        byte[] random = Random.RandomBySM3(16);
+        System.out.println(Hex.toHexString(random));
 ```
 ### SM4加解密
 ```java
