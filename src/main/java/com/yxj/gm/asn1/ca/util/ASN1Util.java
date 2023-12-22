@@ -4,6 +4,7 @@ import com.yxj.gm.asn1.ca.sm2.ASN1SM2Cipher;
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Signature;
 import com.yxj.gm.util.DataConvertUtil;
 import com.yxj.gm.util.FileUtils;
+import io.netty.buffer.ByteBuf;
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -42,6 +43,38 @@ public class ASN1Util {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+    public static byte[] GetContent(ByteBuf byteBuf){
+
+            while (!byteBuf.isReadable()){
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            int tag = byteBuf.readByte();
+            if(tag!=4){
+                throw new RuntimeException("输入的asn1编码有误");
+            }
+            int ltag = byteBuf.readByte();
+            byte[] bytes = DataConvertUtil.byteToBitArray((byte) ltag);
+            if(bytes[0]!=1){
+                byte[] bytes1 = new byte[ltag];
+                byteBuf.readBytes(bytes1);
+                return  bytes1;
+            }else {
+                bytes[0]=0;
+                byte b = DataConvertUtil.BitArrayTobyte(bytes);
+                byte[] lenbytes = new byte[b];
+                byteBuf.readBytes(lenbytes);
+                long len = DataConvertUtil.byteArrayToUnsignedInt(lenbytes);
+                byte[] content = new byte[(int)len];
+                byteBuf.readBytes(content);
+                return content;
+
+            }
+
     }
     private static final String clientHead = "gm-java-tls-client";
     public static byte[] ServerGetContent(InputStream inputStream){

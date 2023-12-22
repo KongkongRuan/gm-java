@@ -1,8 +1,9 @@
 package com.yxj.gm.tls;
 
+import java.io.Serializable;
 import java.util.Arrays;
 
-public class ClientHello {
+public class ClientHello implements Serializable {
     private String version;
     private byte[] randomC;
     private byte[] sessionId;
