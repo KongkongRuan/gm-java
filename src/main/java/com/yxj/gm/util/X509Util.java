@@ -65,10 +65,17 @@ public class X509Util {
 
     }
     public static Certificate generateStructure(TBSCertificate tbsCert, AlgorithmIdentifier sigAlgId, byte[] signature) throws IOException {
+
         byte[] r = new byte[32];
         byte[] s = new byte[32];
-        System.arraycopy(signature,0,r,0,32);
-        System.arraycopy(signature,32,s,0,32);
+        if(signature[0]==4){
+            System.arraycopy(signature,1,r,0,32);
+            System.arraycopy(signature,32,s,0,32);
+        }else {
+            System.arraycopy(signature,0,r,0,32);
+            System.arraycopy(signature,32,s,0,32);
+        }
+
 
         ASN1Integer asn1IntegerR = new ASN1Integer(new BigInteger(1,r));
         ASN1Integer asn1IntegerS = new ASN1Integer(new BigInteger(1,s));
