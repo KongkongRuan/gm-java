@@ -46,6 +46,10 @@ public class Benchmarking {
         System.out.println(++i+"---------SM2签名验签通过---------");
         System.out.println("---------SM2证书制作开始---------");
         String certPathStr = "D:/certtest/";
+        String property = System.getProperty("os.name");
+        if(property.toLowerCase().contains("linux")){
+            certPathStr = "/home/certtest/";
+        }
         File certFolder = new File(certPathStr);
         if(!certFolder.exists()){
             certFolder.mkdirs();
@@ -61,13 +65,13 @@ public class Benchmarking {
 
         byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded());
         try {
-            FileUtils.writeFile("D:/certtest/java-ca.cer",rootCert);
+            FileUtils.writeFile(certPathStr+"/java-ca.cer",rootCert);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
         byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, caKeyPair.getPrivate().getEncoded(), equipKeyPair.getPublic().getEncoded());
         try {
-            FileUtils.writeFile("D:/certtest/java-ownerCert.cer",ownerCert);
+            FileUtils.writeFile(certPathStr+"/java-ownerCert.cer",ownerCert);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -139,17 +143,36 @@ public class Benchmarking {
 
     }
      static class TlsServerCallable implements Callable{
+
+        TlsServerCallable(){};
+        int port=4433;
+        TlsServerCallable( int port){
+            this.port = port;
+        }
         @Override
         public Object call() throws Exception {
-            TlsServer tlsServer = new TlsServer();
+            TlsServer tlsServer = new TlsServer(port);
             tlsServer.start();
             return Hex.toHexString(tlsServer.getRandom());
         }
     }
     static class TlsClientCallable implements Callable{
+        TlsClientCallable(){};
+        String ip;
+        int port;
+        TlsClientCallable(String ip, int port){
+            this.ip = ip;
+            this.port = port;
+        }
+        TlsClientCallable(String ip){
+            this.ip = ip;
+        }
         @Override
         public Object call() throws Exception {
-            TlsClient tlsClient = new TlsClient("127.0.0.1");
+            if(ip==null){
+                ip="127.0.0.1";
+            }
+            TlsClient tlsClient = new TlsClient(ip);
             tlsClient.start();
             return Hex.toHexString(tlsClient.getRandom());
         }
