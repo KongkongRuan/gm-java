@@ -5,7 +5,11 @@ import org.bouncycastle.asn1.*;
 public class ErrorPkgRespond extends ASN1Object {
 
     private ASN1Integer errNo;
-    private ASN1IA5String errDesc;
+    private ErrDesc errDesc;
+
+
+
+
 
     public static ErrorPkgRespond getInstance(ASN1TaggedObject obj, boolean explicit)
     {
@@ -24,7 +28,7 @@ public class ErrorPkgRespond extends ASN1Object {
 
             errNo = ASN1Integer.getInstance(sequence.getObjectAt(0));
         if(sequence.size()==2) {
-            errDesc=ASN1IA5String.getInstance(sequence.getObjectAt(1));
+            errDesc=ErrDesc.getInstance(sequence.getObjectAt(1));
         }else {
             throw new IllegalArgumentException("Bad sequence size: " + sequence.size());
         }
