@@ -90,9 +90,9 @@ public class Benchmarking {
         sm3Digest.update("gm-java-".getBytes());
         sm3Digest.update("1.0".getBytes());
         byte[] md3 = sm3Digest.doFinal();
-        System.out.println(Hex.toHexString(md));
-        System.out.println(Hex.toHexString(md2));
-        System.out.println(Hex.toHexString(md3));
+        System.out.println("update:        "+Hex.toHexString(md));
+        System.out.println("直接doFinal:   "+Hex.toHexString(md2));
+        System.out.println("多次分开update: "+Hex.toHexString(md3));
         System.out.println(++i+"---------SM3摘要计算通过---------");
 
         System.out.println("---------随机数生成开始---------");
