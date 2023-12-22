@@ -21,11 +21,7 @@ import static com.yxj.gm.enums.ModeEnum.CTR;
  *      PKCS7填充
  */
 public class SM4Cipher {
-    /**
-     * 创建线程池
-     */
-    ExecutorService executorService = Executors.newFixedThreadPool(10);
-    ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executorService;
+
 
     /**
      * 线程数
@@ -165,7 +161,7 @@ public class SM4Cipher {
     //ECB
     public byte[] blockEncryptECB(byte[] m, byte[][] rks){
 //        //1 填充
-//        m=padding(m);
+        m=padding(m);
         //2 分块
         byte[][] block = block(m);
         //3 加密
@@ -197,6 +193,11 @@ public class SM4Cipher {
     }
     //CRT
     public byte[] blockEncryptCTR(byte[] m, byte[] iv, byte[][] rks)  {
+        /**
+         * 创建线程池
+         */
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+        ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executorService;
         if(iv.length!=16){
             throw new RuntimeException("iv 长度错误 iv len="+iv.length);
         }
@@ -294,8 +295,8 @@ public class SM4Cipher {
         //3 合并
         byte[] merge = merge(result);
         //4 去除填充
-//        return unPadding(merge);
-        return merge;
+        return unPadding(merge);
+//        return merge;
     }
     //CBC
     public byte[] blockDecryptCBC(byte[] m, byte[] iv, byte[][] rks){
@@ -573,6 +574,11 @@ public class SM4Cipher {
     }
 
     private  byte[] GCTR(byte[] ICB,byte[] X,byte[][] rks){
+        /**
+         * 创建线程池
+         */
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+        ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executorService;
         if (DEBUG)System.out.println("ICB:"+new BigInteger(ICB));
         if(X==null){
             return null;

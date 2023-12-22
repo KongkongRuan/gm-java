@@ -21,7 +21,7 @@ import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
 
 public class Test {
-    public static void main1(String[] args) {
+    public static void main(String[] args) {
         String msg = "gm-java-1.0";
         //SM2密钥对生成
         KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
@@ -127,7 +127,7 @@ public class Test {
 //
 //    }
 
-    public static void main(String[] args) throws IOException {
+    public static void main1(String[] args) throws IOException {
         byte[] cert = FileUtils.readFileToByteArray(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-03\\TestCrt.crt"));
         byte[] asn1 = FileUtils.pemToASN1ByteArray(cert);
         FileUtils.writeByteArrayToFile(new File("C:\\Users\\XDYG\\Documents\\WeChat Files\\wxid_zeekxfre2s1m41\\FileStorage\\File\\2023-03\\derCert.der"),asn1);
