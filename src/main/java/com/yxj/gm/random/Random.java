@@ -75,12 +75,14 @@ public class Random {
     }
     private static byte[] getCurrentPCinfor(){
         long l = System.currentTimeMillis();
+        long n = System.nanoTime();
         String threadInfo = Thread.currentThread().getName() + "-" + Thread.currentThread().getId();
         long totalMemory = Runtime.getRuntime().totalMemory();
         long freeMemory = Runtime.getRuntime().freeMemory();
         long maxMemory = Runtime.getRuntime().maxMemory();
         String memoryInfo =totalMemory+"-"+freeMemory+"-"+maxMemory;
-        return (l+threadInfo + memoryInfo).getBytes();
+        String s=l+n+threadInfo + memoryInfo;
+        return s.getBytes();
     }
 
     public static byte[] RandomBySM3(int length){
@@ -98,6 +100,7 @@ public class Random {
         SM3Digest sm3Digest = new SM3Digest();
         byte[] bytes = new SM3Digest().doFinal(getCurrentPCinfor());
         if(length<=32){
+            bytes = new SM3Digest().doFinal(bytes);
             System.arraycopy(bytes,0,result,0,length);
         }else {
             System.arraycopy(bytes,0,result,0,32);
