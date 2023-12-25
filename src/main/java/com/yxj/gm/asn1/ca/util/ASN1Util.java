@@ -1,7 +1,10 @@
 package com.yxj.gm.asn1.ca.util;
 
+import com.alibaba.fastjson2.JSON;
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Cipher;
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Signature;
+import com.yxj.gm.tls.netty.TlsMessage;
+import com.yxj.gm.tls.netty.handler.DataRecive;
 import com.yxj.gm.util.DataConvertUtil;
 import com.yxj.gm.util.FileUtils;
 import io.netty.buffer.ByteBuf;
@@ -44,8 +47,13 @@ public class ASN1Util {
             throw new RuntimeException(e);
         }
     }
-    public static byte[] GetContent(ByteBuf byteBuf){
-
+    public static void GetContent(ByteBuf byteBuf, DataRecive dataRecive){
+        System.out.println("GetContent");
+        System.out.println(dataRecive.isComplete());
+        System.out.println(dataRecive.getTotalLength());
+        if(dataRecive.getCurrentContent()!=null){
+            System.out.println(dataRecive.getCurrentContent().length);
+        }
             while (!byteBuf.isReadable()){
                 try {
                     Thread.sleep(50);
@@ -53,25 +61,65 @@ public class ASN1Util {
                     throw new RuntimeException(e);
                 }
             }
+        /**
+         * 解决分包问题
+         */
+        if(!dataRecive.isComplete()){
+            System.out.println("分包 GetContent");
+                int totalLength = dataRecive.getTotalLength();
+                byte[] currentContent = dataRecive.getCurrentContent();
+                int remaining =totalLength-currentContent.length;
+                int contentLength = Math.min(remaining, 2048);
+                byte[] content = new byte[contentLength];
+                byteBuf.readBytes(content);
+                dataRecive.setCurrentContent(DataConvertUtil.byteArrAdd(currentContent,content));
+                dataRecive.setComplete(true);
+                return ;
+            }
+
             int tag = byteBuf.readByte();
             if(tag!=4){
-                throw new RuntimeException("输入的asn1编码有误");
+                byte[] content = new byte[byteBuf.readableBytes()];
+                byteBuf.readBytes(content);
+                System.out.println(Hex.toHexString(content));
+                System.out.println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+                System.out.println(new String(content));
+//                dataRecive.setComplete(false);
+//                return;
+//                throw new RuntimeException("输入的asn1编码有误,tag:"+tag);
             }
             int ltag = byteBuf.readByte();
             byte[] bytes = DataConvertUtil.byteToBitArray((byte) ltag);
             if(bytes[0]!=1){
                 byte[] bytes1 = new byte[ltag];
                 byteBuf.readBytes(bytes1);
-                return  bytes1;
+                dataRecive.setCurrentContent(bytes1);
             }else {
                 bytes[0]=0;
                 byte b = DataConvertUtil.BitArrayTobyte(bytes);
                 byte[] lenbytes = new byte[b];
                 byteBuf.readBytes(lenbytes);
                 long len = DataConvertUtil.byteArrayToUnsignedInt(lenbytes);
+
                 byte[] content = new byte[(int)len];
+                int remaining=byteBuf.writerIndex()-(b+2);
+                if(len>remaining){
+                    dataRecive.setTotalLength((int)len);
+                    content=new byte[remaining];
+                    byteBuf.readBytes(content);
+                    dataRecive.setCurrentContent(DataConvertUtil.byteArrAdd(dataRecive.getCurrentContent(),content));
+                    if(dataRecive.getCurrentContent().length==dataRecive.getTotalLength()){
+                        dataRecive.setComplete(true);
+                    }else {
+                        dataRecive.setComplete(false);
+                    }
+                    return;
+//                    System.out.println("inner--------------");
+//                    System.out.println(new String(content));
+                }
                 byteBuf.readBytes(content);
-                return content;
+                dataRecive.setCurrentContent(content);
+                dataRecive.setComplete(true);
 
             }
 
