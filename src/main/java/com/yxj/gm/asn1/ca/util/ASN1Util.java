@@ -48,30 +48,44 @@ public class ASN1Util {
         }
     }
     public static void GetContent(ByteBuf byteBuf, DataRecive dataRecive){
-        System.out.println("GetContent");
-        System.out.println(dataRecive.isComplete());
-        System.out.println(dataRecive.getTotalLength());
-        if(dataRecive.getCurrentContent()!=null){
-            System.out.println(dataRecive.getCurrentContent().length);
-        }
-            while (!byteBuf.isReadable()){
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
+//        try {
+//            Thread.sleep(500);
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        }
+
+//            while (!byteBuf.isReadable()){
+//                try {
+//                    Thread.sleep(50);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            }
+
+//            if(dataRecive.getUnpackingErrorData()!=null){
+//                byte[] content = new byte[byteBuf.readableBytes()];
+//                byteBuf.readBytes(content);
+//                System.err.println("UnpackingErrorData------------------");
+//                System.err.println(new String(content));
+//                dataRecive.setCurrentContent(DataConvertUtil.byteArrAdd(content,dataRecive.getUnpackingErrorData()));
+//                dataRecive.setComplete(true);
+//                dataRecive.setUnpackingErrorData(null);
+//                return;
+//
+//            }
         /**
          * 解决分包问题
          */
         if(!dataRecive.isComplete()){
-            System.out.println("分包 GetContent");
+//            System.out.println("分包 GetContent");
                 int totalLength = dataRecive.getTotalLength();
                 byte[] currentContent = dataRecive.getCurrentContent();
                 int remaining =totalLength-currentContent.length;
                 int contentLength = Math.min(remaining, 2048);
                 byte[] content = new byte[contentLength];
                 byteBuf.readBytes(content);
+//            System.err.println("分包 GetContent Data------------------");
+//            System.err.println(new String(content));
                 dataRecive.setCurrentContent(DataConvertUtil.byteArrAdd(currentContent,content));
                 dataRecive.setComplete(true);
                 return ;
@@ -79,22 +93,25 @@ public class ASN1Util {
 
             int tag = byteBuf.readByte();
             if(tag!=4){
-                byte[] content = new byte[byteBuf.readableBytes()];
-                byteBuf.readBytes(content);
-                System.out.println(Hex.toHexString(content));
-                System.out.println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                System.out.println(new String(content));
+//                byte[] content = new byte[byteBuf.readableBytes()];
+//                byteBuf.readBytes(content);
+//                System.out.println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+//                System.out.println(new String(content));
+//                dataRecive.setUnpackingErrorData(content);
 //                dataRecive.setComplete(false);
 //                return;
-//                throw new RuntimeException("输入的asn1编码有误,tag:"+tag);
+                throw new RuntimeException("输入的asn1编码有误,tag:"+tag);
             }
             int ltag = byteBuf.readByte();
             byte[] bytes = DataConvertUtil.byteToBitArray((byte) ltag);
             if(bytes[0]!=1){
                 byte[] bytes1 = new byte[ltag];
                 byteBuf.readBytes(bytes1);
+//                System.err.println("bytes[0]!=1  小Data------------------");
+//                System.err.println(new String(bytes1));
                 dataRecive.setCurrentContent(bytes1);
             }else {
+//                System.err.println("bytes[0]!=1  大Data------------------");
                 bytes[0]=0;
                 byte b = DataConvertUtil.BitArrayTobyte(bytes);
                 byte[] lenbytes = new byte[b];
@@ -107,6 +124,8 @@ public class ASN1Util {
                     dataRecive.setTotalLength((int)len);
                     content=new byte[remaining];
                     byteBuf.readBytes(content);
+//                    System.err.println("len>remaining  分包第一包------------------");
+//                    System.err.println(new String(content));
                     dataRecive.setCurrentContent(DataConvertUtil.byteArrAdd(dataRecive.getCurrentContent(),content));
                     if(dataRecive.getCurrentContent().length==dataRecive.getTotalLength()){
                         dataRecive.setComplete(true);
@@ -117,7 +136,10 @@ public class ASN1Util {
 //                    System.out.println("inner--------------");
 //                    System.out.println(new String(content));
                 }
+
                 byteBuf.readBytes(content);
+//                System.err.println("bytes[0]!=1  大Data------------------");
+//                System.err.println(new String(content));
                 dataRecive.setCurrentContent(content);
                 dataRecive.setComplete(true);
 

@@ -30,7 +30,7 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
     static {
         Security.addProvider(new XaProvider());
     }
-    boolean DEBUG = true;
+    boolean DEBUG = false;
 
     @Override
     public void channelActive(ChannelHandlerContext ctx)  {
@@ -56,17 +56,19 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
     private byte[] serverCert;
     private ServerKeyExchange serverKeyExchange;
     private KeyPair clientKeyPairTemp;
-    private byte[] random;
+    public byte[] random;
     private ClientHello clientHello;
     private ServerHello serverHello;
 
     /**数据分包接收相关参数**/
     DataRecive dataRecive = new DataRecive();
 
-
+    int count = 0;
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ByteBuf byteBuf) throws Exception {
+        if(DEBUG) System.out.println(count++);
         ASN1Util.GetContent(byteBuf, dataRecive);
+
         TlsMessage tlsMessage  ;
         if(dataRecive.isComplete()){
             tlsMessage = JSON.parseObject(new String(dataRecive.getCurrentContent()), TlsMessage.class);

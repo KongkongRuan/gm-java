@@ -13,11 +13,20 @@ public class DataRecive {
     public void setTotalLength(int totalLength) {
         this.totalLength = totalLength;
     }
+    private byte[] unpackingErrorData;
 
     public void reset() {
         this.totalLength = 0;
         this.currentContent = null;
         this.isComplete = true;
+    }
+
+    public byte[] getUnpackingErrorData() {
+        return unpackingErrorData;
+    }
+
+    public void setUnpackingErrorData(byte[] unpackingErrorData) {
+        this.unpackingErrorData = unpackingErrorData;
     }
 
     public byte[] getCurrentContent() {

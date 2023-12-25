@@ -30,7 +30,7 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
     static {
         Security.addProvider(new XaProvider());
     }
-    boolean DEBUG = true;
+    boolean DEBUG = false;
     private byte[] serverCert;
     private byte[] serverPriKey;
     private String tempCert = "-----BEGIN CERTIFICATE-----\n" +
@@ -146,10 +146,15 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
         ctx.writeAndFlush(Unpooled.copiedBuffer(TlsMessage.getEncoded(tlsMessage1))).addListener(future -> {
             if (DEBUG) System.out.println("server:serverHello发送完毕");
         });
+        try {
+            Thread.sleep(10);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         TlsMessage tlsMessage2 = new TlsMessage(serverCert, TlsMessageType.SERVER_CERT, clientHello.getSessionId());
         byte[] encoded = TlsMessage.getEncoded(tlsMessage2);
-        System.out.println("serverCert:"+encoded[0]);
-        System.out.println("serverCert:"+new String(encoded));
+        if(DEBUG) System.out.println("serverCert:"+encoded[0]);
+        if(DEBUG) System.out.println("serverCert:"+new String(encoded));
         ctx.writeAndFlush(Unpooled.copiedBuffer(encoded)).addListener(future -> {
             if (DEBUG) System.out.println("server:serverCert发送完毕");
         });
