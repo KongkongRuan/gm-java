@@ -2,6 +2,7 @@ package com.yxj.gm.tls.netty;
 
 import com.alibaba.fastjson2.JSON;
 import com.yxj.gm.tls.netty.handler.enums.TlsMessageType;
+import com.yxj.gm.util.DataConvertUtil;
 import org.bouncycastle.asn1.DEROctetString;
 
 import java.io.IOException;
@@ -17,7 +18,7 @@ public class TlsMessage {
 
     public static byte[] getEncoded(TlsMessage tlsMessage){
         try {
-            return new DEROctetString(JSON.toJSONString(tlsMessage).getBytes(StandardCharsets.UTF_8)).getEncoded();
+            return DataConvertUtil.byteArrAdd(new DEROctetString(JSON.toJSONString(tlsMessage).getBytes(StandardCharsets.UTF_8)).getEncoded(),"$_@==@_$".getBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

@@ -9,6 +9,7 @@ import com.yxj.gm.cert.CertParseVo;
 import com.yxj.gm.provider.XaProvider;
 import com.yxj.gm.random.Random;
 import com.yxj.gm.tls.*;
+import com.yxj.gm.tls.netty.NettyConstant;
 import com.yxj.gm.tls.netty.TlsMessage;
 import com.yxj.gm.tls.netty.handler.DataRecive;
 import com.yxj.gm.tls.netty.handler.enums.TlsMessageType;
@@ -30,11 +31,11 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
     static {
         Security.addProvider(new XaProvider());
     }
-    boolean DEBUG = false;
+    private final boolean DEBUG = NettyConstant.DEBUG;
 
     @Override
     public void channelActive(ChannelHandlerContext ctx)  {
-         clientHello = new ClientHello();
+        clientHello = new ClientHello();
         clientHello.setVersion("v1");
         byte[] randomC = Random.RandomBySM3(32);
         byte[] sessionId = Random.RandomBySM3(32);
@@ -56,7 +57,11 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
     private byte[] serverCert;
     private ServerKeyExchange serverKeyExchange;
     private KeyPair clientKeyPairTemp;
-    public byte[] random;
+
+    private byte[] random;
+    public byte[] getRandom() {
+        return random;
+    }
     private ClientHello clientHello;
     private ServerHello serverHello;
 
@@ -119,7 +124,7 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
                     throw new RuntimeException(e);
                 }
                 if(DEBUG) System.out.println("client:结束");
-                System.out.println("client Random:"+Hex.toHexString(random));
+                if (NettyConstant.ENDPRINT)System.out.println("client  Handler Print Random:"+Hex.toHexString(random));
                 break;
         }
 
@@ -136,7 +141,13 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
 //    @Override
 //    protected void channelRead0(ChannelHandlerContext channelHandlerContext, ByteBuf byteBuf) throws Exception {
 //        System.out.println("client:channelRead0");
-//        byte[] server = ASN1Util.GetContent(byteBuf);
+//        ASN1Util.GetContent(byteBuf,dataRecive);
+//        Thread.sleep(1000);
+//        byte[] server =new byte[0] ;
+//        if(dataRecive.isComplete()){
+//            server=dataRecive.getCurrentContent();
+//        }
+//
 //        if(DEBUG) System.out.println("client:server"+"--"+new String(server));
 //    }
 }

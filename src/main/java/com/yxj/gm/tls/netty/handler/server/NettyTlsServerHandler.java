@@ -8,6 +8,7 @@ import com.yxj.gm.asn1.ca.util.ASN1Util;
 import com.yxj.gm.provider.XaProvider;
 import com.yxj.gm.random.Random;
 import com.yxj.gm.tls.*;
+import com.yxj.gm.tls.netty.NettyConstant;
 import com.yxj.gm.tls.netty.TlsMessage;
 import com.yxj.gm.tls.netty.handler.DataRecive;
 import com.yxj.gm.tls.netty.handler.enums.TlsMessageType;
@@ -16,6 +17,7 @@ import com.yxj.gm.util.SM2Util;
 import com.yxj.gm.util.TLSUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -26,11 +28,13 @@ import org.bouncycastle.util.encoders.Hex;
 
 import java.security.*;
 
+@ChannelHandler.Sharable
 public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
     static {
         Security.addProvider(new XaProvider());
     }
-    boolean DEBUG = false;
+    DataRecive dataRecive = new DataRecive();
+    private final boolean DEBUG = NettyConstant.DEBUG;
     private byte[] serverCert;
     private byte[] serverPriKey;
     private String tempCert = "-----BEGIN CERTIFICATE-----\n" +
@@ -51,10 +55,22 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
         this.serverCert = tempCert.getBytes();
         this.serverPriKey = Hex.decode(tempPriKey);
     }
+    public NettyTlsServerHandler(byte[] serverCert, byte[] serverPriKey){
+        Security.addProvider(new XaProvider());
+        this.serverCert = serverCert;
+        this.serverPriKey = serverPriKey;
+    }
 
 //    @Override
 //    protected void channelRead0(ChannelHandlerContext ctx, ByteBuf bf) throws Exception {
-//        ClientHello clientHello = JSON.parseObject(new String(ASN1Util.GetContent(bf)), ClientHello.class);
+//        ASN1Util.GetContent(bf,dataRecive);
+//        ClientHello clientHello;
+//        if(dataRecive.isComplete()){
+//             clientHello = JSON.parseObject(new String(dataRecive.getCurrentContent()), ClientHello.class);
+//        }else {
+//            return;
+//        }
+//
 //        System.out.println("clientHello");
 //        System.out.println(clientHello.getVersion());
 //        for (int i = 0; i < 10; i++) {
@@ -68,17 +84,18 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
 //
 //    }
 
-    public NettyTlsServerHandler(byte[] serverCert, byte[] serverPriKey){
-        Security.addProvider(new XaProvider());
-        this.serverCert = serverCert;
-        this.serverPriKey = serverPriKey;
-    }
+
 
     private ServerHello serverHello;
     private ClientHello clientHello;
     private KeyPair serverKeyPairTemp;
+
+
+
     private byte[] random;
-    DataRecive dataRecive = new DataRecive();
+    public byte[] getRandom() {
+        return random;
+    }
 
 
     @Override
@@ -102,9 +119,6 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
             default:
                 throw new RuntimeException("未知的消息类型");
         }
-
-
-
     }
     private void clientKeyExchange(ChannelHandlerContext ctx, TlsMessage tlsMessage) {
 
@@ -121,7 +135,7 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
         try {
             xaMd = MessageDigest.getInstance("SM3", "XaProvider");
             random= TLSUtil.prf(xaMd,PreMaster,"master secret".getBytes(), DataConvertUtil.byteArrAdd(clientHello.getRandomC(),serverHello.getRandomS()),16);
-            System.out.println("server Random:"+Hex.toHexString(random));
+            if (NettyConstant.ENDPRINT) System.out.println("server Handler Print Random:"+Hex.toHexString(random));
         } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
             throw new RuntimeException(e);
         }
@@ -146,11 +160,6 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
         ctx.writeAndFlush(Unpooled.copiedBuffer(TlsMessage.getEncoded(tlsMessage1))).addListener(future -> {
             if (DEBUG) System.out.println("server:serverHello发送完毕");
         });
-        try {
-            Thread.sleep(10);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
         TlsMessage tlsMessage2 = new TlsMessage(serverCert, TlsMessageType.SERVER_CERT, clientHello.getSessionId());
         byte[] encoded = TlsMessage.getEncoded(tlsMessage2);
         if(DEBUG) System.out.println("serverCert:"+encoded[0]);

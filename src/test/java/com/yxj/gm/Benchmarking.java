@@ -66,12 +66,14 @@ public class Benchmarking {
         byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded());
         try {
             FileUtils.writeFile(certPathStr+"/java-ca.cer",rootCert);
+            FileUtils.writeFile(certPathStr+"/java-ca.pri",caKeyPair.getPrivate().getEncoded());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
         byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, caKeyPair.getPrivate().getEncoded(), equipKeyPair.getPublic().getEncoded());
         try {
             FileUtils.writeFile(certPathStr+"/java-ownerCert.cer",ownerCert);
+            FileUtils.writeFile(certPathStr+"/java-ownerCert.pri",equipKeyPair.getPrivate().getEncoded());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
