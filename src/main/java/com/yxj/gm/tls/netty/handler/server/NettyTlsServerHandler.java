@@ -27,12 +27,15 @@ import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.security.*;
+import java.util.HashMap;
+import java.util.Map;
 
 @ChannelHandler.Sharable
 public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> {
     static {
         Security.addProvider(new XaProvider());
     }
+    private Map<String,byte[]> currentKeyMap = new HashMap<>();
     DataRecive dataRecive = new DataRecive();
     private final boolean DEBUG = NettyConstant.DEBUG;
     private byte[] serverCert;
@@ -135,6 +138,7 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
         try {
             xaMd = MessageDigest.getInstance("SM3", "XaProvider");
             random= TLSUtil.prf(xaMd,PreMaster,"master secret".getBytes(), DataConvertUtil.byteArrAdd(clientHello.getRandomC(),serverHello.getRandomS()),16);
+            currentKeyMap.put(Hex.toHexString(tlsMessage.getSessionId()),random);
             if (NettyConstant.ENDPRINT) System.out.println("server Handler Print Random:"+Hex.toHexString(random));
         } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
             throw new RuntimeException(e);
@@ -144,9 +148,20 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
     }
 
     private void clientHello(ChannelHandlerContext ctx, TlsMessage tlsMessage) {
+        if(tlsMessage.getSessionId()!=null){
+            System.out.println("sessionId:"+Hex.toHexString(tlsMessage.getSessionId()));
+            byte[] random = currentKeyMap.get(Hex.toHexString(tlsMessage.getSessionId()));
+            if(random!=null){
+                TlsMessage tlsMessage1 = new TlsMessage(random, TlsMessageType.SERVER_FINISHED, tlsMessage.getSessionId());
+                ctx.writeAndFlush(Unpooled.copiedBuffer(TlsMessage.getEncoded(tlsMessage1))).addListener(future -> {
+                    if (DEBUG) System.out.println("server:serverFINISHED发送完毕");
+                });
+                return;
+            }
+        }
         JSONObject jsonObject=(JSONObject)tlsMessage.getObject();
         clientHello = jsonObject.to(ClientHello.class);
-
+        System.out.println("clientHello sessionId:"+Hex.toHexString(clientHello.getSessionId()));
         if (DEBUG) System.out.println("server:clientHello" + clientHello);
         //todo 生成serverHello(选择适当的版本及算法)
         serverHello=new ServerHello();

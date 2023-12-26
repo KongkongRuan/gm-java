@@ -11,7 +11,7 @@ import java.net.Socket;
 public class TestTlsJamming {
     public static void main(String[] args) {
         String serverIp = "127.0.0.1";
-        int tlsPort = 4433;
+        int tlsPort = 4432;
         Socket socket = null;
         try {
             socket = new Socket(serverIp, tlsPort);
@@ -25,21 +25,30 @@ public class TestTlsJamming {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        try {
-            Thread.sleep(50000);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+//        try {
+//            Thread.sleep(50000);
+//        } catch (InterruptedException e) {
+//            throw new RuntimeException(e);
+//        }
+        while (true){
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println("干扰数据");
+            byte[] bytes = Random.RandomBySM3(5);
+            try {
+                outputStream.write(bytes);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            try {
+                outputStream.write("gmjava".getBytes());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         }
-        byte[] bytes = Random.RandomBySM3(5);
-        try {
-            outputStream.write(bytes);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        try {
-            outputStream.write("gmjava".getBytes());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+
     }
 }

@@ -12,6 +12,8 @@ import com.yxj.gm.enums.ModeEnum;
 import com.yxj.gm.random.Random;
 import com.yxj.gm.tls.TlsClient;
 import com.yxj.gm.tls.TlsServer;
+import com.yxj.gm.tls.netty.NettyTlsClient;
+import com.yxj.gm.tls.netty.NettyTlsServer;
 import com.yxj.gm.util.CertResolver;
 import com.yxj.gm.util.FileUtils;
 import org.bouncycastle.asn1.x509.KeyUsage;
@@ -141,6 +143,54 @@ public class Benchmarking {
         String clientResultRandom = (String)clientFutureTask.get();
         System.out.println("clientResultRandom:"+clientResultRandom);
         System.out.println(++i+"---------TLS握手测试通过（SOCKET）---------");
+
+        System.out.println("---------TLS握手测试开始（NETTY）---------");
+        NettyTlsServer nettyTlsServer = new NettyTlsServer(4432);
+        new Thread(()->{
+            try {
+                nettyTlsServer.start();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+        new Thread(()->{
+            while (true){
+                System.out.println("server sleep");
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                if(nettyTlsServer.getRandom()!=null){
+                    System.out.println("netty server random："+Hex.toHexString(nettyTlsServer.getRandom()));
+                    break;
+                }
+            }
+        }).start();
+
+
+        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost", 4432);
+        new Thread(()->{
+            try {
+                nettyTlsClient.start();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }).start();
+        new Thread(()->{
+            while (true){
+                try {
+                    Thread.sleep(1000);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                if(nettyTlsClient.getRandom()!=null){
+                    System.out.println("netty client random："+Hex.toHexString(nettyTlsClient.getRandom()));
+                    break;
+                }
+            }
+
+        }).start();
 
 
     }

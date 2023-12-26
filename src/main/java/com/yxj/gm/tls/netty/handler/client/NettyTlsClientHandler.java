@@ -33,15 +33,25 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
     }
     private final boolean DEBUG = NettyConstant.DEBUG;
 
+    private byte[] sessionId;
+
+    public NettyTlsClientHandler(){
+
+    }
+    public NettyTlsClientHandler(byte[] sessionId){
+        this.sessionId=sessionId;
+    }
+
     @Override
     public void channelActive(ChannelHandlerContext ctx)  {
         clientHello = new ClientHello();
         clientHello.setVersion("v1");
         byte[] randomC = Random.RandomBySM3(32);
-        byte[] sessionId = Random.RandomBySM3(32);
+        if(sessionId==null){
+            sessionId = Random.RandomBySM3(32);
+        }
         clientHello.setSessionId(sessionId);
         clientHello.setRandomC(randomC);
-        clientHello.setSessionId(null);
         CipherSuites cipherSuites = new CipherSuites("SM4", "SM2", "SM3");
         clientHello.setCipherSuites(cipherSuites);
         clientHello.setCompressionMethods(null);
@@ -126,6 +136,8 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
                 if(DEBUG) System.out.println("client:结束");
                 if (NettyConstant.ENDPRINT)System.out.println("client  Handler Print Random:"+Hex.toHexString(random));
                 break;
+            case SERVER_FINISHED:
+                random = tlsMessage.getContent();
         }
 
 

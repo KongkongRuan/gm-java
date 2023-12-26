@@ -2,33 +2,25 @@ package com.yxj.gm.tls.netty;
 
 import com.yxj.gm.tls.netty.handler.client.NettyTlsClientHandler;
 import io.netty.bootstrap.Bootstrap;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.DelimiterBasedFrameDecoder;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import org.bouncycastle.util.encoders.Hex;
 
 @ChannelHandler.Sharable
-public class NettyTlsClient {
+public class NettyTlsClient2 {
     private int tlsPort = 4433;
     private String serverIp = "";
     NettyTlsClientHandler nettyTlsClientHandler = new NettyTlsClientHandler();
 
-    public NettyTlsClient(String serverIp, int tlsPort) {
+    public NettyTlsClient2(String serverIp, int tlsPort) {
         this.serverIp = serverIp;
         this.tlsPort = tlsPort;
     }
-    public NettyTlsClient(String serverIp) {
+    public NettyTlsClient2(String serverIp) {
         this.serverIp = serverIp;
-    }
-    public NettyTlsClient(String serverIp, int tlsPort,byte[] sessionId) {
-        this.serverIp = serverIp;
-        this.tlsPort = tlsPort;
-        nettyTlsClientHandler = new NettyTlsClientHandler(sessionId);
     }
     public void start() throws Exception {
         EventLoopGroup group = new NioEventLoopGroup();
@@ -61,7 +53,7 @@ public class NettyTlsClient {
     }
 
     public static void main(String[] args) throws Exception {
-        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432,Hex.decode("1234567890123456789012345678901234567890123456789012345678901234"));
+        NettyTlsClient2 nettyTlsClient = new NettyTlsClient2("localhost",4432);
 
 
         new Thread(()->{
