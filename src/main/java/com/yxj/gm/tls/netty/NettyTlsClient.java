@@ -86,18 +86,6 @@ public class NettyTlsClient {
 
         }).start();
 
-//        for (int i = 0; i < 20; i++) {
-//            new Thread(()->{
-//                try {
-//                    new NettyTlsClient("localhost").start();
-//                } catch (Exception e) {
-//                    throw new RuntimeException(e);
-//                }
-//            }).start();
-//        }
-
-
-
     }
 }
 

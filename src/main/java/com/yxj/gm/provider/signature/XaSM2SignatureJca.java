@@ -21,11 +21,9 @@ public class XaSM2SignatureJca extends SignatureSpi implements Serializable {
      * 验签初始化
      * @param publicKey the public key of the identity whose signature is
      * going to be verified.
-     *
-     * @throws InvalidKeyException
      */
     @Override
-    protected void engineInitVerify(PublicKey publicKey) throws InvalidKeyException {
+    protected void engineInitVerify(PublicKey publicKey)  {
         this.publicKey=publicKey;
     }
 
@@ -34,15 +32,14 @@ public class XaSM2SignatureJca extends SignatureSpi implements Serializable {
      * @param privateKey the private key of the identity whose signature
      * will be generated.
      *
-     * @throws InvalidKeyException
      */
     @Override
-    protected void engineInitSign(PrivateKey privateKey) throws InvalidKeyException {
+    protected void engineInitSign(PrivateKey privateKey)  {
         this.privateKey=privateKey;
     }
 
     @Override
-    protected void engineUpdate(byte b) throws SignatureException {
+    protected void engineUpdate(byte b)  {
 
     }
 
@@ -53,23 +50,20 @@ public class XaSM2SignatureJca extends SignatureSpi implements Serializable {
      * @param off the offset to start from in the array of bytes
      * @param len the number of bytes to use, starting at offset
      *
-     * @throws SignatureException
      */
     @Override
-    protected void engineUpdate(byte[] b, int off, int len) throws SignatureException {
+    protected void engineUpdate(byte[] b, int off, int len)  {
         if(id==null){
             id="1234567812345678".getBytes();
         }
         this.msg=b;
     }
 
-    /**
+    /*
      * 签名
-     * @return
-     * @throws SignatureException
      */
     @Override
-    protected byte[] engineSign() throws SignatureException {
+    protected byte[] engineSign()   {
         SM2Signature signature = new SM2Signature();
         if(msg==null)throw new RuntimeException("msg is null ");
         if(privateKey==null)throw new RuntimeException("privateKey is null");
@@ -80,11 +74,9 @@ public class XaSM2SignatureJca extends SignatureSpi implements Serializable {
      * 验签
      * @param sigBytes the signature bytes to be verified.
      *
-     * @return
-     * @throws SignatureException
      */
     @Override
-    protected boolean engineVerify(byte[] sigBytes) throws SignatureException {
+    protected boolean engineVerify(byte[] sigBytes)  {
         SM2Signature signature = new SM2Signature();
         if(msg==null)throw new RuntimeException("msg is null ");
         if(publicKey==null)throw new RuntimeException("publicKey is null");
@@ -102,7 +94,7 @@ public class XaSM2SignatureJca extends SignatureSpi implements Serializable {
     }
 
     @Override
-    protected void engineSetParameter(AlgorithmParameterSpec params) throws InvalidAlgorithmParameterException {
+    protected void engineSetParameter(AlgorithmParameterSpec params) {
         if(params instanceof SM2AlgorithmParameterSpec){
             SM2AlgorithmParameterSpec sm2params = (SM2AlgorithmParameterSpec) params;
             this.id=sm2params.getId();

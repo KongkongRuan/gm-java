@@ -14,19 +14,7 @@ public class SignerInfo  extends ASN1Object {
     private AlgorithmIdentifier digestEncryptionAlgorithm;
     private ASN1OctetString encryptedDigest;
     private ASN1Set         unauthenticatedAttributes;//IMPLICIT OPTIONAL 1
-    /**
-     * Return a SignerInfo object from the given input
-     * <p>
-     * Accepted inputs:
-     * <ul>
-     * <li> null &rarr; null
-     * <li> {@link SignerInfo} object
-     * <li> {@link org.bouncycastle.asn1.ASN1Sequence#getInstance(java.lang.Object) ASN1Sequence} input formats with SignerInfo structure inside
-     * </ul>
-     *
-     * @param o the object we want converted.
-     * @exception IllegalArgumentException if the object cannot be converted.
-     */
+
     public static SignerInfo getInstance(
             Object  o)
             throws IllegalArgumentException
@@ -43,12 +31,21 @@ public class SignerInfo  extends ASN1Object {
         return null;
     }
 
-    /**
+    /*
      *
      * @param digestAlgorithm            CMS knows as 'digestAlgorithm'
      * @param authenticatedAttributes CMS knows as 'authenticatedAttributes'
      * @param digestEncryptionAlgorithm  CMS knows as 'digestEncryptionAlgorithm'
      * @param encryptedDigest         CMS knows as 'encryptedDigest'
+     */
+
+    /**
+     *
+     * @param issuerAndSerialNumber 一个证 书颁 发 者 可 识 别 名 和颁 发 者 确 定 的证 书 序 列号 ,可 据此 确 定 — 份 证 书 和 与 此 证 书 对 应 的 实 体 及公钥
+     * @param digestAlgorithm  对 内容进 行 摘 要 计 算 的 消 息 摘 要 算 法 ,本 规 范 采 用sM3算 法
+     * @param authenticatedAttributes  是经 由签名者签名 的属性 的集 合 ,该 域 可选 。如果 该域存在 ,该 域 中摘要 的计 算 方 法是 对原 文进 行 摘要 计算结果
+     * @param digestEncryptionAlgorithm  SM2-1椭 圆曲线数字签名算法标识符
+     * @param encryptedDigest  值是 sM2Signature,用 签名者私钥进行签名 的结果 ,其定义见 GM/T0009。 编码格式为 r|s
      */
     public SignerInfo(
             IssuerAndSerialNumber issuerAndSerialNumber,

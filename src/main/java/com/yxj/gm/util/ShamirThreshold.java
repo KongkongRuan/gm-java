@@ -7,7 +7,7 @@ import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
+/*
  * shamir门限算法使用DEMO
  *         <dependency>
  *             <groupId>com.codahale</groupId>

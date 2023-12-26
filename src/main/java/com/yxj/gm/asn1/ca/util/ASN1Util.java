@@ -311,8 +311,8 @@ public class ASN1Util {
 
     /**
      * 求byte[] 的补码
-     * @param bytes
-     * @return
+     * @param bytes 入参
+     * @return 返回补码
      */
     public static byte[] complement(byte[] bytes) {
         byte[] complement = new byte[bytes.length];

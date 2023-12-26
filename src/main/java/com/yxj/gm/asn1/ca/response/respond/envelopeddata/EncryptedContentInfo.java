@@ -51,19 +51,7 @@ public class EncryptedContentInfo extends ASN1Object {
         }
     }
 
-    /**
-     * Return an EncryptedContentInfo object from the given object.
-     * <p>
-     * Accepted inputs:
-     * <ul>
-     * <li> null &rarr; null
-     * <li> {@link org.bouncycastle.asn1.cms.EncryptedContentInfo} object
-     * <li> {@link org.bouncycastle.asn1.ASN1Sequence#getInstance(java.lang.Object) ASN1Sequence} input formats
-     * </ul>
-     *
-     * @param obj the object we want converted.
-     * @exception IllegalArgumentException if the object cannot be converted.
-     */
+
     public static EncryptedContentInfo getInstance(
             Object obj)
     {

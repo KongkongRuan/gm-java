@@ -11,7 +11,7 @@ import java.nio.ByteOrder;
 
 public class DataConvertUtil {
 
-    /**
+    /*
      * Byte转Bit
      */
     public static String byteToBit(byte b) {
@@ -25,7 +25,7 @@ public class DataConvertUtil {
                 (byte)((b) & 0x1);
     }
 
-    /**
+    /*
      * Byte转Bit
      */
 //    public static byte[] byteToBitArray(byte b) {
@@ -111,7 +111,7 @@ public class DataConvertUtil {
 
 
     }
-    /**
+    /*
      * Bit转Byte
      */
     public static byte BitToByte(String byteStr) {
@@ -280,11 +280,9 @@ public class DataConvertUtil {
         return sb.toString();
     }
 
-    /**
+    /*
      * 字节数组逆序
      *
-     * @param in
-     * @return
      */
     private static byte[] back(byte[] in)
     {
@@ -368,10 +366,9 @@ public class DataConvertUtil {
 
     /**
      * 利用 {@link java.nio.ByteBuffer}实现byte[]转long
-     * @param input
-     * @param offset
+     * @param input 输入
+     * @param offset 偏移量
      * @param littleEndian 输入数组是否小端模式
-     * @return
      */
     public static long bytesToLong(byte[] input, int offset, boolean littleEndian) {
         if(offset <0 || offset+8>input.length)

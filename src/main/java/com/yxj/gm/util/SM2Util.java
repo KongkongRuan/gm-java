@@ -79,9 +79,12 @@ public class SM2Util {
             throw new RuntimeException(e);
         }
     }
+
     /**
      * 生成Za
-     * @param IDa
+     * @param IDa id
+     * @param pubKey 公钥
+     * @return za
      */
     public static byte[] initZa(byte[] IDa,byte[] pubKey){
         byte[] Xa = new byte[32];

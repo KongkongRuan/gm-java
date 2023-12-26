@@ -7,14 +7,7 @@ public class Request extends ASN1Object implements ASN1Choice {
     private int             tagNo;
     private ASN1Encodable    value;
 
-    /**
-     * create a CertStatus object with a tag of zero.
-     */
-//    public Request()
-//    {
-//        tagNo = 0;
-//        value = ApplyKeyReq.getInstance;
-//    }
+
 
     public Request(
             int tagNo,

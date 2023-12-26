@@ -105,10 +105,7 @@ public class CaApplyKeyReq {
         this.applyType = applyType;
     }
 
-    /**密钥恢复*/
 
-    
-    
     public String getAppKeyType() {
         return appKeyType;
     }
@@ -213,7 +210,7 @@ public class CaApplyKeyReq {
         this.extendInfo = extendInfo;
     }
 
-    /**密钥撤销*/
+    /*密钥撤销*/
 
 
     public String getEntName() {
