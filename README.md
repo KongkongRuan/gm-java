@@ -3,10 +3,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 
 ## 项目引入
 
- - 下载源码编译之后引入或者直接下载gm-java-1.0.jar引入
- - ~~pom引入~~ （未上传中央仓库）
- 
-
+ - pom引入（已上传中央仓库）
 ```xml
 <dependency>
     <groupId>io.github.KongkongRuan</groupId>
@@ -14,6 +11,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
     <version>1.0</version>
 </dependency>
 ```
+ - 下载源码编译之后引入或者直接下载gm-java-1.0.jar引入
 ## 主要功能
 ### 密码算法
 
