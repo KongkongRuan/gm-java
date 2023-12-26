@@ -34,10 +34,13 @@ public class NettyTlsServer {
         this.tlsPort = tlsPort;
         nettyTlsServerHandler=new NettyTlsServerHandler(serverCert,serverPriKey);
     }
+    EventLoopGroup bossGroup = new NioEventLoopGroup();
+    EventLoopGroup workerGroup = new NioEventLoopGroup();
+    public void shutdown(){
+        bossGroup.shutdownGracefully();
+        workerGroup.shutdownGracefully();
+    }
     public void start() throws Exception {
-        EventLoopGroup bossGroup = new NioEventLoopGroup();
-        EventLoopGroup workerGroup = new NioEventLoopGroup();
-
         try {
             ServerBootstrap serverBootstrap = new ServerBootstrap();
             serverBootstrap.group(bossGroup, workerGroup)
@@ -84,9 +87,11 @@ public class NettyTlsServer {
             Thread.sleep(1000);
             if(nettyTlsServer.getRandom()!=null){
                 System.out.println(Hex.toHexString(nettyTlsServer.getRandom()));
+                break;
             }
-
         }
+        nettyTlsServer.shutdown();
+
     }
 }
 

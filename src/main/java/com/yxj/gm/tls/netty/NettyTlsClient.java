@@ -30,8 +30,11 @@ public class NettyTlsClient {
         this.tlsPort = tlsPort;
         nettyTlsClientHandler = new NettyTlsClientHandler(sessionId);
     }
+    EventLoopGroup group = new NioEventLoopGroup();
+    public void shutdown(){
+        group.shutdownGracefully();
+    }
     public void start() throws Exception {
-        EventLoopGroup group = new NioEventLoopGroup();
 
         try {
             Bootstrap bootstrap = new Bootstrap();
@@ -81,8 +84,10 @@ public class NettyTlsClient {
                 }
                 if(nettyTlsClient.getRandom()!=null){
                     System.out.println("client random"+Hex.toHexString(nettyTlsClient.getRandom()));
+                    break;
                 }
             }
+            nettyTlsClient.shutdown();
 
         }).start();
 

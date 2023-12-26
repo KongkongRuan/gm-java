@@ -24,28 +24,29 @@ import java.security.KeyPair;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Benchmarking {
     public static void main(String[] args) throws ExecutionException, InterruptedException {
         String msg = "gm-java-1.0";
-        int i=0;
+        AtomicInteger i= new AtomicInteger();
         System.out.println("---------SM2密钥对生成开始---------");
         KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
         System.out.println(Hex.toHexString(keyPair.getPublic().getEncoded()));
         System.out.println(Hex.toHexString(keyPair.getPrivate().getEncoded()));
-        System.out.println(++i+"---------SM2密钥对生成通过---------");
+        System.out.println(i.incrementAndGet() +"---------SM2密钥对生成通过---------");
         System.out.println("---------SM2加解密开始---------");
         SM2Cipher sm2Cipher = new SM2Cipher();
         byte[] mi = sm2Cipher.SM2CipherEncrypt(msg.getBytes(), keyPair.getPublic().getEncoded());
         byte[] ming = sm2Cipher.SM2CipherDecrypt(mi, keyPair.getPrivate().getEncoded());
         System.out.println("SM2解密结果："+new String(ming));
-        System.out.println(++i+"---------SM2加解密通过---------");
+        System.out.println(i.incrementAndGet() +"---------SM2加解密通过---------");
         System.out.println("---------SM2签名验签开始---------");
         SM2Signature signature = new SM2Signature();
         byte[] signature1 = signature.signature(msg.getBytes(), null, keyPair.getPrivate().getEncoded());
         boolean b = signature.verify(msg.getBytes(), null, signature1, keyPair.getPublic().getEncoded());
         System.out.println("SM2验签结果："+b);
-        System.out.println(++i+"---------SM2签名验签通过---------");
+        System.out.println(i.incrementAndGet() +"---------SM2签名验签通过---------");
         System.out.println("---------SM2证书制作开始---------");
         String certPathStr = "D:/certtest/";
         String property = System.getProperty("os.name");
@@ -80,12 +81,12 @@ public class Benchmarking {
             throw new RuntimeException(e);
         }
         System.out.println("证书存放路径："+certPathStr);
-        System.out.println(++i+"---------SM2证书制作通过---------");
+        System.out.println(i.incrementAndGet() +"---------SM2证书制作通过---------");
         System.out.println("---------SM2证书解析开始---------");
         CertParseVo certParseVo = CertResolver.parseCert(rootCert);
         System.out.println("rootCert解析完成");
         System.out.println(certParseVo);
-        System.out.println(++i+"---------SM2证书解析通过---------");
+        System.out.println(i.incrementAndGet() +"---------SM2证书解析通过---------");
         System.out.println("---------SM3摘要计算---------");
         SM3Digest sm3Digest = new SM3Digest();
         sm3Digest.update(msg.getBytes());
@@ -97,12 +98,12 @@ public class Benchmarking {
         System.out.println("update:        "+Hex.toHexString(md));
         System.out.println("直接doFinal:   "+Hex.toHexString(md2));
         System.out.println("多次分开update: "+Hex.toHexString(md3));
-        System.out.println(++i+"---------SM3摘要计算通过---------");
+        System.out.println(i.incrementAndGet() +"---------SM3摘要计算通过---------");
 
         System.out.println("---------随机数生成开始---------");
         byte[] random = Random.RandomBySM3(16);
         System.out.println(Hex.toHexString(random));
-        System.out.println(++i+"---------随机数生成通过---------");
+        System.out.println(i.incrementAndGet() +"---------随机数生成通过---------");
 
         System.out.println("---------SM4加解密开始---------");
         byte[] key = Random.RandomBySM3(16);
@@ -129,7 +130,7 @@ public class Benchmarking {
         System.out.println("GCMtag："+Hex.toHexString(aeadExecution.getTag()));
         byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution.getTag());
         System.out.println("GCM明文："+new String(ming_gcm));
-        System.out.println(++i+"---------SM4加解密通过---------");
+        System.out.println(i.incrementAndGet() +"---------SM4加解密通过---------");
 
         System.out.println("---------TLS握手测试开始（SOCKET）---------");
         TlsServerCallable tlsServerCallable = new TlsServerCallable();
@@ -142,7 +143,7 @@ public class Benchmarking {
         System.out.println("serverResultRandom:"+serverResultRandom);
         String clientResultRandom = (String)clientFutureTask.get();
         System.out.println("clientResultRandom:"+clientResultRandom);
-        System.out.println(++i+"---------TLS握手测试通过（SOCKET）---------");
+        System.out.println(i.incrementAndGet() +"---------TLS握手测试通过（SOCKET）---------");
 
         System.out.println("---------TLS握手测试开始（NETTY）---------");
         NettyTlsServer nettyTlsServer = new NettyTlsServer(4432);
@@ -166,6 +167,7 @@ public class Benchmarking {
                     break;
                 }
             }
+            nettyTlsServer.shutdown();
         }).start();
 
 
@@ -189,6 +191,8 @@ public class Benchmarking {
                     break;
                 }
             }
+            nettyTlsClient.shutdown();
+            System.out.println(i.incrementAndGet() +"---------TLS握手测试通过（NETTY）---------");
 
         }).start();
 
