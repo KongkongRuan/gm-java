@@ -127,7 +127,73 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
         byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution.getTag());
         System.out.println("GCM明文："+new String(ming_gcm));
 ```
-### 模拟TLS握手进行密钥协商
+
+### 模拟TLS握手进行密钥协商（Netty）
+#### 服务端（默认使用4433端口）
+```java
+        NettyTlsServer nettyTlsServer = new NettyTlsServer();
+        new Thread(()->{
+            try {
+                nettyTlsServer.start();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+        new Thread(()->{
+            while (true){
+                System.out.println("server sleep");
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                if(nettyTlsServer.getRandom()!=null){
+                    System.out.println("netty server random："+Hex.toHexString(nettyTlsServer.getRandom()));
+                    break;
+                }
+            }
+        }).start();
+```
+#### 客户端
+```java
+        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost");
+        new Thread(()->{
+            try {
+                nettyTlsClient.start();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }).start();
+        new Thread(()->{
+            while (true){
+                try {
+                    Thread.sleep(1000);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+                if(nettyTlsClient.getRandom()!=null){
+                    System.out.println("netty client random："+Hex.toHexString(nettyTlsClient.getRandom()));
+                    break;
+                }
+            }
+
+        }).start();
+```
+
+#### 服务端（使用私有服务端证书以及自定义端口）
+```java
+NettyTlsServer nettyTlsServer = new NettyTlsServer(4432,cert,pri);
+```
+#### 客户端
+```java
+        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432);
+```
+#### 客户端（使用固定sessionId可以获取固定的key，在Server中缓存）
+```java
+        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432,Hex.decode("1234567812345678"));
+```
+
+### 模拟TLS握手进行密钥协商（Socket）
 #### 服务端（默认使用4433端口）
 ```java
         TlsServer tlsServer = new TlsServer();
