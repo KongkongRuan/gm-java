@@ -8,7 +8,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 <dependency>
     <groupId>io.github.KongkongRuan</groupId>
     <artifactId>gm-java</artifactId>
-    <version>1.0</version>
+    <version>1.0.2</version>
 </dependency>
 ```
  - 下载源码编译之后引入或者直接下载gm-java-1.0.jar引入
@@ -129,7 +129,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 ### 模拟TLS握手进行密钥协商（Netty）
 #### 服务端（默认使用4433端口）
 ```java
-        NettyTlsServer nettyTlsServer = new NettyTlsServer();
+        NettyTlsServer nettyTlsServer = new NettyTlsServer(4432);
         new Thread(()->{
             try {
                 nettyTlsServer.start();
@@ -150,11 +150,12 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
                     break;
                 }
             }
+            nettyTlsServer.shutdown();
         }).start();
 ```
 #### 客户端
 ```java
-        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost");
+        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost", 4432);
         new Thread(()->{
             try {
                 nettyTlsClient.start();
@@ -174,6 +175,8 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
                     break;
                 }
             }
+            nettyTlsClient.shutdown();
+            System.out.println(i.incrementAndGet() +"---------TLS握手测试通过（NETTY）---------");
 
         }).start();
 ```
