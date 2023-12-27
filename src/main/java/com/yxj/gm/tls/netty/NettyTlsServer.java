@@ -82,8 +82,11 @@ public class NettyTlsServer {
 //        NettyTlsServer nettyTlsServer = new NettyTlsServer(4432);
 //        nettyTlsServer.start();
 
+        NettyConstant.setENDPRINT(false);
+        NettyConstant.setFIRSTPRINT(false);
+        NettyConstant.setDEBUG(false);
         while (true){
-            System.out.println("server sleep");
+//            System.out.println("server sleep");
             Thread.sleep(1000);
             if(nettyTlsServer.getRandom()!=null){
                 System.out.println(Hex.toHexString(nettyTlsServer.getRandom()));

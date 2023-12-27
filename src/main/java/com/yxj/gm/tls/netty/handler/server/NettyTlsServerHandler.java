@@ -149,7 +149,7 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
 
     private void clientHello(ChannelHandlerContext ctx, TlsMessage tlsMessage) {
         if(tlsMessage.getSessionId()!=null){
-            System.out.println("sessionId:"+Hex.toHexString(tlsMessage.getSessionId()));
+            if (DEBUG) System.out.println("sessionId:"+Hex.toHexString(tlsMessage.getSessionId()));
             byte[] random = currentKeyMap.get(Hex.toHexString(tlsMessage.getSessionId()));
             if(random!=null){
                 TlsMessage tlsMessage1 = new TlsMessage(random, TlsMessageType.SERVER_FINISHED, tlsMessage.getSessionId());
@@ -161,7 +161,7 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
         }
         JSONObject jsonObject=(JSONObject)tlsMessage.getObject();
         clientHello = jsonObject.to(ClientHello.class);
-        System.out.println("clientHello sessionId:"+Hex.toHexString(clientHello.getSessionId()));
+        if (DEBUG) System.out.println("clientHello sessionId:"+Hex.toHexString(clientHello.getSessionId()));
         if (DEBUG) System.out.println("server:clientHello" + clientHello);
         //todo 生成serverHello(选择适当的版本及算法)
         serverHello=new ServerHello();
