@@ -189,9 +189,9 @@ NettyTlsServer nettyTlsServer = new NettyTlsServer(4432,cert,pri);
 ```java
         NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432);
 ```
-#### 客户端（使用固定sessionId可以获取固定的key，在Server中缓存）
+#### 客户端（使用固定sessionId可以获取固定的key，在Server中缓存，存在被窃听风险,自行选择是否开启，默认关闭）
 ```java
-        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432,Hex.decode("1234567812345678"));
+        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432,true,Hex.decode("1234567812345678"));
 ```
 
 ### 模拟TLS握手进行密钥协商（Socket）
