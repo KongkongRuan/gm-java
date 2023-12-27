@@ -13,12 +13,9 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.DelimiterBasedFrameDecoder;
-import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import org.bouncycastle.util.encoders.Hex;
 
-import javax.lang.model.element.VariableElement;
 import java.io.File;
-import java.sql.SQLOutput;
 
 public class NettyTlsServer {
     private int tlsPort = 4433;
@@ -36,6 +33,10 @@ public class NettyTlsServer {
     }
     EventLoopGroup bossGroup = new NioEventLoopGroup();
     EventLoopGroup workerGroup = new NioEventLoopGroup();
+
+    public byte[] getRandomBySessionId(byte[] sessionId){
+        return nettyTlsServerHandler.getRandomBySessionId(sessionId);
+    }
     public void shutdown(){
         bossGroup.shutdownGracefully();
         workerGroup.shutdownGracefully();
@@ -82,9 +83,9 @@ public class NettyTlsServer {
 //        NettyTlsServer nettyTlsServer = new NettyTlsServer(4432);
 //        nettyTlsServer.start();
 
-        NettyConstant.setENDPRINT(false);
-        NettyConstant.setFIRSTPRINT(false);
-        NettyConstant.setDEBUG(false);
+        NettyConstant.setENDPRINT(true);
+//        NettyConstant.setFIRSTPRINT(false);
+//        NettyConstant.setDEBUG(false);
         while (true){
 //            System.out.println("server sleep");
             Thread.sleep(1000);
@@ -93,7 +94,7 @@ public class NettyTlsServer {
                 break;
             }
         }
-        nettyTlsServer.shutdown();
+//        nettyTlsServer.shutdown();
 
     }
 }

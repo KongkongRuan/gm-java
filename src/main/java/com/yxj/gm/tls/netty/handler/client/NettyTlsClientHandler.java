@@ -19,6 +19,7 @@ import com.yxj.gm.util.SM2Util;
 import com.yxj.gm.util.TLSUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.util.CharsetUtil;
@@ -27,6 +28,7 @@ import org.bouncycastle.util.encoders.Hex;
 
 import java.security.*;
 
+//@ChannelHandler.Sharable
 public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> {
     static {
         Security.addProvider(new XaProvider());
@@ -34,12 +36,14 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
     private final boolean DEBUG = NettyConstant.DEBUG;
 
     private byte[] sessionId;
+    private boolean isCacheKey=false;
 
     public NettyTlsClientHandler(){
 
     }
-    public NettyTlsClientHandler(byte[] sessionId){
+    public NettyTlsClientHandler(boolean isCacheKey,byte[] sessionId){
         this.sessionId=sessionId;
+        this.isCacheKey=isCacheKey;
     }
 
     @Override
@@ -50,6 +54,7 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
         if(sessionId==null){
             sessionId = Random.RandomBySM3(32);
         }
+        clientHello.setCacheKey(isCacheKey);
         clientHello.setSessionId(sessionId);
         clientHello.setRandomC(randomC);
         CipherSuites cipherSuites = new CipherSuites("SM4", "SM2", "SM3");

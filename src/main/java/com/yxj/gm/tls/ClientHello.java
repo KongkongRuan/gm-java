@@ -12,6 +12,9 @@ public class ClientHello implements Serializable {
 
     private String extensions;
 
+    private boolean isCacheKey=false;
+
+
     public String getVersion() {
         return version;
     }
@@ -58,6 +61,14 @@ public class ClientHello implements Serializable {
 
     public void setExtensions(String extensions) {
         this.extensions = extensions;
+    }
+
+    public boolean isCacheKey() {
+        return isCacheKey;
+    }
+
+    public void setCacheKey(boolean cacheKey) {
+        isCacheKey = cacheKey;
     }
 
     @Override

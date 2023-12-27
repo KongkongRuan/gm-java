@@ -93,11 +93,16 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
     private ClientHello clientHello;
     private KeyPair serverKeyPairTemp;
 
+    private boolean isCacheKey;
 
 
     private byte[] random;
     public byte[] getRandom() {
         return random;
+    }
+
+    public byte[] getRandomBySessionId(byte[] sessionId) {
+        return currentKeyMap.get(Hex.toHexString(sessionId));
     }
 
 
@@ -138,8 +143,10 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
         try {
             xaMd = MessageDigest.getInstance("SM3", "XaProvider");
             random= TLSUtil.prf(xaMd,PreMaster,"master secret".getBytes(), DataConvertUtil.byteArrAdd(clientHello.getRandomC(),serverHello.getRandomS()),16);
-            currentKeyMap.put(Hex.toHexString(tlsMessage.getSessionId()),random);
+            if(isCacheKey) currentKeyMap.put(Hex.toHexString(tlsMessage.getSessionId()),random);
+            if (NettyConstant.ENDPRINT) System.out.println("server Handler Print SessionId:"+Hex.toHexString(tlsMessage.getSessionId()));
             if (NettyConstant.ENDPRINT) System.out.println("server Handler Print Random:"+Hex.toHexString(random));
+            if (NettyConstant.ENDPRINT) System.out.println("server Handler Print currentKeyMap Size:"+currentKeyMap.size());
         } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
             throw new RuntimeException(e);
         }
@@ -161,6 +168,7 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
         }
         JSONObject jsonObject=(JSONObject)tlsMessage.getObject();
         clientHello = jsonObject.to(ClientHello.class);
+        isCacheKey=clientHello.isCacheKey();
         if (DEBUG) System.out.println("clientHello sessionId:"+Hex.toHexString(clientHello.getSessionId()));
         if (DEBUG) System.out.println("server:clientHello" + clientHello);
         //todo 生成serverHello(选择适当的版本及算法)

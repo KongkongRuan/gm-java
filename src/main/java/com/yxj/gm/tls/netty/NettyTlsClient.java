@@ -1,5 +1,6 @@
 package com.yxj.gm.tls.netty;
 
+import com.yxj.gm.random.Random;
 import com.yxj.gm.tls.netty.handler.client.NettyTlsClientHandler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -12,7 +13,6 @@ import io.netty.handler.codec.DelimiterBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import org.bouncycastle.util.encoders.Hex;
 
-@ChannelHandler.Sharable
 public class NettyTlsClient {
     private int tlsPort = 4433;
     private String serverIp = "";
@@ -25,10 +25,10 @@ public class NettyTlsClient {
     public NettyTlsClient(String serverIp) {
         this.serverIp = serverIp;
     }
-    public NettyTlsClient(String serverIp, int tlsPort,byte[] sessionId) {
+    public NettyTlsClient(String serverIp, int tlsPort,boolean isCacheKey,byte[] sessionId) {
         this.serverIp = serverIp;
         this.tlsPort = tlsPort;
-        nettyTlsClientHandler = new NettyTlsClientHandler(sessionId);
+        nettyTlsClientHandler = new NettyTlsClientHandler(isCacheKey,sessionId);
     }
     EventLoopGroup group = new NioEventLoopGroup();
     public void shutdown(){
@@ -64,20 +64,22 @@ public class NettyTlsClient {
     }
 
     public static void main(String[] args) throws Exception {
-        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432,Hex.decode("1234567890123456789012345678901234567890123456789012345678901234"));
         NettyConstant.setENDPRINT(false);
         NettyConstant.setFIRSTPRINT(false);
         NettyConstant.setDEBUG(false);
-
-        new Thread(()->{
-            try {
-                nettyTlsClient.start();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }).start();
-
-        new Thread(()->{
+        for (int i = 0; i < 20; i++) {
+//            byte[] random = Random.RandomBySM3(10);
+            byte[] random = Hex.decode("d380db50a88b7191b33b");
+            NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432);
+            System.out.println("start");
+            new Thread(()->{
+                try {
+                    System.out.println(Thread.currentThread().getName()+"start--"+Hex.toHexString(random));
+                    nettyTlsClient.start();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }).start();
             while (true){
                 try {
                     Thread.sleep(1000);
@@ -85,13 +87,16 @@ public class NettyTlsClient {
                     throw new RuntimeException(e);
                 }
                 if(nettyTlsClient.getRandom()!=null){
-                    System.out.println("client random"+Hex.toHexString(nettyTlsClient.getRandom()));
+                    System.out.println("netty client random："+ Hex.toHexString(nettyTlsClient.getRandom()));
                     break;
                 }
             }
-            nettyTlsClient.shutdown();
+        }
 
-        }).start();
+
+//            nettyTlsClient.shutdown();
+
+
 
     }
 }
