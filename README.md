@@ -8,7 +8,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 <dependency>
     <groupId>io.github.KongkongRuan</groupId>
     <artifactId>gm-java</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
 </dependency>
 ```
  - 下载源码编译之后引入或者直接下载gm-java-1.0.jar引入
