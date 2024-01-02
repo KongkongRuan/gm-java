@@ -26,7 +26,7 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 - 模拟TLS握手协议，通信双方协商会话密钥
 
 ## 整体功能基准测试
-### test目录下com.yxj.gm包Benchmarking类
+### test目录下com.yxj.gm包Benchmark类
 
 ## 快速使用
 ```java
