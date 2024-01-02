@@ -38,8 +38,12 @@ public class NettyTlsServer {
         return nettyTlsServerHandler.getRandomBySessionId(sessionId);
     }
     public void shutdown(){
-        bossGroup.shutdownGracefully();
-        workerGroup.shutdownGracefully();
+        try {
+            workerGroup.shutdownGracefully().sync();
+            bossGroup.shutdownGracefully().sync();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
     public void start() throws Exception {
         try {

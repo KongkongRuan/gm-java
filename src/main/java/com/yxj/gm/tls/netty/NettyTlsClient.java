@@ -32,7 +32,11 @@ public class NettyTlsClient {
     }
     EventLoopGroup group = new NioEventLoopGroup();
     public void shutdown(){
-        group.shutdownGracefully();
+        try {
+            group.shutdownGracefully().sync();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
     public void start() throws Exception {
 
