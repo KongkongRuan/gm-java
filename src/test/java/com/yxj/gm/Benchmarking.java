@@ -108,6 +108,7 @@ public class Benchmarking {
         System.out.println("---------SM4加解密开始---------");
         byte[] key = Random.RandomBySM3(16);
         byte[] iv = Random.RandomBySM3(16);
+        System.out.println("---------正确性测试---------");
         //ECB模式
         SM4Cipher sm4CipherECB = new SM4Cipher(ModeEnum.ECB);
         byte[] ecbmi = sm4CipherECB.cipherEncrypt(key, msg.getBytes(), null);
@@ -130,7 +131,39 @@ public class Benchmarking {
         System.out.println("GCMtag："+Hex.toHexString(aeadExecution.getTag()));
         byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution.getTag());
         System.out.println("GCM明文："+new String(ming_gcm));
+        System.out.println(i.incrementAndGet() +"---------正确性测试通过---------");
+
+        int size = 1;
+        byte[] data = Random.RandomBySM3(1024*1024*size);
+        System.out.println("---------速度测试（"+size+"M 数据加解密）---------");
+        long l = System.currentTimeMillis();
+        byte[] ecbMi = sm4CipherECB.cipherEncrypt(key, data, null);
+        System.out.println("ECB加密耗时："+(System.currentTimeMillis()-l)+"ms"+" 速度："+(size*1000L/(double)(System.currentTimeMillis()-l))+"MB/s");
+        l = System.currentTimeMillis();
+        sm4CipherECB.cipherDecrypt(key, ecbMi, iv);
+        System.out.println("ECB解密耗时："+(System.currentTimeMillis()-l)+"ms" +" 速度："+(size*1000L/(double)(System.currentTimeMillis()-l))+"MB/s");
+        l = System.currentTimeMillis();
+        byte[] cbcMi = sm4CipherCBC.cipherEncrypt(key, data, iv);
+        System.out.println("CBC加密耗时："+(System.currentTimeMillis()-l)+"ms" +" 速度："+(size*1000L/(double)(System.currentTimeMillis()-l))+"MB/s");
+        l = System.currentTimeMillis();
+        sm4CipherCBC.cipherDecrypt(key, cbcMi, iv);
+        System.out.println("CBC解密耗时："+(System.currentTimeMillis()-l)+"ms" +" 速度："+(size*1000L/(double)(System.currentTimeMillis()-l))+"MB/s");
+        l = System.currentTimeMillis();
+        byte[] ctrMi = sm4CipherCTR.cipherEncrypt(key, data, iv);
+        System.out.println("CTR加密耗时："+(System.currentTimeMillis()-l)+"ms" +" 速度："+(size*1000L/(double)(System.currentTimeMillis()-l))+"MB/s");
+        l = System.currentTimeMillis();
+        sm4CipherCTR.cipherDecrypt(key, ctrMi, iv);
+        System.out.println("CTR解密耗时："+(System.currentTimeMillis()-l)+"ms" +" 速度："+(size*1000L/(double)(System.currentTimeMillis()-l))+"MB/s");
+        l = System.currentTimeMillis();
+        AEADExecution aeadExecution1 = sm4_gcm.cipherEncryptGCM(key, data, new byte[12], "aad".getBytes(), 16);
+        System.out.println("GCM加密耗时："+(System.currentTimeMillis()-l)+"ms" +" 速度："+(size*1000L/(double)(System.currentTimeMillis()-l))+"MB/s");
+        l = System.currentTimeMillis();
+        sm4_gcm.cipherDecryptGCM(key, aeadExecution1.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution1.getTag());
+        System.out.println("GCM解密耗时："+(System.currentTimeMillis()-l)+"ms" +" 速度："+(size*1000L/(double)(System.currentTimeMillis()-l))+"MB/s");
+        System.out.println(i.incrementAndGet() +"---------速度测试通过---------");
+
         System.out.println(i.incrementAndGet() +"---------SM4加解密通过---------");
+
 
         System.out.println("---------TLS握手测试开始（SOCKET）---------");
         TlsServerCallable tlsServerCallable = new TlsServerCallable();

@@ -3,6 +3,7 @@ package com.yxj.gm;
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM4.SM4Cipher;
 import com.yxj.gm.SM4.dto.AEADExecution;
+import com.yxj.gm.asn1.ca.util.ASN1Util;
 import com.yxj.gm.enums.ModeEnum;
 import com.yxj.gm.util.FileUtils;
 import org.bouncycastle.util.encoders.Hex;
@@ -141,5 +142,25 @@ public class TestSM4 {
             });
         }
 
+    }
+
+    public static void main(String[] args) {
+        /*
+        私钥密文:279ed5ba8bcf5014567847388acdd116d3f62a1597513ad7b7bfdd4f34886fc8f03b4fc4e18d1ecd1e4b5e9d8fbbab86f08ef45fb0aa43fddef1851150ddd42480c135aebd175a06121cc731c4e63ddd6ac3823016fbda6a1b52bdb55a66f012af904636421dab1ebaefa9253f7de97442098f6c5c4d70d514c739b83a1b0f3fb0a85ac2c7d1107d8bebb6838ad11516
+iv:e264853753e1de02fca5e3336a25839c
+会话密钥:b168476a919cea42a3df0ba15bc69eae
+         */
+        SM4Cipher sm4Cipher= new SM4Cipher(ModeEnum.CBC);
+        byte[] key = Hex.decode("fca13660a40d3d04f1c1934daa9e65a5");
+        byte[] iv = Hex.decode("212e90407534ae58cfc0d8acd7b13f19");
+        byte[] mi = Hex.decode("d9ad3d5c33f6932ec6fdbb2d9a8997bbeaf079a34dd89f022f35e90f2c7a069bc4a319b252e1b07414dbff2b853706e016e316e58a2e5d860358833ad9c0be7a33b3ee73bcdd0f8972425dc2319954a970b1410c505deb6e3cd03f6922df64916920df7356ec5c041402254aacd90d412b9e4d5561aaa707f94de3ba20f81c0d6967eeaa14e7a93a5811ab1499061f4a");
+//        byte[] ming = sm4Cipher.cipherDecrypt(key, msg, iv);
+//        byte[] ming = Hex.decode("308186020100301306072A8648CE3D020106082A811CCF5501822D046C306A0201010220F3445EF90EA0BFE3E6DB4CE60B9EA47675D759FA2C4D0429AE4FA8F805150C00A14303410010D68A7CAEB590BCEE271C198C2DE09CCEA692754961D8EF1E396C6A594DD07CBB1710D80EBACF46F022398B57267CE8D4C589DE76BAF6ECF94D8EC7492F2879");
+//        byte[] javami = sm4Cipher.cipherEncrypt(key, ming, iv);
+//        System.out.println(Hex.toHexString(javami));
+        byte[] javaming = sm4Cipher.cipherDecrypt(key, mi, iv);
+        System.out.println(Hex.toHexString(javaming));
+        byte[] bytes = ASN1Util.Asn1PriKeyToPriKey(javaming);
+        System.out.println(Hex.toHexString(bytes));
     }
 }

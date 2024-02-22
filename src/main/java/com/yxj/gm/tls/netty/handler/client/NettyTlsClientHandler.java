@@ -104,6 +104,10 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
                 break;
             case SERVER_CERT:
                 serverCert = tlsMessage.getContent();
+                /*todo 服务端证书校验，客户端需要传入服务端ca证书或证书链
+                 *todo 修改客户端构造方法
+                 */
+                //
                 break;
             case SERVER_KEY_EXCHANGE_ECDHE:
                  jsonObject=(JSONObject)tlsMessage.getObject();
