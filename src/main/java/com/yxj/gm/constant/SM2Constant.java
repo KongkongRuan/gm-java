@@ -1,5 +1,7 @@
 package com.yxj.gm.constant;
 
+import java.math.BigInteger;
+
 public class SM2Constant {
 
 
@@ -79,27 +81,25 @@ public class SM2Constant {
     private static final byte[] b = new byte[]{(byte) 0x0,(byte) 0x28, (byte) 0xE9, (byte) 0xFA, (byte) 0x9E, (byte) 0x9D, (byte) 0x9F, (byte) 0x5E, (byte) 0x34, (byte) 0x4D, (byte) 0x5A, (byte) 0x9E, (byte) 0x4B, (byte) 0xCF, (byte) 0x65, (byte) 0x09, (byte) 0xA7, (byte) 0xF3, (byte) 0x97, (byte) 0x89, (byte) 0xF5, (byte) 0x15, (byte) 0xAB, (byte) 0x8F, (byte) 0x92, (byte) 0xDD, (byte) 0xBC, (byte) 0xBD, (byte) 0x41, (byte) 0x4D, (byte) 0x94, (byte) 0x0E, (byte) 0x93};
     //***********************************************************************真实数据*************************************************************************************************************/
 
-    public static byte[] getP() {
-        return p;
-    }
+    // 缓存 BigInteger 版本，避免每次运算重复创建
+    private static final BigInteger BIG_P = new BigInteger(p);
+    private static final BigInteger BIG_A = new BigInteger(a);
+    private static final BigInteger BIG_B = new BigInteger(b);
+    private static final BigInteger BIG_N = new BigInteger(n);
+    private static final BigInteger BIG_GX = new BigInteger(XG);
+    private static final BigInteger BIG_GY = new BigInteger(YG);
 
-    public static byte[] getA() {
-        return a;
-    }
+    public static byte[] getP() { return p; }
+    public static byte[] getA() { return a; }
+    public static byte[] getXG() { return XG; }
+    public static byte[] getYG() { return YG; }
+    public static byte[] getN() { return n; }
+    public static byte[] getB() { return b; }
 
-    public static byte[] getXG() {
-        return XG;
-    }
-
-    public static byte[] getYG() {
-        return YG;
-    }
-
-    public static byte[] getN() {
-        return n;
-    }
-
-    public static byte[] getB() {
-        return b;
-    }
+    public static BigInteger getBigP() { return BIG_P; }
+    public static BigInteger getBigA() { return BIG_A; }
+    public static BigInteger getBigB() { return BIG_B; }
+    public static BigInteger getBigN() { return BIG_N; }
+    public static BigInteger getBigGX() { return BIG_GX; }
+    public static BigInteger getBigGY() { return BIG_GY; }
 }

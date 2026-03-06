@@ -48,11 +48,14 @@ public class TlsClient {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        //准备发送clientHello的数据
         ClientHello clientHello = new ClientHello();
         clientHello.setVersion("v1");
+        //生成客户端密钥
         byte[] randomC = Random.RandomBySM3(32);
         clientHello.setRandomC(randomC);
         clientHello.setSessionId(null);
+        //准备加密套件
         CipherSuites cipherSuites = new CipherSuites("SM4", "SM2", "SM3");
         clientHello.setCipherSuites(cipherSuites);
         clientHello.setCompressionMethods(null);
@@ -62,6 +65,7 @@ public class TlsClient {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        //使用der编码发送
         DEROctetString derOctetString = new DEROctetString(JSON.toJSONString(clientHello).getBytes());
         try {
             outputStream.write(derOctetString.getEncoded());

@@ -1,0 +1,62 @@
+D:\jdk\jdk-8u291\bin\java.exe "-javaagent:D:\Development\IntelliJ IDEA 2025.2\lib\idea_rt.jar=50836" -Dfile.encoding=UTF-8 -classpath D:\jdk\jdk-8u291\jre\lib\charsets.jar;D:\jdk\jdk-8u291\jre\lib\deploy.jar;D:\jdk\jdk-8u291\jre\lib\ext\access-bridge-64.jar;D:\jdk\jdk-8u291\jre\lib\ext\cldrdata.jar;D:\jdk\jdk-8u291\jre\lib\ext\dnsns.jar;D:\jdk\jdk-8u291\jre\lib\ext\jaccess.jar;D:\jdk\jdk-8u291\jre\lib\ext\jfxrt.jar;D:\jdk\jdk-8u291\jre\lib\ext\localedata.jar;D:\jdk\jdk-8u291\jre\lib\ext\nashorn.jar;D:\jdk\jdk-8u291\jre\lib\ext\sunec.jar;D:\jdk\jdk-8u291\jre\lib\ext\sunjce_provider.jar;D:\jdk\jdk-8u291\jre\lib\ext\sunmscapi.jar;D:\jdk\jdk-8u291\jre\lib\ext\sunpkcs11.jar;D:\jdk\jdk-8u291\jre\lib\ext\zipfs.jar;D:\jdk\jdk-8u291\jre\lib\javaws.jar;D:\jdk\jdk-8u291\jre\lib\jce.jar;D:\jdk\jdk-8u291\jre\lib\jfr.jar;D:\jdk\jdk-8u291\jre\lib\jfxswt.jar;D:\jdk\jdk-8u291\jre\lib\jsse.jar;D:\jdk\jdk-8u291\jre\lib\management-agent.jar;D:\jdk\jdk-8u291\jre\lib\plugin.jar;D:\jdk\jdk-8u291\jre\lib\resources.jar;D:\jdk\jdk-8u291\jre\lib\rt.jar;D:\Development\java\project\gitee\gm-java\target\test-classes;D:\Development\java\project\gitee\gm-java\target\classes;D:\Development\java\MavenRepository\org\bouncycastle\bcprov-jdk18on\1.76\bcprov-jdk18on-1.76.jar;D:\Development\java\MavenRepository\com\codahale\shamir\0.7.0\shamir-0.7.0.jar;D:\Development\java\MavenRepository\org\bouncycastle\bcpkix-jdk18on\1.77\bcpkix-jdk18on-1.77.jar;D:\Development\java\MavenRepository\org\bouncycastle\bcutil-jdk18on\1.77\bcutil-jdk18on-1.77.jar;D:\Development\java\MavenRepository\org\apache\commons\commons-lang3\3.9\commons-lang3-3.9.jar;D:\Development\java\MavenRepository\commons-io\commons-io\2.8.0\commons-io-2.8.0.jar;D:\Development\java\MavenRepository\com\alibaba\fastjson2\fastjson2\2.0.40\fastjson2-2.0.40.jar;D:\Development\java\MavenRepository\io\netty\netty-all\4.1.100.Final\netty-all-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-buffer\4.1.100.Final\netty-buffer-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec\4.1.100.Final\netty-codec-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-dns\4.1.100.Final\netty-codec-dns-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-haproxy\4.1.100.Final\netty-codec-haproxy-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-http\4.1.100.Final\netty-codec-http-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-http2\4.1.100.Final\netty-codec-http2-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-memcache\4.1.100.Final\netty-codec-memcache-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-mqtt\4.1.100.Final\netty-codec-mqtt-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-redis\4.1.100.Final\netty-codec-redis-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-smtp\4.1.100.Final\netty-codec-smtp-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-socks\4.1.100.Final\netty-codec-socks-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-stomp\4.1.100.Final\netty-codec-stomp-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-codec-xml\4.1.100.Final\netty-codec-xml-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-common\4.1.100.Final\netty-common-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-handler\4.1.100.Final\netty-handler-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-native-unix-common\4.1.100.Final\netty-transport-native-unix-common-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-handler-proxy\4.1.100.Final\netty-handler-proxy-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-handler-ssl-ocsp\4.1.100.Final\netty-handler-ssl-ocsp-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-resolver\4.1.100.Final\netty-resolver-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-resolver-dns\4.1.100.Final\netty-resolver-dns-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-transport\4.1.100.Final\netty-transport-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-rxtx\4.1.100.Final\netty-transport-rxtx-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-sctp\4.1.100.Final\netty-transport-sctp-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-udt\4.1.100.Final\netty-transport-udt-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-classes-epoll\4.1.100.Final\netty-transport-classes-epoll-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-classes-kqueue\4.1.100.Final\netty-transport-classes-kqueue-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-resolver-dns-classes-macos\4.1.100.Final\netty-resolver-dns-classes-macos-4.1.100.Final.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-native-epoll\4.1.100.Final\netty-transport-native-epoll-4.1.100.Final-linux-x86_64.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-native-epoll\4.1.100.Final\netty-transport-native-epoll-4.1.100.Final-linux-aarch_64.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-native-kqueue\4.1.100.Final\netty-transport-native-kqueue-4.1.100.Final-osx-x86_64.jar;D:\Development\java\MavenRepository\io\netty\netty-transport-native-kqueue\4.1.100.Final\netty-transport-native-kqueue-4.1.100.Final-osx-aarch_64.jar;D:\Development\java\MavenRepository\io\netty\netty-resolver-dns-native-macos\4.1.100.Final\netty-resolver-dns-native-macos-4.1.100.Final-osx-x86_64.jar;D:\Development\java\MavenRepository\io\netty\netty-resolver-dns-native-macos\4.1.100.Final\netty-resolver-dns-native-macos-4.1.100.Final-osx-aarch_64.jar com.yxj.gm.Benchmarking
+---------SM2密钥对生成开始---------
+f9ec4a25e63ae05555bd8e79297d182524b3967a4a9aff90fd4cf2877e0479494ecbe3bcabe8b8013c0eb98ca98b6f3933bfaa71907dd34e2546f6a160cf8dc0
+53bd6ddc3788ac29326ceecd7d6af93277a5132d4436d0b9e24de02f2027ea72
+1---------SM2密钥对生成通过---------
+---------SM2加解密开始---------
+SM2解密结果：gm-java-1.0
+2---------SM2加解密通过---------
+---------SM2签名验签开始---------
+SM2验签结果：true
+3---------SM2签名验签通过---------
+---------SM2证书制作开始---------
+证书存放路径：D:/certtest/
+4---------SM2证书制作通过---------
+---------SM2证书解析开始---------
+rootCert解析完成
+CertParseVo{version='2', serial=0df8f41ca2be4325, signature='SM3WithSM2Signature', issuerSubject='CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US', startTime='2026年03月06日 13:49:44', endTime='2036年03月03日 13:49:44', ownerSubject='CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US', isCa=true, sigMaxLength=255, keyUsage='digitalSignature,keyCertSign', publicKeyInfo='1.2.156.10197.1.301', pubKey=83812e637fb0dd4a7d793b7cdfa84aba3b52aeb9fa9a41903f605eaab7c975393f2813ed35861ee5ce58e7701596b5c3f122adf81e0b95c297980701e080a74c, signatureAlgorithm='SM3WithSM2Signature', signatureValue=ffbff0898b2c4d1ff1339c4330c1c790fd00b36ae8ccb22263d2df909c3d435458ad0c944f3ff8e9d2a02bbf9036713a1736610fc47cef54072fc8bf927da717, SHA1Thumbprint=dc61fb756381484d5e0d817d13f7bba837d7e92d, tbsCert=3082018ca00302010202080df8f41ca2be4325300a06082a811ccf5501837530663111300f06035504030c0844696769636572743111300f060355040b0c0844696769636572743111300f060355040a0c084469676963657274310f300d06035504070c064c696e746f6e310d300b06035504080c0455746168310b3009060355040613025553301e170d3236303330363035343934345a170d3336303330333035343934345a30663111300f06035504030c0844696769636572743111300f060355040b0c0844696769636572743111300f060355040a0c084469676963657274310f300d06035504070c064c696e746f6e310d300b06035504080c0455746168310b30090603550406130255533059301306072a8648ce3d020106082a811ccf5501822d0342000483812e637fb0dd4a7d793b7cdfa84aba3b52aeb9fa9a41903f605eaab7c975393f2813ed35861ee5ce58e7701596b5c3f122adf81e0b95c297980701e080a74ca324302230100603551d13040930070101ff020200ff300e0603551d0f0101ff040403020284}
+5---------SM2证书解析通过---------
+---------SM3摘要计算---------
+update:        cc7e992374984c82ab13f3f117d52849970628d16acf4cc1d9c137953e23a418
+直接doFinal:   cc7e992374984c82ab13f3f117d52849970628d16acf4cc1d9c137953e23a418
+多次分开update: cc7e992374984c82ab13f3f117d52849970628d16acf4cc1d9c137953e23a418
+6---------SM3摘要计算通过---------
+---------随机数生成开始---------
+c7f3fbd02632d979fdce630b62ec5d73
+7---------随机数生成通过---------
+---------SM4加解密开始---------
+---------正确性测试---------
+ECB明文：gm-java-1.0
+CBC明文：gm-java-1.0
+CTR明文：gm-java-1.0
+GCM密文：7fe60617876304c2a8e1af
+GCMtag：49ab359378859b208dcbfffca2d0e910
+GCM明文：gm-java-1.0
+8---------正确性测试通过---------
+---------速度测试（1M 数据加解密）---------
+ECB加密耗时：575ms 速度：1.7391304347826086MB/s
+ECB解密耗时：608ms 速度：1.644736842105263MB/s
+CBC加密耗时：535ms 速度：1.8691588785046729MB/s
+CBC解密耗时：552ms 速度：1.8115942028985508MB/s
+CTR加密耗时：339ms 速度：2.949852507374631MB/s
+CTR解密耗时：198ms 速度：5.05050505050505MB/s
+GCM加密耗时：618ms 速度：1.6181229773462784MB/s
+GCM解密耗时：606ms 速度：1.6501650165016502MB/s
+9---------速度测试通过---------
+10---------SM4加解密通过---------
+---------TLS握手测试开始（SOCKET）---------
+gm-java client:clientStart
+gm-java server:server start port:4433
+serverResultRandom:5041ea00f95655dc252cec31c13b53d8
+clientResultRandom:5041ea00f95655dc252cec31c13b53d8
+11---------TLS握手测试通过（SOCKET）---------
+---------TLS握手测试开始（NETTY）---------
+server sleep
+netty-tls-server:serverStart
+netty-tls-client:clientStart
+server sleep
+netty server random：8c19273a42cda2c759ce62322956efe7
+netty client random：8c19273a42cda2c759ce62322956efe7
+12---------TLS握手测试通过（NETTY）---------
+
+Process finished with exit code 0

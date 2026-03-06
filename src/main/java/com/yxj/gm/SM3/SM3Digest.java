@@ -1,218 +1,140 @@
-package com.yxj.gm.SM3;//import com.kms.jca.UseKey;
-import com.yxj.gm.util.DataConvertUtil;
-import org.bouncycastle.util.encoders.Hex;
+package com.yxj.gm.SM3;
 
-import java.nio.ByteBuffer;
+import java.io.ByteArrayOutputStream;
 
+/**
+ * SM3 哈希算法
+ *
+ * 性能优化：压缩函数使用 int 寄存器运算，消除 byte[]/int 反复转换，
+ *          消息扩展使用 int 数组，update 使用 ByteArrayOutputStream 避免 O(n²) 拼接
+ */
 public class SM3Digest {
 
-    private static final byte[] IVbyte =new byte[]{(byte) 0x73,(byte) 0x80,(byte) 0x16,(byte) 0x6f,(byte) 0x49,(byte) 0x14,(byte) 0xb2,(byte) 0xb9,(byte) 0x17
-            ,(byte) 0x24,(byte) 0x42,(byte) 0xd7,(byte) 0xda,(byte) 0x8a,(byte) 0x06,(byte) 0x00,(byte) 0xa9,(byte) 0x6f,(byte) 0x30,(byte) 0xbc
-            ,(byte) 0x16,(byte) 0x31,(byte) 0x38,(byte) 0xaa,(byte) 0xe3,(byte) 0x8d,(byte) 0xee,(byte) 0x4d,(byte) 0xb0,(byte) 0xfb,(byte) 0x0e,(byte) 0x4e};
+    private static final int[] IV = {
+            0x7380166f, 0x4914b2b9, 0x172442d7, 0xda8a0600,
+            0xa96f30bc, 0x163138aa, 0xe38dee4d, 0xb0fb0e4e
+    };
 
-    private static final byte[] T1byte =new byte[]{(byte) 0x79,(byte) 0xcc,(byte) 0x45,(byte) 0x19};
-    private static final byte[] T2byte = new byte[]{(byte) 0x7a,(byte) 0x87,(byte) 0x9d,(byte) 0x8a};
+    private static final int T_0_15 = 0x79cc4519;
+    private static final int T_16_63 = 0x7a879d8a;
 
-    private  final byte[][] WAArray= new byte[68][4];
-    private  final byte[][] WBArray= new byte[64][4];
+    private ByteArrayOutputStream msgBuffer = new ByteArrayOutputStream();
 
-//    static String strM = "616263";
-    private   byte[] msgAll=null;
-    
-
-    //0-15
-    private static byte[] FF1(byte[] X,byte[] Y,byte[] Z){
-        return DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(X, Y), Z);
-    }
-    //16-63
-    private static byte[] FF2(byte[] X,byte[] Y,byte[] Z){
-        return DataConvertUtil.byteArrayOR(DataConvertUtil.byteArrayOR(DataConvertUtil.byteArrayAND(X,Y), DataConvertUtil.byteArrayAND(X,Z)),DataConvertUtil.byteArrayAND(Y,Z));
-    }
-    //0-15
-    private static byte[] GG1(byte[] X,byte[] Y,byte[] Z){
-        return DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(X, Y), Z);
-    }
-    //16-63
-    private static byte[] GG2(byte[] X,byte[] Y,byte[] Z){
-        return DataConvertUtil.byteArrayOR(DataConvertUtil.byteArrayAND(X,Y),DataConvertUtil.byteArrayAND(DataConvertUtil.byteArrayNOT(X), Z));
-    }
-    private static byte[] P0(byte[] X){
-        return DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(X,DataConvertUtil.bitCycleLeft(X,9)),DataConvertUtil.bitCycleLeft(X,17));
+    private static int bytesToIntBE(byte[] b, int off) {
+        return ((b[off] & 0xFF) << 24) | ((b[off + 1] & 0xFF) << 16) |
+                ((b[off + 2] & 0xFF) << 8) | (b[off + 3] & 0xFF);
     }
 
-    private static byte[] P1(byte[] X){
-        return DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(X,DataConvertUtil.bitCycleLeft(X,15)),DataConvertUtil.bitCycleLeft(X,23));
+    private static void intToBytesBE(int val, byte[] b, int off) {
+        b[off] = (byte) (val >>> 24);
+        b[off + 1] = (byte) (val >>> 16);
+        b[off + 2] = (byte) (val >>> 8);
+        b[off + 3] = (byte) val;
     }
 
-    //1.填充
-    private static byte[] append(byte[] m){
-        //System.out.println("ivlen:"+IVbyte.length);
-        long l = m.length* 8L; //448
-        //System.out.println("l:"+l);
-        //计算k
-        long k = 448-((l+1)%512); //-1
-        //K不为0
-        if(k<0){
-            k=k+512;
+    private static int FF1(int X, int Y, int Z) { return X ^ Y ^ Z; }
+    private static int FF2(int X, int Y, int Z) { return (X & Y) | (X & Z) | (Y & Z); }
+    private static int GG1(int X, int Y, int Z) { return X ^ Y ^ Z; }
+    private static int GG2(int X, int Y, int Z) { return (X & Y) | (~X & Z); }
+    private static int P0(int X) { return X ^ Integer.rotateLeft(X, 9) ^ Integer.rotateLeft(X, 17); }
+    private static int P1(int X) { return X ^ Integer.rotateLeft(X, 15) ^ Integer.rotateLeft(X, 23); }
+
+    private static byte[] pad(byte[] m) {
+        long bitLen = m.length * 8L;
+        long k = 448 - ((bitLen + 1) % 512);
+        if (k < 0) k += 512;
+        int totalBytes = (int) ((bitLen + 1 + k + 64) / 8);
+        byte[] result = new byte[totalBytes];
+        System.arraycopy(m, 0, result, 0, m.length);
+        result[m.length] = (byte) 0x80;
+        for (int i = 0; i < 8; i++) {
+            result[totalBytes - 1 - i] = (byte) (bitLen >>> (i * 8));
         }
-        long length = (l+1+k+64)/8; //64
-        //System.out.println("length:"+length);
-        byte[] append = new byte[(int)length];
-        int mLen = m.length;
-        //System.out.println("mLen:"+mLen);
-        //先把 m system.copopy到首部
-        System.arraycopy(m,0,append,0,mLen);
-        //填充1
-        System.arraycopy(new byte[]{-128},0,append,mLen,1);
-        //填充64位bit 长度是l的二进制表达式
-        byte[] array = ByteBuffer.allocate(Long.SIZE / Byte.SIZE).putLong(l).array();
-        System.arraycopy(array,0,append,(int)length-array.length,array.length);
-        return append;
+        return result;
     }
 
-    public static void main(String[] args) {
-        long l = 448;
-        byte[] array = ByteBuffer.allocate(Long.SIZE / Byte.SIZE).putLong(l).array();
+    /**
+     * 压缩函数 - 全 int 运算
+     */
+    private static int[] CF(int[] V, byte[] block) {
+        int[] W = new int[68];
+        int[] W1 = new int[64];
 
-//        DataConvertUtil.byteToBitArray())
-
-    }
-
-
-
-    //压缩函数
-    private  byte[] CF(byte[] V,byte[] BI){
-        if(V==null){
-            V=IVbyte;
+        for (int i = 0; i < 16; i++) {
+            W[i] = bytesToIntBE(block, i * 4);
         }
-        expand(BI);
-        byte[] SS1,SS2,TT1,TT2,T;
-        byte[] VIABC;
-        byte[] A=new byte[4];
-        System.arraycopy(V, 0, A, 0, 4);
-        byte[] B=new byte[4];
-        System.arraycopy(V, 4, B, 0, 4);
-        byte[] C=new byte[4];
-        System.arraycopy(V, 4*2, C, 0, 4);
-        byte[] D=new byte[4];
-        System.arraycopy(V, 4*3, D, 0, 4);
-        byte[] E=new byte[4];
-        System.arraycopy(V, 4*4, E, 0, 4);
-        byte[] F=new byte[4];
-        System.arraycopy(V, 4*5, F, 0, 4);
-        byte[] G=new byte[4];
-        System.arraycopy(V, 4*6, G, 0, 4);
-        byte[] H=new byte[4];
-        System.arraycopy(V, 4*7, H, 0, 4);
+        for (int j = 16; j < 68; j++) {
+            W[j] = P1(W[j - 16] ^ W[j - 9] ^ Integer.rotateLeft(W[j - 3], 15))
+                    ^ Integer.rotateLeft(W[j - 13], 7) ^ W[j - 6];
+        }
+        for (int j = 0; j < 64; j++) {
+            W1[j] = W[j] ^ W[j + 4];
+        }
+
+        int A = V[0], B = V[1], C = V[2], D = V[3];
+        int E = V[4], F = V[5], G = V[6], H = V[7];
 
         for (int j = 0; j < 64; j++) {
-
-                int l1,l2,l3;
-                l1=DataConvertUtil.bytesToInt(DataConvertUtil.bitCycleLeft(A,12),0,false);
-                l2=DataConvertUtil.bytesToInt(E,0,false);
-                if(j<16){
-                    T=T1byte;
-                }else{
-                    T=T2byte;
-                }
-                l3=DataConvertUtil.bytesToInt(DataConvertUtil.bitCycleLeft(T,(j%32)),0,false);
-                SS1 = DataConvertUtil.bitCycleLeft(DataConvertUtil.intToBytes(l1+l2+l3), 7);
-                SS2=DataConvertUtil.byteArrayXOR(SS1, DataConvertUtil.bitCycleLeft(A,12));
-
-                int l4,l5,l6,l7;
-                if(j<16){
-                    l4=DataConvertUtil.bytesToInt(FF1(A,B,C),0,false);
-                }else{
-                    l4=DataConvertUtil.bytesToInt(FF2(A,B,C),0,false);
-                }
-                l5=DataConvertUtil.bytesToInt(D,0,false);
-                l6=DataConvertUtil.bytesToInt(SS2,0,false);
-                l7=DataConvertUtil.bytesToInt(WBArray[j],0,false);
-                TT1=DataConvertUtil.intToBytes(l4+l5+l6+l7);
-
-                int l8,l9,l10,l11;
-                if(j<16){
-                    l8=DataConvertUtil.bytesToInt(GG1(E,F,G),0,false);
-                }else {
-                    l8=DataConvertUtil.bytesToInt(GG2(E,F,G),0,false);
-                }
-                l9 = DataConvertUtil.bytesToInt(H,0,false);
-                l10 = DataConvertUtil.bytesToInt(SS1,0,false);
-                l11 = DataConvertUtil.bytesToInt(WAArray[j],0,false);
-                TT2 = DataConvertUtil.intToBytes(l8+l9+l10+l11);
-                D=C;
-                C=DataConvertUtil.bitCycleLeft(B,9);
-                B=A;
-                A=TT1;
-                H=G;
-                G=DataConvertUtil.bitCycleLeft(F,19);
-                F=E;
-                E=P0(TT2);
+            int T = (j < 16) ? T_0_15 : T_16_63;
+            int SS1 = Integer.rotateLeft(Integer.rotateLeft(A, 12) + E + Integer.rotateLeft(T, j % 32), 7);
+            int SS2 = SS1 ^ Integer.rotateLeft(A, 12);
+            int TT1, TT2;
+            if (j < 16) {
+                TT1 = FF1(A, B, C) + D + SS2 + W1[j];
+                TT2 = GG1(E, F, G) + H + SS1 + W[j];
+            } else {
+                TT1 = FF2(A, B, C) + D + SS2 + W1[j];
+                TT2 = GG2(E, F, G) + H + SS1 + W[j];
+            }
+            D = C;
+            C = Integer.rotateLeft(B, 9);
+            B = A;
+            A = TT1;
+            H = G;
+            G = Integer.rotateLeft(F, 19);
+            F = E;
+            E = P0(TT2);
         }
-        VIABC=DataConvertUtil.byteArrAdd(A,B,C,D,E,F,G,H);
 
-
-        return DataConvertUtil.byteArrayXOR(VIABC, V);
-    }
-    //扩展(压缩函数需要调用扩展)
-    private  void expand(byte[] BI){
-        //第一步将消息分组B划分为16个字
-        for (int i = 0; i <16 ; i++) {
-            byte[] temByte = new byte[4];
-            System.arraycopy(BI, i*4, temByte,0,4);
-            WAArray[i]=temByte;
-        }
-        //第二步
-        for (int j = 16; j < 68; j++) {
-            WAArray[j]= DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(P1(DataConvertUtil.byteArrayXOR(DataConvertUtil.byteArrayXOR(WAArray[j-16],WAArray[j-9]),DataConvertUtil.bitCycleLeft(WAArray[j-3],15))),DataConvertUtil.bitCycleLeft(WAArray[j-13], 7)),WAArray[j-6]);
-        }
-        for (int j = 0; j <64 ; j++) {
-            WBArray[j]=DataConvertUtil.byteArrayXOR(WAArray[j], WAArray[j+4]);
-        }
+        return new int[]{A ^ V[0], B ^ V[1], C ^ V[2], D ^ V[3],
+                E ^ V[4], F ^ V[5], G ^ V[6], H ^ V[7]};
     }
 
+    private byte[] computeHash(byte[] msgAll) {
+        byte[] padded = pad(msgAll);
+        int n = padded.length / 64;
+        int[] v = IV.clone();
+        byte[] block = new byte[64];
+        for (int i = 0; i < n; i++) {
+            System.arraycopy(padded, i * 64, block, 0, 64);
+            v = CF(v, block);
+        }
+        byte[] result = new byte[32];
+        for (int i = 0; i < 8; i++) {
+            intToBytesBE(v[i], result, i * 4);
+        }
+        return result;
+    }
 
+    public void update(byte[] msg) {
+        msgBuffer.write(msg, 0, msg.length);
+    }
 
-    //2.迭代
-    private  byte[] iteration(){
-        if(msgAll==null){
+    public byte[] doFinal() {
+        byte[] data = msgBuffer.toByteArray();
+        msgBuffer.reset();
+        if (data.length == 0) {
             throw new RuntimeException("请添加要计算的值");
         }
-        byte[] append = append(msgAll);
-        byte[] sm3Hash=null;
-        long n = append.length / 64;
-        //System.out.println("n:"+n);
-        byte[][] BArray = new byte[(int) n][64];
-        for (int i = 0; i < n; i++) {
-            System.arraycopy(append, i*64, BArray[i],0,64);
-            //System.out.println("第"+i+"轮压缩");
-            //压缩函数
-            sm3Hash=CF(sm3Hash, BArray[i]);
-        }
-        //计算完成后清空上次的消息值
-        msgAll=null;
-        return sm3Hash;
-    }
-    public void update(byte[] msg){
-        if(msgAll==null){
-            msgAll=msg;
-        }else {
-            msgAll=DataConvertUtil.byteArrAdd(msgAll,msg);
-        }
-    }
-    public byte[] doFinal(){
-        return iteration();
-    }
-    public byte[] doFinal(byte[] msg){
-        msgAll=msg;
-        return iteration();
+        return computeHash(data);
     }
 
-    public void msgAllReset(){
-        msgAll=null;
+    public byte[] doFinal(byte[] msg) {
+        msgBuffer.reset();
+        return computeHash(msg);
     }
 
-
-
-
+    public void msgAllReset() {
+        msgBuffer.reset();
+    }
 }

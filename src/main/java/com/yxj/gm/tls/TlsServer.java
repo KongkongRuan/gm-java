@@ -92,15 +92,17 @@ public class TlsServer {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-
+        //解析der编码的数据
         byte[] content = ASN1Util.GetContent(inputStream);
 
         ClientHello clientHello = JSON.parseObject(new String(content), ClientHello.class);
 
         if(DEBUG) System.out.println("server:serverHello"+clientHello);
+        //准备serverHello数据
         //todo 生成serverHello(选择适当的版本及算法)
         ServerHello serverHello = new ServerHello();
         serverHello.setVersion(clientHello.getVersion());
+        //生成serverRandom
         byte[] randomS = Random.RandomBySM3(32);
         serverHello.setRandomS(randomS);
         serverHello.setSessionId(null);
@@ -125,7 +127,7 @@ public class TlsServer {
             throw new RuntimeException(e);
         }
         if(DEBUG) System.out.println("server:serverCert发送完毕");
-        //ECDHE（E为ephemeral（临时性的）
+        //ECDHE（DHE E为ephemeral（临时性的）
         KeyPair serverKeyPairTemp = SM2KeyPairGenerate.generateSM2KeyPair();
         ServerKeyExchange serverKeyExchange = new ServerKeyExchange(serverKeyPairTemp.getPublic().getEncoded());
         byte[] serverKeyExchangeBytes = JSON.toJSONString(serverKeyExchange).getBytes();
