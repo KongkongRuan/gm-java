@@ -31,4 +31,27 @@ public class SM4Constant {
             0xc4cbd2d9, 0xe0e7eef5, 0xfc030a11, 0x181f262d, 0x343b4249, 0x50575e65, 0x6c737a81, 0x888f969d, 0xa4abb2b9,
             0xc0c7ced5, 0xdce3eaf1, 0xf8ff060d, 0x141b2229, 0x30373e45, 0x4c535a61, 0x686f767d, 0x848b9299, 0xa0a7aeb5,
             0xbcc3cad1, 0xd8dfe6ed, 0xf4fb0209, 0x10171e25, 0x2c333a41, 0x484f565d, 0x646b7279 };
+
+    public static final int[] T0 = new int[256];
+    public static final int[] T1 = new int[256];
+    public static final int[] T2 = new int[256];
+    public static final int[] T3 = new int[256];
+
+    static {
+        for (int i = 0; i < 256; i++) {
+            int s = SboxTable[i] & 0xFF;
+            int b0 = s << 24;
+            T0[i] = b0 ^ Integer.rotateLeft(b0, 2) ^ Integer.rotateLeft(b0, 10)
+                    ^ Integer.rotateLeft(b0, 18) ^ Integer.rotateLeft(b0, 24);
+            int b1 = s << 16;
+            T1[i] = b1 ^ Integer.rotateLeft(b1, 2) ^ Integer.rotateLeft(b1, 10)
+                    ^ Integer.rotateLeft(b1, 18) ^ Integer.rotateLeft(b1, 24);
+            int b2 = s << 8;
+            T2[i] = b2 ^ Integer.rotateLeft(b2, 2) ^ Integer.rotateLeft(b2, 10)
+                    ^ Integer.rotateLeft(b2, 18) ^ Integer.rotateLeft(b2, 24);
+            int b3 = s;
+            T3[i] = b3 ^ Integer.rotateLeft(b3, 2) ^ Integer.rotateLeft(b3, 10)
+                    ^ Integer.rotateLeft(b3, 18) ^ Integer.rotateLeft(b3, 24);
+        }
+    }
 }

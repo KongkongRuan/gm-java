@@ -11,6 +11,7 @@ import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigInteger;
 import java.security.*;
+import java.util.Arrays;
 
 /**
  * SM2 椭圆曲线工具类
@@ -30,6 +31,12 @@ public class SM2Util {
     private static final BigInteger THREE = BigInteger.valueOf(3);
     private static final BigInteger FOUR = BigInteger.valueOf(4);
     private static final BigInteger EIGHT = BigInteger.valueOf(8);
+
+    private static final int WNAF_WIDTH = 6;
+    private static final int PRECOMP_SIZE = 1 << (WNAF_WIDTH - 2); // 16 个预计算点
+
+    /** 基点 G 的 wNAF 预计算表（延迟初始化），存储 [1]G, [3]G, [5]G, ..., [31]G 的仿射坐标 */
+    private static volatile BigInteger[][] basePointTable;
 
     // ==================== 公开接口（保持向后兼容） ====================
 
@@ -123,18 +130,21 @@ public class SM2Util {
      * 使用雅可比坐标 + 二进制展开法，整个过程只需 1 次模逆
      */
     public static byte[][] MultiplePointOperation(byte[] XG, byte[] YG, byte[] k, byte[] a, byte[] p) {
-        BigInteger bigP = toBigIntUnsigned(p);
-        BigInteger bigA = toBigIntUnsigned(a);
         BigInteger bigK = toBigIntUnsigned(k);
         BigInteger gx = toBigIntUnsigned(XG);
         BigInteger gy = toBigIntUnsigned(YG);
 
+        if (gx.equals(SM2Constant.getBigGX()) && gy.equals(SM2Constant.getBigGY())) {
+            BigInteger[] pt = fixedBaseMultiply(bigK);
+            return toPointResult(pt[0], pt[1]);
+        }
+
+        BigInteger bigP = toBigIntUnsigned(p);
+        BigInteger bigA = toBigIntUnsigned(a);
         boolean aIsMinusThree = bigA.add(THREE).equals(bigP);
 
-        // 雅可比坐标标量乘法
         BigInteger[] Q = jacobianMultiply(gx, gy, bigK, bigA, bigP, aIsMinusThree);
 
-        // 转回仿射坐标（只需 1 次模逆）
         if (Q[2].signum() == 0) {
             return new byte[2][32];
         }
@@ -206,23 +216,254 @@ public class SM2Util {
         return left.equals(right);
     }
 
+    /**
+     * 基点标量乘法 [k]G，使用 wNAF(w=6) + 延迟预计算表
+     * 首次调用触发预计算（~1ms），后续调用直接复用缓存
+     * 点加法次数从 NAF 的 ~85 降至 ~37（256位标量）
+     * @return 仿射坐标 [x, y]
+     */
+    public static BigInteger[] fixedBaseMultiply(BigInteger k) {
+        BigInteger bigP = SM2Constant.getBigP();
+        BigInteger bigA = SM2Constant.getBigA();
+        boolean aIsM3 = bigA.add(THREE).equals(bigP);
+
+        BigInteger[][] table = getBasePointTable();
+        int[] wnaf = toWNAF(k, WNAF_WIDTH);
+
+        BigInteger QX = BigInteger.ONE, QY = BigInteger.ONE, QZ = BigInteger.ZERO;
+
+        for (int i = wnaf.length - 1; i >= 0; i--) {
+            BigInteger[] doubled = jacobianDouble(QX, QY, QZ, bigA, bigP, aIsM3);
+            QX = doubled[0]; QY = doubled[1]; QZ = doubled[2];
+
+            if (wnaf[i] != 0) {
+                int idx = (Math.abs(wnaf[i]) - 1) >> 1;
+                BigInteger px = table[idx][0];
+                BigInteger py = (wnaf[i] > 0) ? table[idx][1] : bigP.subtract(table[idx][1]);
+                BigInteger[] added = jacobianAddMixed(QX, QY, QZ, px, py, bigA, bigP, aIsM3);
+                QX = added[0]; QY = added[1]; QZ = added[2];
+            }
+        }
+
+        if (QZ.signum() == 0) {
+            return new BigInteger[]{BigInteger.ZERO, BigInteger.ZERO};
+        }
+        BigInteger zInv = QZ.modInverse(bigP);
+        BigInteger zInv2 = zInv.multiply(zInv).mod(bigP);
+        BigInteger zInv3 = zInv2.multiply(zInv).mod(bigP);
+        return new BigInteger[]{QX.multiply(zInv2).mod(bigP), QY.multiply(zInv3).mod(bigP)};
+    }
+
+    /**
+     * Shamir's Trick：单次遍历计算 [s]G + [t]P
+     * G 分量使用 wNAF + 预计算表（~37 次加法），P 分量使用 NAF（~85 次加法）
+     */
+    public static BigInteger[] shamirMultiply(BigInteger s, BigInteger px, BigInteger py, BigInteger t) {
+        BigInteger bigP = SM2Constant.getBigP();
+        BigInteger bigA = SM2Constant.getBigA();
+        boolean aIsM3 = bigA.add(THREE).equals(bigP);
+
+        BigInteger[][] gTable = getBasePointTable();
+        int[] wNafS = toWNAF(s, WNAF_WIDTH);
+        int[] nafT = toNAF(t);
+        BigInteger negPy = bigP.subtract(py);
+
+        int maxLen = Math.max(wNafS.length, nafT.length);
+        BigInteger QX = BigInteger.ONE, QY = BigInteger.ONE, QZ = BigInteger.ZERO;
+
+        for (int i = maxLen - 1; i >= 0; i--) {
+            BigInteger[] doubled = jacobianDouble(QX, QY, QZ, bigA, bigP, aIsM3);
+            QX = doubled[0]; QY = doubled[1]; QZ = doubled[2];
+
+            int si = (i < wNafS.length) ? wNafS[i] : 0;
+            int ti = (i < nafT.length) ? nafT[i] : 0;
+
+            if (si != 0) {
+                int idx = (Math.abs(si) - 1) >> 1;
+                BigInteger gx = gTable[idx][0];
+                BigInteger gy = (si > 0) ? gTable[idx][1] : bigP.subtract(gTable[idx][1]);
+                BigInteger[] added = jacobianAddMixed(QX, QY, QZ, gx, gy, bigA, bigP, aIsM3);
+                QX = added[0]; QY = added[1]; QZ = added[2];
+            }
+
+            if (ti == 1) {
+                BigInteger[] added = jacobianAddMixed(QX, QY, QZ, px, py, bigA, bigP, aIsM3);
+                QX = added[0]; QY = added[1]; QZ = added[2];
+            } else if (ti == -1) {
+                BigInteger[] added = jacobianAddMixed(QX, QY, QZ, px, negPy, bigA, bigP, aIsM3);
+                QX = added[0]; QY = added[1]; QZ = added[2];
+            }
+        }
+
+        if (QZ.signum() == 0) {
+            return new BigInteger[]{BigInteger.ZERO, BigInteger.ZERO};
+        }
+        BigInteger zInv = QZ.modInverse(bigP);
+        BigInteger zInv2 = zInv.multiply(zInv).mod(bigP);
+        BigInteger zInv3 = zInv2.multiply(zInv).mod(bigP);
+        return new BigInteger[]{QX.multiply(zInv2).mod(bigP), QY.multiply(zInv3).mod(bigP)};
+    }
+
     // ==================== 雅可比坐标内部实现 ====================
 
     /**
+     * 将标量 k 转换为 NAF（Non-Adjacent Form）表示
+     * NAF 保证不存在连续的非零位，使点加法次数从 ~n/2 降至 ~n/3
+     * 返回数组下标 0 为最低位
+     */
+    private static int[] toNAF(BigInteger k) {
+        int[] naf = new int[k.bitLength() + 1];
+        int len = 0;
+        while (k.signum() > 0) {
+            if (k.testBit(0)) {
+                if ((k.intValue() & 3) == 3) {
+                    naf[len] = -1;
+                    k = k.add(BigInteger.ONE);
+                } else {
+                    naf[len] = 1;
+                    k = k.subtract(BigInteger.ONE);
+                }
+            }
+            k = k.shiftRight(1);
+            len++;
+        }
+        return Arrays.copyOf(naf, len);
+    }
+
+    /**
+     * wNAF 表示：窗口宽度 w 的非相邻形式
+     * 非零位间隔至少 w 位，使点加法次数降至 ~256/(w+1)
+     * 非零值范围：奇数 ±1, ±3, ..., ±(2^(w-1)-1)
+     */
+    private static int[] toWNAF(BigInteger k, int w) {
+        int[] wnaf = new int[k.bitLength() + 1];
+        int len = 0;
+        int pow2w = 1 << w;
+        int halfPow2w = 1 << (w - 1);
+        int mask = pow2w - 1;
+
+        while (k.signum() > 0) {
+            if (k.testBit(0)) {
+                int digit = k.intValue() & mask;
+                if (digit >= halfPow2w) {
+                    digit -= pow2w;
+                }
+                wnaf[len] = digit;
+                k = k.subtract(BigInteger.valueOf(digit));
+            }
+            k = k.shiftRight(1);
+            len++;
+        }
+        return Arrays.copyOf(wnaf, len);
+    }
+
+    // ==================== 基点预计算表（延迟初始化） ====================
+
+    private static BigInteger[][] getBasePointTable() {
+        BigInteger[][] table = basePointTable;
+        if (table == null) {
+            synchronized (SM2Util.class) {
+                table = basePointTable;
+                if (table == null) {
+                    table = buildBasePointTable();
+                    basePointTable = table;
+                }
+            }
+        }
+        return table;
+    }
+
+    /**
+     * 构建基点 G 的 wNAF 预计算表：[1]G, [3]G, [5]G, ..., [2*PRECOMP_SIZE-1]G
+     * 全部存储为仿射坐标，用于后续 mixed addition
+     * 使用 Montgomery 批量求逆，整个过程仅需 2 次 modInverse
+     */
+    private static BigInteger[][] buildBasePointTable() {
+        BigInteger gx = SM2Constant.getBigGX();
+        BigInteger gy = SM2Constant.getBigGY();
+        BigInteger bigP = SM2Constant.getBigP();
+        BigInteger bigA = SM2Constant.getBigA();
+        boolean aIsM3 = bigA.add(THREE).equals(bigP);
+
+        // [2]G → 仿射坐标（1 次 modInverse）
+        BigInteger[] dblJ = jacobianDouble(gx, gy, BigInteger.ONE, bigA, bigP, aIsM3);
+        BigInteger zInv = dblJ[2].modInverse(bigP);
+        BigInteger zi2 = zInv.multiply(zInv).mod(bigP);
+        BigInteger zi3 = zi2.multiply(zInv).mod(bigP);
+        BigInteger dblX = dblJ[0].multiply(zi2).mod(bigP);
+        BigInteger dblY = dblJ[1].multiply(zi3).mod(bigP);
+
+        // 递推计算奇数倍点（雅可比坐标），每步 mixed add [2]G（仿射）
+        BigInteger[][] jacPts = new BigInteger[PRECOMP_SIZE][];
+        jacPts[0] = new BigInteger[]{gx, gy, BigInteger.ONE};
+        for (int i = 1; i < PRECOMP_SIZE; i++) {
+            jacPts[i] = jacobianAddMixed(
+                    jacPts[i - 1][0], jacPts[i - 1][1], jacPts[i - 1][2],
+                    dblX, dblY, bigA, bigP, aIsM3);
+        }
+
+        // Montgomery 批量求逆 → 仿射坐标（1 次 modInverse）
+        return batchToAffine(jacPts, bigP);
+    }
+
+    /**
+     * Montgomery 批量求逆：将 n 个雅可比坐标点转为仿射坐标
+     * 仅需 1 次 modInverse + O(n) 次乘法，替代 n 次独立 modInverse
+     */
+    private static BigInteger[][] batchToAffine(BigInteger[][] jacPts, BigInteger p) {
+        int n = jacPts.length;
+
+        BigInteger[] cumZ = new BigInteger[n];
+        cumZ[0] = jacPts[0][2];
+        for (int i = 1; i < n; i++) {
+            cumZ[i] = cumZ[i - 1].multiply(jacPts[i][2]).mod(p);
+        }
+
+        BigInteger inv = cumZ[n - 1].modInverse(p);
+
+        BigInteger[] zInvs = new BigInteger[n];
+        for (int i = n - 1; i > 0; i--) {
+            zInvs[i] = cumZ[i - 1].multiply(inv).mod(p);
+            inv = jacPts[i][2].multiply(inv).mod(p);
+        }
+        zInvs[0] = inv;
+
+        BigInteger[][] result = new BigInteger[n][2];
+        for (int i = 0; i < n; i++) {
+            BigInteger zi2 = zInvs[i].multiply(zInvs[i]).mod(p);
+            BigInteger zi3 = zi2.multiply(zInvs[i]).mod(p);
+            result[i] = new BigInteger[]{
+                    jacPts[i][0].multiply(zi2).mod(p),
+                    jacPts[i][1].multiply(zi3).mod(p)
+            };
+        }
+        return result;
+    }
+
+    /**
      * 雅可比坐标标量乘法：Q = [k]P，P 为仿射坐标
-     * 使用 left-to-right 二进制展开 + 混合加法（基点为仿射）
+     * 使用 NAF + left-to-right 遍历 + 混合加法
+     * 用于非基点的任意点乘法
      */
     private static BigInteger[] jacobianMultiply(BigInteger gx, BigInteger gy, BigInteger k,
                                                   BigInteger a, BigInteger p, boolean aIsMinusThree) {
+        if (k.signum() == 0) {
+            return new BigInteger[]{BigInteger.ONE, BigInteger.ONE, BigInteger.ZERO};
+        }
+
+        int[] naf = toNAF(k);
+        BigInteger negGy = p.subtract(gy);
         BigInteger QX = BigInteger.ONE, QY = BigInteger.ONE, QZ = BigInteger.ZERO;
 
-        int bitLength = k.bitLength();
-        for (int i = bitLength - 1; i >= 0; i--) {
+        for (int i = naf.length - 1; i >= 0; i--) {
             BigInteger[] doubled = jacobianDouble(QX, QY, QZ, a, p, aIsMinusThree);
             QX = doubled[0]; QY = doubled[1]; QZ = doubled[2];
 
-            if (k.testBit(i)) {
+            if (naf[i] == 1) {
                 BigInteger[] added = jacobianAddMixed(QX, QY, QZ, gx, gy, a, p, aIsMinusThree);
+                QX = added[0]; QY = added[1]; QZ = added[2];
+            } else if (naf[i] == -1) {
+                BigInteger[] added = jacobianAddMixed(QX, QY, QZ, gx, negGy, a, p, aIsMinusThree);
                 QX = added[0]; QY = added[1]; QZ = added[2];
             }
         }

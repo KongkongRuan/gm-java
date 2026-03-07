@@ -7,13 +7,16 @@ import com.yxj.gm.util.DataConvertUtil;
 import com.yxj.gm.util.SM2Util;
 
 import java.math.BigInteger;
+import java.security.SecureRandom;
 
 /**
  * SM2 签名/验签（备份版本）
  *
- * 优化同 SM2Signature
+ * 优化同 SM2Signature：fixedBaseMultiply + Shamir's Trick
  */
 public class SM2SignatureBack {
+
+    private static final BigInteger TWO = BigInteger.valueOf(2);
 
     byte[] Za;
     byte[] Xa;
@@ -60,24 +63,24 @@ public class SM2SignatureBack {
 
         BigInteger bigE = new BigInteger(1, e);
         BigInteger bigN = SM2Constant.getBigN();
-        BigInteger r = BigInteger.ZERO;
-        byte[] kBytes = new byte[32];
+        BigInteger nMinus2 = bigN.subtract(TWO);
+        SecureRandom secureRandom = new SecureRandom();
 
-        while (r.equals(BigInteger.ZERO) || bigN.equals(r.add(new BigInteger(1, kBytes)))) {
-            byte[][] keyPairBytes = SM2Util.generatePubKey();
-            kBytes = keyPairBytes[0];
-            BigInteger bigx1 = new BigInteger(1, keyPairBytes[1]);
-            r = bigE.add(bigx1).mod(bigN);
-        }
+        BigInteger r, bigK;
+        do {
+            byte[] kBytes = new byte[32];
+            do {
+                secureRandom.nextBytes(kBytes);
+                bigK = new BigInteger(1, kBytes);
+            } while (bigK.compareTo(BigInteger.ONE) < 0 || bigK.compareTo(nMinus2) > 0);
 
-        BigInteger bigK = new BigInteger(1, kBytes);
+            BigInteger[] kG = SM2Util.fixedBaseMultiply(bigK);
+            r = bigE.add(kG[0]).mod(bigN);
+        } while (r.signum() == 0 || r.add(bigK).equals(bigN));
+
         BigInteger bigDa = new BigInteger(1, dA);
-        BigInteger ts0 = BigInteger.ONE.add(bigDa).mod(bigN);
-        BigInteger ts1 = ts0.modInverse(bigN);
-
-        BigInteger ts2 = r.multiply(bigDa).mod(bigN);
-        BigInteger ts3 = bigK.subtract(ts2).mod(bigN);
-        BigInteger s = ts1.multiply(ts3).mod(bigN);
+        BigInteger s = bigDa.add(BigInteger.ONE).modInverse(bigN)
+                .multiply(bigK.subtract(r.multiply(bigDa)).mod(bigN)).mod(bigN);
 
         byte[][] result = new byte[2][32];
         result[0] = SM2Util.toFixedBytes(r, 32);
@@ -103,28 +106,20 @@ public class SM2SignatureBack {
             return false;
         }
 
-        byte[] sBytes = SM2Util.toFixedBytes(bigS, 32);
-        byte[] tBytes = SM2Util.toFixedBytes(bigT, 32);
+        BigInteger px = new BigInteger(1, Xa);
+        BigInteger py = new BigInteger(1, Ya);
 
-        byte[][] temp1 = SM2Util.MultiplePointOperation(SM2Constant.getXG(), SM2Constant.getYG(), sBytes, SM2Constant.getA(), SM2Constant.getP());
-        byte[][] temp2 = SM2Util.MultiplePointOperation(
-                DataConvertUtil.oneAdd(Xa), DataConvertUtil.oneAdd(Ya),
-                tBytes, SM2Constant.getA(), SM2Constant.getP());
-
-        byte[][] temp3 = SM2Util.PointAdditionOperation(
-                DataConvertUtil.oneAdd(temp1[0]), DataConvertUtil.oneAdd(temp1[1]),
-                DataConvertUtil.oneAdd(temp2[0]), DataConvertUtil.oneAdd(temp2[1]),
-                SM2Constant.getA(), SM2Constant.getP());
-
-        BigInteger bigX1 = new BigInteger(1, temp3[0]);
-        BigInteger R = bigE.add(bigX1).mod(bigN);
+        BigInteger[] point = SM2Util.shamirMultiply(bigS, px, py, bigT);
+        BigInteger R = bigE.add(point[0]).mod(bigN);
         return R.equals(bigR);
     }
 
     public byte[] signature(byte[] msg, byte[] id, byte[] priKey) {
-        byte[][] puba = SM2Util.MultiplePointOperation(SM2Constant.getXG(), SM2Constant.getYG(), priKey, SM2Constant.getA(), SM2Constant.getP());
-        Xa = puba[0];
-        Ya = puba[1];
+        byte[] pub = SM2Util.generatePubKeyByPriKey(priKey);
+        Xa = new byte[32];
+        Ya = new byte[32];
+        System.arraycopy(pub, 0, Xa, 0, 32);
+        System.arraycopy(pub, 32, Ya, 0, 32);
         initZa(id);
         byte[][] bytes = internalSignature(msg, priKey);
         byte[] temp = new byte[bytes[0].length + bytes[1].length];

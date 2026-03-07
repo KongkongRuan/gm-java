@@ -133,7 +133,7 @@ public class Benchmarking {
         System.out.println("GCM明文："+new String(ming_gcm));
         System.out.println(i.incrementAndGet() +"---------正确性测试通过---------");
 
-        int size = 1;
+        int size = 10;
         byte[] data = Random.RandomBySM3(1024*1024*size);
         System.out.println("---------速度测试（"+size+"M 数据加解密）---------");
         long l = System.currentTimeMillis();

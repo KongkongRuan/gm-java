@@ -81,7 +81,10 @@ public class SM4Cipher {
         return B ^ Integer.rotateLeft(B, 13) ^ Integer.rotateLeft(B, 23);
     }
 
-    private static int tInt(int A) { return lInt(tauInt(A)); }
+    private static int tInt(int A) {
+        return SM4Constant.T0[(A >>> 24) & 0xFF] ^ SM4Constant.T1[(A >>> 16) & 0xFF]
+                ^ SM4Constant.T2[(A >>> 8) & 0xFF] ^ SM4Constant.T3[A & 0xFF];
+    }
     private static int tPrimeInt(int A) { return lPrimeInt(tauInt(A)); }
 
     /**

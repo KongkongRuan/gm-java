@@ -6,11 +6,12 @@ import com.yxj.gm.constant.SM2Constant;
 import com.yxj.gm.util.DataConvertUtil;
 import com.yxj.gm.util.SM2Util;
 
-import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
 public class SM2Cipher {
+
+    private static final ThreadLocal<SecureRandom> SECURE_RANDOM = ThreadLocal.withInitial(SecureRandom::new);
 
     public byte[] SM2CipherEncrypt(byte[] M, byte[] pubKey) {
         byte[] Xb = new byte[32];
@@ -19,8 +20,7 @@ public class SM2Cipher {
         System.arraycopy(pubKey, 32, Yb, 0, 32);
 
         byte[] k = new byte[32];
-        SecureRandom secureRandom = new SecureRandom();
-        secureRandom.nextBytes(k);
+        SECURE_RANDOM.get().nextBytes(k);
         byte[][] C1Point = SM2Util.MultiplePointOperation(SM2Constant.getXG(), SM2Constant.getYG(), k, SM2Constant.getA(), SM2Constant.getP());
         byte[] C1 = new byte[C1Point[0].length + C1Point[1].length + 1];
         byte[] PC = new byte[]{(byte) 0x04};
@@ -93,45 +93,20 @@ public class SM2Cipher {
     }
 
     /**
-     * KDF 密钥派生函数 - 使用 int 计数器替代 BigInteger
+     * KDF 密钥派生函数 - 直接写入结果数组，避免反复拼接
      */
     private byte[] SM2_KDF(byte[] Z, int kLen) {
         int v = 32;
         int n = (int) Math.ceil((double) kLen / v);
-        int downN = kLen / v;
-        int m = kLen % v;
-
-        byte[][] HA = new byte[n + 1][32];
+        byte[] K = new byte[kLen];
+        int offset = 0;
         for (int i = 1; i <= n; i++) {
-            HA[i] = paddConnHash(Z, i);
-        }
-        byte[] HAt;
-        if (m == 0) {
-            HAt = HA[n];
-        } else {
-            int choseLen = kLen - (v * downN);
-            HAt = new byte[choseLen];
-            System.arraycopy(HA[n], 0, HAt, 0, choseLen);
-        }
-        byte[] K = null;
-        for (int i = 1; i <= n; i++) {
-            if (i == n) {
-                K = conn(K, HAt);
-            } else {
-                K = conn(K, HA[i]);
-            }
+            byte[] hash = paddConnHash(Z, i);
+            int copyLen = Math.min(v, kLen - offset);
+            System.arraycopy(hash, 0, K, offset, copyLen);
+            offset += copyLen;
         }
         return K;
-    }
-
-    private byte[] conn(byte[] k, byte[] han) {
-        if (k == null) {
-            return han;
-        }
-        byte[] temp = new byte[k.length + han.length];
-        System.arraycopy(k, 0, temp, 0, k.length);
-        System.arraycopy(han, 0, temp, k.length, han.length);
-        return temp;
     }
 
     /**
