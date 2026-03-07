@@ -8,10 +8,14 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 <dependency>
     <groupId>io.github.KongkongRuan</groupId>
     <artifactId>gm-java</artifactId>
-    <version>1.0.3</version>
+    <version>2.1.0</version>
 </dependency>
 ```
- - 下载源码编译之后引入或者直接下载gm-java-1.0.jar引入
+ - 下载源码编译之后引入或者直接下载gm-java-2.1.0.jar引入
+### 2.1.0更新内容
+使用opus全面优化了密钥生成以及加解密运算速度（虽然在AI时代可能不太用得上工具类了）
+- 1.SM4以及SM3性能与BC接近（SM4CTR使用了多线程加速，速度比BC（bcprov-jdk18on 1.76版本）快三倍）
+- 2.SM2略慢于BC，后续计划对 SM2 素数做特化模归约和以及增大更大的预计算窗口
 ## 主要功能
 ### 密码算法
 
