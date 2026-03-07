@@ -8,10 +8,34 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 <dependency>
     <groupId>io.github.KongkongRuan</groupId>
     <artifactId>gm-java</artifactId>
-    <version>2.1.0</version>
+    <version>2.2.0</version>
 </dependency>
 ```
- - 下载源码编译之后引入或者直接下载gm-java-2.1.0.jar引入
+ - 下载源码编译之后引入或者直接下载gm-java-2.2.0.jar引入
+### 2.2.0更新内容
+#### SM2底层重构
+#### 优化后的结果(BC（bcprov-jdk18on 1.76版本）)
+- 密钥生成比BC快 1.63x
+- 加密比BC快 2.24x
+- 解密比BC快 3.14x
+- 签名比BC快 2.80x
+- 验签比BC快 1.54x
+#### SM2 素数特化归约 + 更大预计算窗口
+#### 核心思路
+SM2 的素数 p = 2^256 - 2^224 - 2^96 + 2^64 - 1 是一个 Solinas 素数（广义 Mersenne 素数），其特殊结构允许用移位和加减法替代通用的除法取模。当前代码每次 a.multiply(b).mod(p) 会创建 2 个 BigInteger 临时对象并执行通用除法。一次标量乘法约有 1500 次这样的调用——这是最主要的性能瓶颈。
+
+数学原理
+
+由 p 的定义可得：2^256 ≡ 2^224 + 2^96 - 2^64 + 1 (mod p)
+因此 512 位乘积 T = T_high * 2^256 + T_low 可以归约为：
+T mod p ≡ T_low + T_high * (2^224 + 2^96 - 2^64 + 1) (mod p) 
+这只需要移位和加减法，完全消除了除法。
+
+- SM2P256V1Field — 利用 SM2 素数 p = 2^256 - 2^224 - 2^96 + 2^64 - 1 的特殊结构，用 int[8] 小端数组替代 BigInteger，模归约仅需移位+加减法
+- wNAF 窗口 w=7 — 预计算 32 个基点奇数倍点，将点加法从 ~37 次降至 ~32 次
+- 零 BigInteger 分配 — 域运算内部全部使用 int 数组和 long 累加器，消除约 1500 个/次标量乘法的 BigInteger 临时对象
+
+
 ### 2.1.0更新内容
 使用opus全面优化了密钥生成以及加解密运算速度（虽然在AI时代可能不太用得上工具类了）
 - 1.SM4以及SM3性能与BC接近（SM4CTR使用了多线程加速，速度比BC（bcprov-jdk18on 1.76版本）快三倍）
