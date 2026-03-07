@@ -5,8 +5,13 @@ import java.io.ByteArrayOutputStream;
 /**
  * SM3 哈希算法
  *
- * 性能优化：压缩函数使用 int 寄存器运算，消除 byte[]/int 反复转换，
- *          消息扩展使用 int 数组，update 使用 ByteArrayOutputStream 避免 O(n²) 拼接
+ * 性能优化：
+ * - 压缩函数使用 int 寄存器运算，消除 byte[]/int 反复转换
+ * - 消息扩展使用 int 数组，update 使用 ByteArrayOutputStream 避免 O(n²) 拼接
+ * - 对象复用：W/W1/state 数组复用，减少 GC
+ * - 预计算 T 的循环移位，消除重复计算
+ * - 主循环拆分为 0-15 和 16-63，减少分支预测失败
+ * - CF 直接读取 padded 的 offset，消除 block 拷贝
  */
 public class SM3Digest {
 
@@ -18,7 +23,22 @@ public class SM3Digest {
     private static final int T_0_15 = 0x79cc4519;
     private static final int T_16_63 = 0x7a879d8a;
 
+    /** 预计算 T 的循环移位，避免主循环中重复计算 */
+    private static final int[] T_ROTATED = new int[64];
+    static {
+        for (int j = 0; j < 64; j++) {
+            int T = (j < 16) ? T_0_15 : T_16_63;
+            T_ROTATED[j] = Integer.rotateLeft(T, j % 32);
+        }
+    }
+
     private ByteArrayOutputStream msgBuffer = new ByteArrayOutputStream();
+
+    /** 复用的工作数组，避免每次 CF 分配 */
+    private final int[] W = new int[68];
+    private final int[] W1 = new int[64];
+    private final int[] stateA = new int[8];
+    private final int[] stateB = new int[8];
 
     private static int bytesToIntBE(byte[] b, int off) {
         return ((b[off] & 0xFF) << 24) | ((b[off + 1] & 0xFF) << 16) |
@@ -32,12 +52,13 @@ public class SM3Digest {
         b[off + 3] = (byte) val;
     }
 
-    private static int FF1(int X, int Y, int Z) { return X ^ Y ^ Z; }
-    private static int FF2(int X, int Y, int Z) { return (X & Y) | (X & Z) | (Y & Z); }
-    private static int GG1(int X, int Y, int Z) { return X ^ Y ^ Z; }
-    private static int GG2(int X, int Y, int Z) { return (X & Y) | (~X & Z); }
-    private static int P0(int X) { return X ^ Integer.rotateLeft(X, 9) ^ Integer.rotateLeft(X, 17); }
-    private static int P1(int X) { return X ^ Integer.rotateLeft(X, 15) ^ Integer.rotateLeft(X, 23); }
+    private static int P1(int X) {
+        return X ^ Integer.rotateLeft(X, 15) ^ Integer.rotateLeft(X, 23);
+    }
+
+    private static int P0(int X) {
+        return X ^ Integer.rotateLeft(X, 9) ^ Integer.rotateLeft(X, 17);
+    }
 
     private static byte[] pad(byte[] m) {
         long bitLen = m.length * 8L;
@@ -54,14 +75,11 @@ public class SM3Digest {
     }
 
     /**
-     * 压缩函数 - 全 int 运算
+     * 压缩函数 - 直接读取 padded[offset..]，结果写入 out，无额外分配
      */
-    private static int[] CF(int[] V, byte[] block) {
-        int[] W = new int[68];
-        int[] W1 = new int[64];
-
+    private void CF(int[] V, byte[] padded, int offset, int[] out) {
         for (int i = 0; i < 16; i++) {
-            W[i] = bytesToIntBE(block, i * 4);
+            W[i] = bytesToIntBE(padded, offset + i * 4);
         }
         for (int j = 16; j < 68; j++) {
             W[j] = P1(W[j - 16] ^ W[j - 9] ^ Integer.rotateLeft(W[j - 3], 15))
@@ -74,18 +92,27 @@ public class SM3Digest {
         int A = V[0], B = V[1], C = V[2], D = V[3];
         int E = V[4], F = V[5], G = V[6], H = V[7];
 
-        for (int j = 0; j < 64; j++) {
-            int T = (j < 16) ? T_0_15 : T_16_63;
-            int SS1 = Integer.rotateLeft(Integer.rotateLeft(A, 12) + E + Integer.rotateLeft(T, j % 32), 7);
+        // 0-15 轮：FF1, GG1
+        for (int j = 0; j < 16; j++) {
+            int SS1 = Integer.rotateLeft(Integer.rotateLeft(A, 12) + E + T_ROTATED[j], 7);
             int SS2 = SS1 ^ Integer.rotateLeft(A, 12);
-            int TT1, TT2;
-            if (j < 16) {
-                TT1 = FF1(A, B, C) + D + SS2 + W1[j];
-                TT2 = GG1(E, F, G) + H + SS1 + W[j];
-            } else {
-                TT1 = FF2(A, B, C) + D + SS2 + W1[j];
-                TT2 = GG2(E, F, G) + H + SS1 + W[j];
-            }
+            int TT1 = (A ^ B ^ C) + D + SS2 + W1[j];
+            int TT2 = (E ^ F ^ G) + H + SS1 + W[j];
+            D = C;
+            C = Integer.rotateLeft(B, 9);
+            B = A;
+            A = TT1;
+            H = G;
+            G = Integer.rotateLeft(F, 19);
+            F = E;
+            E = P0(TT2);
+        }
+        // 16-63 轮：FF2, GG2
+        for (int j = 16; j < 64; j++) {
+            int SS1 = Integer.rotateLeft(Integer.rotateLeft(A, 12) + E + T_ROTATED[j], 7);
+            int SS2 = SS1 ^ Integer.rotateLeft(A, 12);
+            int TT1 = ((A & B) | (A & C) | (B & C)) + D + SS2 + W1[j];
+            int TT2 = ((E & F) | (~E & G)) + H + SS1 + W[j];
             D = C;
             C = Integer.rotateLeft(B, 9);
             B = A;
@@ -96,28 +123,44 @@ public class SM3Digest {
             E = P0(TT2);
         }
 
-        return new int[]{A ^ V[0], B ^ V[1], C ^ V[2], D ^ V[3],
-                E ^ V[4], F ^ V[5], G ^ V[6], H ^ V[7]};
+        out[0] = A ^ V[0];
+        out[1] = B ^ V[1];
+        out[2] = C ^ V[2];
+        out[3] = D ^ V[3];
+        out[4] = E ^ V[4];
+        out[5] = F ^ V[5];
+        out[6] = G ^ V[6];
+        out[7] = H ^ V[7];
     }
 
     private byte[] computeHash(byte[] msgAll) {
         byte[] padded = pad(msgAll);
         int n = padded.length / 64;
-        int[] v = IV.clone();
-        byte[] block = new byte[64];
+
+        System.arraycopy(IV, 0, stateA, 0, 8);
+        int[] inState = stateA;
+        int[] outState = stateB;
+
         for (int i = 0; i < n; i++) {
-            System.arraycopy(padded, i * 64, block, 0, 64);
-            v = CF(v, block);
+            CF(inState, padded, i * 64, outState);
+            int[] tmp = inState;
+            inState = outState;
+            outState = tmp;
         }
+
         byte[] result = new byte[32];
         for (int i = 0; i < 8; i++) {
-            intToBytesBE(v[i], result, i * 4);
+            intToBytesBE(inState[i], result, i * 4);
         }
         return result;
     }
 
     public void update(byte[] msg) {
         msgBuffer.write(msg, 0, msg.length);
+    }
+
+    public void update(byte[] msg, int offset, int len) {
+        msgBuffer.write(msg, offset, len);
     }
 
     public byte[] doFinal() {

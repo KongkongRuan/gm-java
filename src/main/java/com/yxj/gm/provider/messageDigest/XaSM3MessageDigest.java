@@ -11,12 +11,12 @@ public class XaSM3MessageDigest extends MessageDigestSpi implements Serializable
 
     @Override
     protected void engineUpdate(byte input) {
-
+        sm3.update(new byte[]{input});
     }
 
     @Override
     protected void engineUpdate(byte[] input, int offset, int len) {
-        sm3.update(input);
+        sm3.update(input, offset, len);
     }
 
     @Override
