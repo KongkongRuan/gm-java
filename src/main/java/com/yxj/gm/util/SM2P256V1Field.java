@@ -2,6 +2,8 @@ package com.yxj.gm.util;
 
 import java.math.BigInteger;
 
+import com.yxj.gm.util.JNI.Nat256Native;
+
 /**
  * SM2 P-256-V1 有限域快速算术
  *
@@ -18,6 +20,27 @@ public final class SM2P256V1Field {
             0xFFFFFFFF, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF,
             0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFE
     };
+
+    // ======================== 模逆 ========================
+
+    private static final BigInteger P_BI = toBigInteger(P);
+
+    public static void inv(int[] a, int[] r) {
+        if (Nat256Native.isAvailable()) {
+            try {
+                Nat256Native.nativeInv(a, r);
+                return;
+            } catch (Throwable t) {
+                Nat256Native.markUnavailable();
+            }
+        }
+        int[] tmp = fromBigInteger(toBigInteger(a).modInverse(P_BI));
+        System.arraycopy(tmp, 0, r, 0, 8);
+    }
+
+    public static void inv(int[] a, int[] r, int[] ext) {
+        inv(a, r);
+    }
 
     // ======================== 模加 / 模减 ========================
 
@@ -63,6 +86,28 @@ public final class SM2P256V1Field {
 
     public static void mul(int[] a, int[] b, int[] r) {
         int[] ext = new int[16];
+        mulCore(a, b, r, ext);
+    }
+
+    public static void mul(int[] a, int[] b, int[] r, int[] ext) {
+        for (int i = 0; i < 16; i++) ext[i] = 0;
+        mulCore(a, b, r, ext);
+    }
+
+    private static void mulCore(int[] a, int[] b, int[] r, int[] ext) {
+        if (Nat256Native.isAvailable()) {
+            try {
+                Nat256Native.nativeMulMod(a, b, r);
+                return;
+            } catch (Throwable t) {
+                Nat256Native.markUnavailable();
+            }
+        }
+        mulCoreJava(a, b, ext);
+        reduce(ext, r);
+    }
+
+    private static void mulCoreJava(int[] a, int[] b, int[] ext) {
         for (int i = 0; i < 8; i++) {
             long ai = a[i] & M;
             long carry = 0;
@@ -73,12 +118,31 @@ public final class SM2P256V1Field {
             }
             ext[i + 8] = (int) carry;
         }
-        reduce(ext, r);
     }
 
     public static void sqr(int[] a, int[] r) {
         int[] ext = new int[16];
+        sqrCore(a, r, ext);
+    }
 
+    public static void sqr(int[] a, int[] r, int[] ext) {
+        for (int i = 0; i < 16; i++) ext[i] = 0;
+        sqrCore(a, r, ext);
+    }
+
+    private static void sqrCore(int[] a, int[] r, int[] ext) {
+        if (Nat256Native.isAvailable()) {
+            try {
+                Nat256Native.nativeSqrMod(a, r);
+                return;
+            } catch (Throwable t) {
+                Nat256Native.markUnavailable();
+            }
+        }
+        sqrCoreJava(a, r, ext);
+    }
+
+    private static void sqrCoreJava(int[] a, int[] r, int[] ext) {
         for (int i = 0; i < 7; i++) {
             long ai = a[i] & M;
             long carry = 0;
@@ -112,6 +176,13 @@ public final class SM2P256V1Field {
         reduce(ext, r);
     }
 
+    static void sqrN(int[] a, int n, int[] r, int[] ext) {
+        sqr(a, r, ext);
+        for (int i = 1; i < n; i++) {
+            sqr(r, r, ext);
+        }
+    }
+
     // ======================== 乘以小常数 ========================
 
     public static void twice(int[] a, int[] r) {
@@ -134,7 +205,6 @@ public final class SM2P256V1Field {
             r[i] = (int) cc;
             cc >>>= 32;
         }
-        // cc is 0, 1, or 2. Add cc * R = cc * (1, 0, -1, 1, 0, 0, 0, 1) in LE
         if (cc != 0) {
             long c = (r[0] & M) + cc;  r[0] = (int) c; c >>= 32;
             c += (r[1] & M);           r[1] = (int) c; c >>= 32;
@@ -150,12 +220,6 @@ public final class SM2P256V1Field {
 
     // ======================== SM2 快速模归约 ========================
 
-    /**
-     * 将 512 位乘积 (int[16] 小端) 归约到 256 位 (mod p).
-     *
-     * 利用 2^256 ≡ 2^224 + 2^96 - 2^64 + 1 (mod p) 将高 256 位折叠.
-     * 所有系数通过代数推导, 对 x[8]..x[15] 的每个贡献直接累加到 r[0..7].
-     */
     public static void reduce(int[] ext, int[] r) {
         long x0 = ext[0] & M, x1 = ext[1] & M, x2 = ext[2] & M, x3 = ext[3] & M;
         long x4 = ext[4] & M, x5 = ext[5] & M, x6 = ext[6] & M, x7 = ext[7] & M;
@@ -173,7 +237,6 @@ public final class SM2P256V1Field {
 
         long cc;
 
-        // 第 1 轮: carry 传播
         cc = s0 >> 32; s0 &= M;
         s1 += cc; cc = s1 >> 32; s1 &= M;
         s2 += cc; cc = s2 >> 32; s2 &= M;
@@ -183,10 +246,8 @@ public final class SM2P256V1Field {
         s6 += cc; cc = s6 >> 32; s6 &= M;
         s7 += cc; cc = s7 >> 32; s7 &= M;
 
-        // R-reduce carry (cc ≈ 0..15)
         s0 += cc; s2 -= cc; s3 += cc; s7 += cc;
 
-        // 第 2 轮: carry 传播
         cc = s0 >> 32; s0 &= M;
         s1 += cc; cc = s1 >> 32; s1 &= M;
         s2 += cc; cc = s2 >> 32; s2 &= M;
@@ -196,10 +257,8 @@ public final class SM2P256V1Field {
         s6 += cc; cc = s6 >> 32; s6 &= M;
         s7 += cc; cc = s7 >> 32; s7 &= M;
 
-        // R-reduce carry (cc = 0 or 1)
         s0 += cc; s2 -= cc; s3 += cc; s7 += cc;
 
-        // 第 3 轮: final carry 传播
         cc = s0 >> 32; s0 &= M;
         s1 += cc; cc = s1 >> 32; s1 &= M;
         s2 += cc; cc = s2 >> 32; s2 &= M;
@@ -218,23 +277,38 @@ public final class SM2P256V1Field {
     // ======================== 内部辅助 ========================
 
     /**
-     * 如果 r >= p 则减去 p (常量时间)
+     * r >= p 时减去 p (常量时间), 使用栈上局部变量, 无堆分配
      */
     private static void subPCond(int[] r) {
-        long borrow = 0;
-        int[] d = new int[8];
-        for (int i = 0; i < 8; i++) {
-            borrow += (r[i] & M) - (P[i] & M);
-            d[i] = (int) borrow;
-            borrow >>= 32;
-        }
-        int mask = (int) borrow; // 0 if r >= p, -1 if r < p
-        for (int i = 0; i < 8; i++) {
-            r[i] = (d[i] & ~mask) | (r[i] & mask);
-        }
+        long borrow;
+        borrow = (r[0] & M) - 0xFFFFFFFFL;
+        int d0 = (int) borrow; borrow >>= 32;
+        borrow += (r[1] & M) - 0xFFFFFFFFL;
+        int d1 = (int) borrow; borrow >>= 32;
+        borrow += (r[2] & M);
+        int d2 = (int) borrow; borrow >>= 32;
+        borrow += (r[3] & M) - 0xFFFFFFFFL;
+        int d3 = (int) borrow; borrow >>= 32;
+        borrow += (r[4] & M) - 0xFFFFFFFFL;
+        int d4 = (int) borrow; borrow >>= 32;
+        borrow += (r[5] & M) - 0xFFFFFFFFL;
+        int d5 = (int) borrow; borrow >>= 32;
+        borrow += (r[6] & M) - 0xFFFFFFFFL;
+        int d6 = (int) borrow; borrow >>= 32;
+        borrow += (r[7] & M) - 0xFFFFFFFEL;
+        int d7 = (int) borrow; borrow >>= 32;
+
+        int mask = (int) borrow;
+        r[0] = (d0 & ~mask) | (r[0] & mask);
+        r[1] = (d1 & ~mask) | (r[1] & mask);
+        r[2] = (d2 & ~mask) | (r[2] & mask);
+        r[3] = (d3 & ~mask) | (r[3] & mask);
+        r[4] = (d4 & ~mask) | (r[4] & mask);
+        r[5] = (d5 & ~mask) | (r[5] & mask);
+        r[6] = (d6 & ~mask) | (r[6] & mask);
+        r[7] = (d7 & ~mask) | (r[7] & mask);
     }
 
-    /** 加 p, 用于 sub 结果为负时 */
     private static void addP(int[] r) {
         long cc = 0;
         for (int i = 0; i < 8; i++) {
@@ -244,10 +318,6 @@ public final class SM2P256V1Field {
         }
     }
 
-    /**
-     * 加 R = 2^224 + 2^96 - 2^64 + 1 (= 2^256 mod p)
-     * LE signed: [+1, 0, -1, +1, 0, 0, 0, +1]
-     */
     private static void addR(int[] r) {
         long cc = (r[0] & M) + 1; r[0] = (int) cc; cc >>= 32;
         cc += (r[1] & M); r[1] = (int) cc; cc >>= 32;
@@ -257,19 +327,6 @@ public final class SM2P256V1Field {
         cc += (r[5] & M); r[5] = (int) cc; cc >>= 32;
         cc += (r[6] & M); r[6] = (int) cc; cc >>= 32;
         cc += (r[7] & M) + 1; r[7] = (int) cc;
-    }
-
-    /** addR 并返回 carry */
-    private static long addRCarry(int[] r) {
-        long cc = (r[0] & M) + 1; r[0] = (int) cc; cc >>= 32;
-        cc += (r[1] & M); r[1] = (int) cc; cc >>= 32;
-        cc += (r[2] & M) - 1; r[2] = (int) cc; cc >>= 32;
-        cc += (r[3] & M) + 1; r[3] = (int) cc; cc >>= 32;
-        cc += (r[4] & M); r[4] = (int) cc; cc >>= 32;
-        cc += (r[5] & M); r[5] = (int) cc; cc >>= 32;
-        cc += (r[6] & M); r[6] = (int) cc; cc >>= 32;
-        cc += (r[7] & M) + 1; r[7] = (int) cc;
-        return cc >> 32;
     }
 
     // ======================== 工具方法 ========================

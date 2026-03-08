@@ -1,17 +1,15 @@
 package com.yxj.gm.SM3;
 
-import java.io.ByteArrayOutputStream;
-
 /**
  * SM3 哈希算法
  *
  * 性能优化：
- * - 压缩函数使用 int 寄存器运算，消除 byte[]/int 反复转换
- * - 消息扩展使用 int 数组，update 使用 ByteArrayOutputStream 避免 O(n²) 拼接
- * - 对象复用：W/W1/state 数组复用，减少 GC
- * - 预计算 T 的循环移位，消除重复计算
- * - 主循环拆分为 0-15 和 16-63，减少分支预测失败
- * - CF 直接读取 padded 的 offset，消除 block 拷贝
+ * - 直接 byte[] 缓冲区替代 ByteArrayOutputStream，避免 toByteArray() 拷贝
+ * - 压缩函数使用 int 寄存器运算
+ * - 消息扩展使用 int 数组复用
+ * - 预计算 T 的循环移位
+ * - 主循环拆分 0-15 和 16-63 减少分支
+ * - pad() 在缓冲区上原地操作，避免额外数组分配
  */
 public class SM3Digest {
 
@@ -23,7 +21,6 @@ public class SM3Digest {
     private static final int T_0_15 = 0x79cc4519;
     private static final int T_16_63 = 0x7a879d8a;
 
-    /** 预计算 T 的循环移位，避免主循环中重复计算 */
     private static final int[] T_ROTATED = new int[64];
     static {
         for (int j = 0; j < 64; j++) {
@@ -32,9 +29,9 @@ public class SM3Digest {
         }
     }
 
-    private ByteArrayOutputStream msgBuffer = new ByteArrayOutputStream();
+    private byte[] msgBuf = new byte[256];
+    private int msgLen = 0;
 
-    /** 复用的工作数组，避免每次 CF 分配 */
     private final int[] W = new int[68];
     private final int[] W1 = new int[64];
     private final int[] stateA = new int[8];
@@ -60,23 +57,6 @@ public class SM3Digest {
         return X ^ Integer.rotateLeft(X, 9) ^ Integer.rotateLeft(X, 17);
     }
 
-    private static byte[] pad(byte[] m) {
-        long bitLen = m.length * 8L;
-        long k = 448 - ((bitLen + 1) % 512);
-        if (k < 0) k += 512;
-        int totalBytes = (int) ((bitLen + 1 + k + 64) / 8);
-        byte[] result = new byte[totalBytes];
-        System.arraycopy(m, 0, result, 0, m.length);
-        result[m.length] = (byte) 0x80;
-        for (int i = 0; i < 8; i++) {
-            result[totalBytes - 1 - i] = (byte) (bitLen >>> (i * 8));
-        }
-        return result;
-    }
-
-    /**
-     * 压缩函数 - 直接读取 padded[offset..]，结果写入 out，无额外分配
-     */
     private void CF(int[] V, byte[] padded, int offset, int[] out) {
         for (int i = 0; i < 16; i++) {
             W[i] = bytesToIntBE(padded, offset + i * 4);
@@ -92,7 +72,6 @@ public class SM3Digest {
         int A = V[0], B = V[1], C = V[2], D = V[3];
         int E = V[4], F = V[5], G = V[6], H = V[7];
 
-        // 0-15 轮：FF1, GG1
         for (int j = 0; j < 16; j++) {
             int SS1 = Integer.rotateLeft(Integer.rotateLeft(A, 12) + E + T_ROTATED[j], 7);
             int SS2 = SS1 ^ Integer.rotateLeft(A, 12);
@@ -107,7 +86,6 @@ public class SM3Digest {
             F = E;
             E = P0(TT2);
         }
-        // 16-63 轮：FF2, GG2
         for (int j = 16; j < 64; j++) {
             int SS1 = Integer.rotateLeft(Integer.rotateLeft(A, 12) + E + T_ROTATED[j], 7);
             int SS2 = SS1 ^ Integer.rotateLeft(A, 12);
@@ -133,10 +111,35 @@ public class SM3Digest {
         out[7] = H ^ V[7];
     }
 
-    private byte[] computeHash(byte[] msgAll) {
-        byte[] padded = pad(msgAll);
-        int n = padded.length / 64;
+    private void ensureCapacity(int needed) {
+        if (needed > msgBuf.length) {
+            int newCap = Math.max(needed, msgBuf.length * 2);
+            byte[] nb = new byte[newCap];
+            System.arraycopy(msgBuf, 0, nb, 0, msgLen);
+            msgBuf = nb;
+        }
+    }
 
+    private byte[] computeHash(byte[] msg, int len) {
+        long bitLen = len * 8L;
+        long k = 448 - ((bitLen + 1) % 512);
+        if (k < 0) k += 512;
+        int totalBytes = (int) ((bitLen + 1 + k + 64) / 8);
+
+        byte[] padded;
+        if (msg.length >= totalBytes) {
+            padded = msg;
+        } else {
+            padded = new byte[totalBytes];
+            System.arraycopy(msg, 0, padded, 0, len);
+        }
+        padded[len] = (byte) 0x80;
+        for (int i = len + 1; i < totalBytes - 8; i++) padded[i] = 0;
+        for (int i = 0; i < 8; i++) {
+            padded[totalBytes - 1 - i] = (byte) (bitLen >>> (i * 8));
+        }
+
+        int n = totalBytes / 64;
         System.arraycopy(IV, 0, stateA, 0, 8);
         int[] inState = stateA;
         int[] outState = stateB;
@@ -156,28 +159,37 @@ public class SM3Digest {
     }
 
     public void update(byte[] msg) {
-        msgBuffer.write(msg, 0, msg.length);
+        ensureCapacity(msgLen + msg.length);
+        System.arraycopy(msg, 0, msgBuf, msgLen, msg.length);
+        msgLen += msg.length;
     }
 
     public void update(byte[] msg, int offset, int len) {
-        msgBuffer.write(msg, offset, len);
+        ensureCapacity(msgLen + len);
+        System.arraycopy(msg, offset, msgBuf, msgLen, len);
+        msgLen += len;
     }
 
     public byte[] doFinal() {
-        byte[] data = msgBuffer.toByteArray();
-        msgBuffer.reset();
-        if (data.length == 0) {
+        if (msgLen == 0) {
             throw new RuntimeException("请添加要计算的值");
         }
-        return computeHash(data);
+        long bitLen = msgLen * 8L;
+        long k = 448 - ((bitLen + 1) % 512);
+        if (k < 0) k += 512;
+        int totalBytes = (int) ((bitLen + 1 + k + 64) / 8);
+        ensureCapacity(totalBytes);
+        byte[] result = computeHash(msgBuf, msgLen);
+        msgLen = 0;
+        return result;
     }
 
     public byte[] doFinal(byte[] msg) {
-        msgBuffer.reset();
-        return computeHash(msg);
+        msgLen = 0;
+        return computeHash(msg, msg.length);
     }
 
     public void msgAllReset() {
-        msgBuffer.reset();
+        msgLen = 0;
     }
 }

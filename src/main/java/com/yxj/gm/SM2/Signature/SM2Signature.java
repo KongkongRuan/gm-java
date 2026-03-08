@@ -3,6 +3,7 @@ package com.yxj.gm.SM2.Signature;
 
 import com.yxj.gm.SM3.SM3Digest;
 import com.yxj.gm.constant.SM2Constant;
+import com.yxj.gm.util.JNI.Nat256Native;
 import com.yxj.gm.util.SM2Util;
 
 import java.math.BigInteger;
@@ -19,34 +20,68 @@ import java.security.SecureRandom;
 public class SM2Signature {
 
     private static final BigInteger TWO = BigInteger.valueOf(2);
+    private static final BigInteger N_MINUS_2 = SM2Constant.getBigN().subtract(TWO);
+    private static final ThreadLocal<SecureRandom> SECURE_RANDOM = ThreadLocal.withInitial(SecureRandom::new);
+
+    private static final ThreadLocal<byte[]> cachedPriKey = new ThreadLocal<>();
+    private static final ThreadLocal<BigInteger> cachedDaInverse = new ThreadLocal<>();
+    private static final ThreadLocal<byte[]> cachedDaInvBytes = new ThreadLocal<>();
 
     private byte[][] internalSignature(byte[] msg, byte[] dA, byte[] Za) {
-        byte[] M_ = new byte[Za.length + msg.length];
-        System.arraycopy(Za, 0, M_, 0, Za.length);
-        System.arraycopy(msg, 0, M_, Za.length, msg.length);
         SM3Digest sm3Digest = new SM3Digest();
-        sm3Digest.update(M_);
+        sm3Digest.update(Za);
+        sm3Digest.update(msg);
         byte[] e = sm3Digest.doFinal();
 
-        BigInteger bigE = new BigInteger(1, e);
+        SecureRandom secureRandom = SECURE_RANDOM.get();
         BigInteger bigN = SM2Constant.getBigN();
-        BigInteger nMinus2 = bigN.subtract(TWO);
-        SecureRandom secureRandom = new SecureRandom();
 
+        BigInteger bigDa = new BigInteger(1, dA);
+        byte[] daInvBytes;
+        byte[] cached = cachedPriKey.get();
+        if (cached != null && java.util.Arrays.equals(cached, dA)) {
+            daInvBytes = cachedDaInvBytes.get();
+        } else {
+            BigInteger daInv = bigDa.add(BigInteger.ONE).modInverse(bigN);
+            daInvBytes = SM2Util.toFixedBytes(daInv, 32);
+            cachedPriKey.set(dA.clone());
+            cachedDaInvBytes.set(daInvBytes);
+            cachedDaInverse.set(daInv);
+        }
+
+        if (Nat256Native.isAvailable()) {
+            try {
+                byte[] kBytes = new byte[32];
+                byte[] outRS = new byte[64];
+                while (true) {
+                    secureRandom.nextBytes(kBytes);
+                    if (Nat256Native.nativeSignCore(e, dA, daInvBytes, kBytes, outRS) == 1) {
+                        byte[][] result = new byte[2][32];
+                        System.arraycopy(outRS, 0, result[0], 0, 32);
+                        System.arraycopy(outRS, 32, result[1], 0, 32);
+                        return result;
+                    }
+                }
+            } catch (Throwable t) {
+                Nat256Native.markUnavailable();
+            }
+        }
+
+        BigInteger daInv = cachedDaInverse.get();
+        BigInteger bigE = new BigInteger(1, e);
         BigInteger r, bigK;
         do {
             byte[] kBytes = new byte[32];
             do {
                 secureRandom.nextBytes(kBytes);
                 bigK = new BigInteger(1, kBytes);
-            } while (bigK.compareTo(BigInteger.ONE) < 0 || bigK.compareTo(nMinus2) > 0);
+            } while (bigK.compareTo(BigInteger.ONE) < 0 || bigK.compareTo(N_MINUS_2) > 0);
 
             BigInteger[] kG = SM2Util.fixedBaseMultiply(bigK);
             r = bigE.add(kG[0]).mod(bigN);
         } while (r.signum() == 0 || r.add(bigK).equals(bigN));
 
-        BigInteger bigDa = new BigInteger(1, dA);
-        BigInteger s = bigDa.add(BigInteger.ONE).modInverse(bigN)
+        BigInteger s = daInv
                 .multiply(bigK.subtract(r.multiply(bigDa)).mod(bigN)).mod(bigN);
 
         byte[][] result = new byte[2][32];
@@ -56,18 +91,18 @@ public class SM2Signature {
     }
 
     private boolean internalVerify(byte[] M, byte[][] rs, byte[] Za, byte[] pubKey) {
-        byte[] Xa = new byte[32];
-        byte[] Ya = new byte[32];
-        System.arraycopy(pubKey, 0, Xa, 0, 32);
-        System.arraycopy(pubKey, 32, Ya, 0, 32);
-
-        byte[] M_ = new byte[Za.length + M.length];
-        System.arraycopy(Za, 0, M_, 0, Za.length);
-        System.arraycopy(M, 0, M_, Za.length, M.length);
-
         SM3Digest sm3Digest = new SM3Digest();
-        sm3Digest.update(M_);
+        sm3Digest.update(Za);
+        sm3Digest.update(M);
         byte[] e = sm3Digest.doFinal();
+
+        if (Nat256Native.isAvailable()) {
+            try {
+                return Nat256Native.nativeVerifyCore(e, rs[0], rs[1], pubKey);
+            } catch (Throwable t) {
+                Nat256Native.markUnavailable();
+            }
+        }
 
         BigInteger bigE = new BigInteger(1, e);
         BigInteger bigR = new BigInteger(1, rs[0]);
@@ -78,6 +113,10 @@ public class SM2Signature {
             return false;
         }
 
+        byte[] Xa = new byte[32];
+        byte[] Ya = new byte[32];
+        System.arraycopy(pubKey, 0, Xa, 0, 32);
+        System.arraycopy(pubKey, 32, Ya, 0, 32);
         BigInteger px = new BigInteger(1, Xa);
         BigInteger py = new BigInteger(1, Ya);
 

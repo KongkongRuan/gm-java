@@ -125,40 +125,42 @@ public class SM4Cipher {
         return rk;
     }
 
-    /**
-     * 单 block 加密（int 轮密钥）
-     */
     private byte[] cipherCore(byte[] in, int[] rk) {
-        int x0 = bytesToIntBE(in, 0), x1 = bytesToIntBE(in, 4);
-        int x2 = bytesToIntBE(in, 8), x3 = bytesToIntBE(in, 12);
+        byte[] out = new byte[16];
+        cipherCoreOff(in, 0, out, 0, rk);
+        return out;
+    }
+
+    private byte[] decryptCore(byte[] in, int[] rk) {
+        byte[] out = new byte[16];
+        decryptCoreOff(in, 0, out, 0, rk);
+        return out;
+    }
+
+    private static void cipherCoreOff(byte[] in, int inOff, byte[] out, int outOff, int[] rk) {
+        int x0 = bytesToIntBE(in, inOff), x1 = bytesToIntBE(in, inOff + 4);
+        int x2 = bytesToIntBE(in, inOff + 8), x3 = bytesToIntBE(in, inOff + 12);
         for (int i = 0; i < 32; i++) {
             int tmp = x0 ^ tInt(x1 ^ x2 ^ x3 ^ rk[i]);
             x0 = x1; x1 = x2; x2 = x3; x3 = tmp;
         }
-        byte[] out = new byte[16];
-        intToBytesBE(x3, out, 0);
-        intToBytesBE(x2, out, 4);
-        intToBytesBE(x1, out, 8);
-        intToBytesBE(x0, out, 12);
-        return out;
+        intToBytesBE(x3, out, outOff);
+        intToBytesBE(x2, out, outOff + 4);
+        intToBytesBE(x1, out, outOff + 8);
+        intToBytesBE(x0, out, outOff + 12);
     }
 
-    /**
-     * 单 block 解密（int 轮密钥）
-     */
-    private byte[] decryptCore(byte[] in, int[] rk) {
-        int x0 = bytesToIntBE(in, 0), x1 = bytesToIntBE(in, 4);
-        int x2 = bytesToIntBE(in, 8), x3 = bytesToIntBE(in, 12);
+    private static void decryptCoreOff(byte[] in, int inOff, byte[] out, int outOff, int[] rk) {
+        int x0 = bytesToIntBE(in, inOff), x1 = bytesToIntBE(in, inOff + 4);
+        int x2 = bytesToIntBE(in, inOff + 8), x3 = bytesToIntBE(in, inOff + 12);
         for (int i = 31; i >= 0; i--) {
             int tmp = x0 ^ tInt(x1 ^ x2 ^ x3 ^ rk[i]);
             x0 = x1; x1 = x2; x2 = x3; x3 = tmp;
         }
-        byte[] out = new byte[16];
-        intToBytesBE(x3, out, 0);
-        intToBytesBE(x2, out, 4);
-        intToBytesBE(x1, out, 8);
-        intToBytesBE(x0, out, 12);
-        return out;
+        intToBytesBE(x3, out, outOff);
+        intToBytesBE(x2, out, outOff + 4);
+        intToBytesBE(x1, out, outOff + 8);
+        intToBytesBE(x0, out, outOff + 12);
     }
 
     // ==================== CTR 计数器直接操作 ====================
@@ -232,37 +234,39 @@ public class SM4Cipher {
     // ==================== int 轮密钥版本的分组加解密 ====================
 
     private byte[] blockEncryptECBInt(byte[] m, int[] rk) {
-        m = padding(m);
-        byte[][] block = block(m);
-        byte[][] result = new byte[block.length][16];
-        for (int i = 0; i < block.length; i++) {
-            result[i] = cipherCore(block[i], rk);
+        byte[] padded = padding(m);
+        int blocks = padded.length / 16;
+        byte[] result = new byte[padded.length];
+        for (int i = 0; i < blocks; i++) {
+            cipherCoreOff(padded, i * 16, result, i * 16, rk);
         }
-        return merge(result);
+        return result;
     }
 
     private byte[] blockEncryptCBCInt(byte[] m, byte[] iv, int[] rk) {
-        m = padding(m);
-        byte[][] block = block(m);
-        byte[][] result = new byte[block.length][16];
-        byte[] xorTemp = iv;
-        for (int i = 0; i < block.length; i++) {
-            result[i] = cipherCore(xorBytes(block[i], xorTemp), rk);
-            xorTemp = result[i];
+        byte[] padded = padding(m);
+        int blocks = padded.length / 16;
+        byte[] result = new byte[padded.length];
+        for (int j = 0; j < 16; j++) padded[j] ^= iv[j];
+        cipherCoreOff(padded, 0, result, 0, rk);
+        for (int i = 1; i < blocks; i++) {
+            int off = i * 16;
+            for (int j = 0; j < 16; j++) padded[off + j] ^= result[off - 16 + j];
+            cipherCoreOff(padded, off, result, off, rk);
         }
-        return merge(result);
+        return result;
     }
 
     private byte[] blockEncryptCTRInt(byte[] m, byte[] iv, int[] rk) {
         if (iv.length != 16) {
             throw new RuntimeException("iv 长度错误 iv len=" + iv.length);
         }
-        byte[][] blocks = block(m);
-        byte[][] mis = new byte[blocks.length][16];
-        int procs = Math.min(processorCount, blocks.length);
+        int totalBlocks = (m.length + 15) / 16;
+        byte[] result = new byte[m.length];
+        int procs = Math.min(processorCount, totalBlocks);
 
-        long size = blocks.length / procs;
-        long remainder = blocks.length % procs;
+        long size = totalBlocks / procs;
+        long remainder = totalBlocks % procs;
         CountDownLatch latch = new CountDownLatch(procs);
 
         for (int j = 0; j < procs; j++) {
@@ -273,15 +277,12 @@ public class SM4Cipher {
             long finalStart = start;
             THREAD_POOL.execute(() -> {
                 byte[] curIv = threadIv;
+                byte[] cipherBuf = new byte[16];
                 for (int i = (int) finalStart; i < finalEnd; i++) {
-                    byte[] cipher = cipherCore(curIv, rk);
-                    if (blocks[i].length != cipher.length) {
-                        byte[] tempCipher = new byte[blocks[i].length];
-                        System.arraycopy(cipher, 0, tempCipher, 0, blocks[i].length);
-                        cipher = tempCipher;
-                    }
-                    mis[i] = xorBytes(blocks[i], cipher);
-                    curIv = curIv.clone();
+                    cipherCoreOff(curIv, 0, cipherBuf, 0, rk);
+                    int off = i * 16;
+                    int len = Math.min(16, m.length - off);
+                    for (int b = 0; b < len; b++) result[off + b] = (byte)(m[off + b] ^ cipherBuf[b]);
                     incrementCounter(curIv);
                 }
                 latch.countDown();
@@ -292,29 +293,29 @@ public class SM4Cipher {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        return merge(mis);
+        return result;
     }
 
     private byte[] blockDecryptECBInt(byte[] m, int[] rk) {
-        byte[][] block = block(m);
-        byte[][] result = new byte[block.length][16];
-        for (int i = 0; i < block.length; i++) {
-            result[i] = decryptCore(block[i], rk);
+        int blocks = m.length / 16;
+        byte[] result = new byte[m.length];
+        for (int i = 0; i < blocks; i++) {
+            decryptCoreOff(m, i * 16, result, i * 16, rk);
         }
-        byte[] merged = merge(result);
-        return unPadding(merged);
+        return unPadding(result);
     }
 
     private byte[] blockDecryptCBCInt(byte[] m, byte[] iv, int[] rk) {
-        byte[][] block = block(m);
-        byte[][] result = new byte[block.length][16];
-        byte[] xorTemp = iv;
-        for (int i = 0; i < block.length; i++) {
-            result[i] = xorBytes(decryptCore(block[i], rk), xorTemp);
-            xorTemp = block[i];
+        int blocks = m.length / 16;
+        byte[] result = new byte[m.length];
+        for (int i = 0; i < blocks; i++) {
+            int off = i * 16;
+            decryptCoreOff(m, off, result, off, rk);
+            byte[] xorWith = (i == 0) ? iv : m;
+            int xorOff = (i == 0) ? 0 : off - 16;
+            for (int j = 0; j < 16; j++) result[off + j] ^= xorWith[xorOff + j];
         }
-        byte[] merged = merge(result);
-        return unPadding(merged);
+        return unPadding(result);
     }
 
     // ==================== 内部工具方法 ====================
