@@ -20,10 +20,12 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 <dependency>
     <groupId>io.github.kongkongruan</groupId>
     <artifactId>gm-java</artifactId>
-    <version>3.0.0</version>
+    <version>3.1.0</version>
 </dependency>
 ```
- - 下载源码编译之后引入或者直接下载gm-java-3.0.0.jar引入
+ - 下载源码编译之后引入或者直接下载gm-java-3.1.0.jar引入
+### 3.1.0更新内容
+修复依赖中的bug并解决BC库依赖传递问题
 ### 3.0.0更新内容
 使用JNI对SM2进行了专门优化(JNI加载失败会自动降级使用原生JAVA)，除了SM2验签gm-java慢 43.8%，其余的均超过BC库的最新版本的SM2P256V1曲线
 ##### SM2 验签的 Shamir 双标量乘法需要 ~258 次倍点 + ~80 次加点，这是算法固有成本。SM2 曲线 a ≠ 0 且 p ≡ 2 (mod 3)，不支持 GLV 自同态分解（需要 a=0 或 p ≡ 1 mod 3）。BC 的 HotSpot C2 JIT 编译器对纯 Java long 算术优化极致，在此场景下接近 C 性能。进一步优化方向：x86-64 BMI2/ADX 汇编优化 Montgomery 乘法内循环。
