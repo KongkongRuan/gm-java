@@ -34,7 +34,7 @@ public class Request extends ASN1Object implements ASN1Choice {
                 value = RevokeKeyReq.getInstance(choice, false);
                 break;
             default:
-                throw new IllegalArgumentException("Unknown tag encountered: " + ASN1Util.getTagText(choice));
+                throw new IllegalArgumentException("Unknown tag encountered: " + choice.getTagNo());
         }
 
         this.tagNo = tagNo;

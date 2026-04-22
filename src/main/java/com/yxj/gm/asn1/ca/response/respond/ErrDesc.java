@@ -5,7 +5,7 @@ import org.bouncycastle.asn1.*;
 public class ErrDesc extends ASN1Object {
 
 
-    private ASN1UTF8String errDescUTF8;
+    private DERUTF8String errDescUTF8;
 
 
     public static ErrDesc getInstance(ASN1TaggedObject obj, boolean explicit)
@@ -21,13 +21,13 @@ public class ErrDesc extends ASN1Object {
         }
     }
 
-    public ErrDesc(ASN1UTF8String errDescUTF8){
+    public ErrDesc(DERUTF8String errDescUTF8){
         this.errDescUTF8=errDescUTF8;
     }
 
     public ErrDesc(ASN1Sequence sequence) {
         if (sequence.size() == 1) {
-            errDescUTF8 = ASN1UTF8String.getInstance(sequence.getObjectAt(0));
+            errDescUTF8 = DERUTF8String.getInstance(sequence.getObjectAt(0));
         } else {
             throw new IllegalArgumentException("Bad sequence size: " + sequence.size());
         }

@@ -10,11 +10,13 @@ import com.yxj.gm.util.FileUtils;
 import org.apache.commons.lang3.ArrayUtils;
 import org.bouncycastle.asn1.x509.KeyUsage;
 import org.bouncycastle.util.encoders.Hex;
-import sun.security.x509.X509CertInfo;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.security.cert.CertificateParsingException;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 
 public class CertTest {
     /**
@@ -100,7 +102,7 @@ public class CertTest {
 ////        CertPaser.parseCert(FileUtils.readFileToByteArray(cert));
 //    }
 
-    public static void main(String[] args) throws IOException, CertificateParsingException {
+    public static void main(String[] args) throws IOException {
 //        UseKey useKey = new UseKey();
 //        HashMap<String, String> plainMap = new HashMap<>();
 //        plainMap.put("cacert", "-----BEGIN CERTIFICATE-----\nMIIBXjCCAQOgAwIBAgIKvdbGslG3QIaksTAKBggqgRzPVQGDdTApMQswCQYDVQQG\nEwJDTjELMAkGA1UEBwwCQkoxDTALBgNVBAoMBEhOQ0EwHhcNMjEwMzAxMDI1MzMx\nWhcNMzEwMzAxMDI1MzMxWjApMQswCQYDVQQGEwJDTjELMAkGA1UEBwwCQkoxDTAL\nBgNVBAoMBEhOQ0EwWTATBgcqhkjOPQIBBggqgRzPVQGCLQNCAAQEyvJJe/dCtvBk\n/+zkP0WI8Yizlfe7ripxkIxGGGghBs99H0mTjsdcH9bolAnedUpkipgkohfx69OD\nlrYumF7noxMwETAPBgNVHRMECDAGAQH/AgF/MAoGCCqBHM9VAYN1A0kAMEYCIQCm\nPhiYrz8OuW34cj/+Tojzq77jV5k+NBC9+Om3+s3nmAIhAIc4VTj+sRvlLmBaqlKw\ni/e6Hh67hn95DrWKaAAimYH4\n-----END CERTIFICATE-----");
@@ -110,8 +112,37 @@ public class CertTest {
 //            useKey.getCert("X509","C=CN,L=BJ,O=KMS","O=HNCA,L=BJ,C=CN",caCert,0,0,new byte[32],keyPair.getPrivate().getEncoded(),keyPair.getPublic().getEncoded(),1,10,0);
 //
 //        }
-        X509CertInfo x509CertInfo = new X509CertInfo(FileUtils.readFileToByteArray(new File("D:\\certtest\\zjhAndJava\\old\\SM2CERT_1_62_1671428432529.pem")));
-        System.out.println(x509CertInfo);
+        byte[] certificateBytes = FileUtils.readFileToByteArray(new File("D:\\certtest\\zjhAndJava\\old\\SM2CERT_1_62_1671428432529.pem"));
+        printCertificate(certificateBytes);
+    }
+
+    private static void printCertificate(byte[] certificateBytes) {
+        try {
+            X509Certificate certificate = loadX509Certificate(certificateBytes);
+            System.out.println(certificate);
+        } catch (CertificateException e) {
+            // Fall back to the project's parser when the JDK provider cannot materialize the certificate.
+            CertParseVo certParseVo = CertResolver.parseCert(certificateBytes);
+            System.out.println(certParseVo);
+        }
+    }
+
+    private static X509Certificate loadX509Certificate(byte[] certificateBytes) throws CertificateException {
+        CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
+        return (X509Certificate) certificateFactory.generateCertificate(new ByteArrayInputStream(normalizeCertificateBytes(certificateBytes)));
+    }
+
+    private static byte[] normalizeCertificateBytes(byte[] certificateBytes) throws CertificateException {
+        if (certificateBytes.length == 0) {
+            throw new CertificateException("Certificate content is empty");
+        }
+        if (certificateBytes[0] == 0x30) {
+            return certificateBytes;
+        }
+        if (certificateBytes[0] == 0x2d) {
+            return FileUtils.pemToASN1ByteArray(certificateBytes);
+        }
+        throw new CertificateException("Unsupported certificate encoding");
 
     }
 }

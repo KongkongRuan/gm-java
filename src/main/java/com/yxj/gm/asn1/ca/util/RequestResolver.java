@@ -99,14 +99,14 @@ public class RequestResolver {
                                             DLTaggedObject dlTaggedObject = (DLTaggedObject)primitive;
                                             int tagNo = dlTaggedObject.getTagNo();
                                             if (caApplyKeyReq.getEntName() == null && tagNo == 4) {
-                                                ASN1Object baseObject = dlTaggedObject.getBaseObject();
+                                                ASN1Primitive baseObject = dlTaggedObject.getObject();
                                                 if (baseObject instanceof DLSequence) {
                                                     X500Name x500Name = X500Name.getInstance(baseObject);
                                                     caApplyKeyReq.setEntName(x500Name.toString());
                                                 }
                                             } else {
                                                 caApplyKeyReq.setApplyType(ApplyTypeEnum.stateOf(tagNo));
-                                                ASN1Object baseObject = dlTaggedObject.getBaseObject();
+                                                ASN1Primitive baseObject = dlTaggedObject.getObject();
                                                 if (baseObject instanceof DLSequence) {
                                                     DLSequence dlSequence = (DLSequence)baseObject;
                                                     ASN1SequenceParser parser2_1 = dlSequence.parser();
@@ -182,7 +182,7 @@ public class RequestResolver {
                                                                     }
                                                                     if (primitive instanceof DLTaggedObject) {
                                                                         DLTaggedObject dlTaggedObject1 = (DLTaggedObject)primitive;
-                                                                        ASN1Object baseObject1 = dlTaggedObject1.getBaseObject();
+                                                                        ASN1Primitive baseObject1 = dlTaggedObject1.getObject();
                                                                         int tagNo1 = dlTaggedObject1.getTagNo();
                                                                         if (tagNo1 == 0) {
                                                                             DEROctetString userName = (DEROctetString)baseObject1;

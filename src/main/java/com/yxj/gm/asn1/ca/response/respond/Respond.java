@@ -32,7 +32,7 @@ public class Respond extends ASN1Object implements ASN1Choice {
                 value = ErrorPkgRespond.getInstance(choice, false);
                 break;
             default:
-                throw new IllegalArgumentException("Unknown tag encountered: " + ASN1Util.getTagText(choice));
+                throw new IllegalArgumentException("Unknown tag encountered: " + choice.getTagNo());
         }
 
         this.tagNo = tagNo;

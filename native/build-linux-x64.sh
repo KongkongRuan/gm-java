@@ -6,8 +6,10 @@
 JAVA_HOME="${1:-${JAVA_HOME:-/usr/lib/jvm/default-java}}"
 INC="$JAVA_HOME/include"
 INC_LINUX="$JAVA_HOME/include/linux"
-OUT="../src/main/resources/native/linux-x86_64/libnat256mul.so"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+OUT="$SCRIPT_DIR/../src/main/resources/native/linux-x86_64/libnat256mul.so"
+SRC="$SCRIPT_DIR/native_mul.c"
 
 mkdir -p "$(dirname "$OUT")"
-gcc -shared -O3 -march=native -fPIC -I"$INC" -I"$INC_LINUX" -o "$OUT" native_mul.c
+gcc -shared -O3 -march=x86-64 -mtune=generic -fPIC -I"$INC" -I"$INC_LINUX" -o "$OUT" "$SRC"
 echo "Build OK: $OUT"

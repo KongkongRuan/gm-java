@@ -401,8 +401,7 @@ public class ASN1Util {
                             DLTaggedObject dlTaggedObject = (DLTaggedObject) primitive;
                             int tagNo = dlTaggedObject.getTagNo();
                             if(tagNo==1){
-                                ASN1Object baseObject = dlTaggedObject.getBaseObject();
-//                                ASN1Primitive baseObject = derTaggedObject.getObject();
+                                ASN1Primitive baseObject = dlTaggedObject.getObject();
                                 if(baseObject instanceof DERBitString){
                                     DERBitString derBitString = (DERBitString) baseObject;
                                     byte[] priKeyWitchHead = derBitString.getBytes();

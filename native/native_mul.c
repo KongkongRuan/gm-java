@@ -7,12 +7,15 @@
  * Internal representation: uint64_t[4] in Montgomery form (aR mod p).
  * JNI boundary converts between uint32_t[8] (little-endian) and Montgomery form.
  *
- * Build: gcc -shared -O3 -fPIC -march=native -funroll-loops -flto ...
+ * Build: gcc -shared -O3 -fPIC -march=x86-64 -mtune=generic ...
  */
 #include <jni.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
+#include <cpuid.h>
+#endif
 
 #ifdef __SIZEOF_INT128__
 typedef unsigned __int128 uint128_t;
@@ -22,8 +25,66 @@ typedef signed   __int128 int128_t;
 #define HAS_INT128 0
 #endif
 
+#if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
+#define GM_HAS_X86_RUNTIME_DISPATCH 1
+#else
+#define GM_HAS_X86_RUNTIME_DISPATCH 0
+#endif
+
+#if GM_HAS_X86_RUNTIME_DISPATCH
+#define GM_TARGET_BMI2 __attribute__((target("bmi2")))
+#define GM_TARGET_BMI2_ADX __attribute__((target("bmi2,adx")))
+#else
+#define GM_TARGET_BMI2
+#define GM_TARGET_BMI2_ADX
+#endif
+
 typedef uint64_t felem[4];
 typedef uint64_t felem_wide[8]; /* 512-bit */
+typedef void (*felem_mul_impl)(const felem a, const felem b, felem r);
+
+static void mont_mul_generic(const felem a, const felem b, felem r);
+static void modn_mul_generic(const felem a, const felem b, felem r);
+#if GM_HAS_X86_RUNTIME_DISPATCH && HAS_INT128
+GM_TARGET_BMI2 static void mont_mul_bmi2(const felem a, const felem b, felem r);
+GM_TARGET_BMI2_ADX static void mont_mul_bmi2_adx(const felem a, const felem b, felem r);
+GM_TARGET_BMI2 static void modn_mul_bmi2(const felem a, const felem b, felem r);
+GM_TARGET_BMI2_ADX static void modn_mul_bmi2_adx(const felem a, const felem b, felem r);
+#endif
+static felem_mul_impl g_mont_mul_impl = mont_mul_generic;
+static felem_mul_impl g_modn_mul_impl = modn_mul_generic;
+static volatile int g_runtime_dispatch_ready = 0;
+
+static inline void mont_mul(const felem a, const felem b, felem r) {
+    g_mont_mul_impl(a, b, r);
+}
+
+static inline void modn_mul(const felem a, const felem b, felem r) {
+    g_modn_mul_impl(a, b, r);
+}
+
+static void ensure_runtime_dispatch(void) {
+    if (g_runtime_dispatch_ready) return;
+#if GM_HAS_X86_RUNTIME_DISPATCH && HAS_INT128
+    unsigned int eax, ebx, ecx, edx;
+    if (__get_cpuid_max(0, NULL) >= 7 &&
+        __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx)) {
+        int has_bmi2 = (ebx & bit_BMI2) != 0;
+        int has_adx = (ebx & bit_ADX) != 0;
+        if (has_bmi2 && has_adx) {
+            g_mont_mul_impl = mont_mul_bmi2_adx;
+            g_modn_mul_impl = modn_mul_bmi2_adx;
+        } else if (has_bmi2) {
+            g_mont_mul_impl = mont_mul_bmi2;
+            g_modn_mul_impl = modn_mul_bmi2;
+        }
+    }
+#endif
+#if defined(__GNUC__) || defined(__clang__)
+    __sync_synchronize();
+#endif
+    g_runtime_dispatch_ready = 1;
+}
 
 /* ================================================================
  * Section 1 — SM2 constants (64-bit limb, little-endian)
@@ -91,54 +152,62 @@ static inline void u64_to_u32(const felem s, uint32_t *d) {
  * at each step is simply z[0] — no multiplication by p' needed.
  * ================================================================ */
 #if HAS_INT128
-static void mont_mul(const felem a, const felem b, felem r) {
-    uint64_t z0=0, z1=0, z2=0, z3=0, z4=0;
-
-    for (int i = 0; i < 4; i++) {
-        /* z += a[i] * b */
-        uint128_t carry = (uint128_t)a[i] * b[0] + z0;
-        z0 = (uint64_t)carry; carry >>= 64;
-        carry += (uint128_t)a[i] * b[1] + z1;
-        z1 = (uint64_t)carry; carry >>= 64;
-        carry += (uint128_t)a[i] * b[2] + z2;
-        z2 = (uint64_t)carry; carry >>= 64;
-        carry += (uint128_t)a[i] * b[3] + z3;
-        z3 = (uint64_t)carry; carry >>= 64;
-        uint128_t c1 = (uint128_t)(uint64_t)carry + z4;
-
-        /* z += z[0] * p  (Montgomery reduction, m = z[0] since p' = 1) */
-        uint64_t m = z0;
-        carry = (uint128_t)m * P64[0] + z0;
-        /* z0 becomes 0 by construction */ carry >>= 64;
-        carry += (uint128_t)m * P64[1] + z1;
-        z1 = (uint64_t)carry; carry >>= 64;
-        carry += (uint128_t)m * P64[2] + z2;
-        z2 = (uint64_t)carry; carry >>= 64;
-        carry += (uint128_t)m * P64[3] + z3;
-        z3 = (uint64_t)carry; carry >>= 64;
-        c1 += (uint64_t)carry;
-
-        /* shift right by 1 limb */
-        z0 = z1; z1 = z2; z2 = z3; z3 = (uint64_t)c1; z4 = (uint64_t)(c1 >> 64);
-    }
-
-    /* conditional subtraction: if z >= p, z -= p */
-    uint64_t d[4];
-    int128_t bw = (int128_t)z0 - P64[0]; d[0]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z1 - P64[1];         d[1]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z2 - P64[2];         d[2]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z3 - P64[3];         d[3]=(uint64_t)bw; bw>>=64;
-    bw += z4;
-
-    uint64_t mask = (uint64_t)((int64_t)bw >> 63);
-    r[0] = (z0 & mask) | (d[0] & ~mask);
-    r[1] = (z1 & mask) | (d[1] & ~mask);
-    r[2] = (z2 & mask) | (d[2] & ~mask);
-    r[3] = (z3 & mask) | (d[3] & ~mask);
+#define DEFINE_MONT_MUL(NAME, ATTR) \
+ATTR static void NAME(const felem a, const felem b, felem r) { \
+    uint64_t z0=0, z1=0, z2=0, z3=0, z4=0; \
+\
+    for (int i = 0; i < 4; i++) { \
+        /* z += a[i] * b */ \
+        uint128_t carry = (uint128_t)a[i] * b[0] + z0; \
+        z0 = (uint64_t)carry; carry >>= 64; \
+        carry += (uint128_t)a[i] * b[1] + z1; \
+        z1 = (uint64_t)carry; carry >>= 64; \
+        carry += (uint128_t)a[i] * b[2] + z2; \
+        z2 = (uint64_t)carry; carry >>= 64; \
+        carry += (uint128_t)a[i] * b[3] + z3; \
+        z3 = (uint64_t)carry; carry >>= 64; \
+        uint128_t c1 = (uint128_t)(uint64_t)carry + z4; \
+\
+        /* z += z[0] * p  (Montgomery reduction, m = z[0] since p' = 1) */ \
+        uint64_t m = z0; \
+        carry = (uint128_t)m * P64[0] + z0; \
+        /* z0 becomes 0 by construction */ carry >>= 64; \
+        carry += (uint128_t)m * P64[1] + z1; \
+        z1 = (uint64_t)carry; carry >>= 64; \
+        carry += (uint128_t)m * P64[2] + z2; \
+        z2 = (uint64_t)carry; carry >>= 64; \
+        carry += (uint128_t)m * P64[3] + z3; \
+        z3 = (uint64_t)carry; carry >>= 64; \
+        c1 += (uint64_t)carry; \
+\
+        /* shift right by 1 limb */ \
+        z0 = z1; z1 = z2; z2 = z3; z3 = (uint64_t)c1; z4 = (uint64_t)(c1 >> 64); \
+    } \
+\
+    /* conditional subtraction: if z >= p, z -= p */ \
+    uint64_t d[4]; \
+    int128_t bw = (int128_t)z0 - P64[0]; d[0]=(uint64_t)bw; bw>>=64; \
+    bw += (int128_t)z1 - P64[1];         d[1]=(uint64_t)bw; bw>>=64; \
+    bw += (int128_t)z2 - P64[2];         d[2]=(uint64_t)bw; bw>>=64; \
+    bw += (int128_t)z3 - P64[3];         d[3]=(uint64_t)bw; bw>>=64; \
+    bw += z4; \
+\
+    uint64_t mask = (uint64_t)((int64_t)bw >> 63); \
+    r[0] = (z0 & mask) | (d[0] & ~mask); \
+    r[1] = (z1 & mask) | (d[1] & ~mask); \
+    r[2] = (z2 & mask) | (d[2] & ~mask); \
+    r[3] = (z3 & mask) | (d[3] & ~mask); \
 }
+
+DEFINE_MONT_MUL(mont_mul_generic, )
+#if GM_HAS_X86_RUNTIME_DISPATCH
+DEFINE_MONT_MUL(mont_mul_bmi2, GM_TARGET_BMI2)
+DEFINE_MONT_MUL(mont_mul_bmi2_adx, GM_TARGET_BMI2_ADX)
+#endif
+#undef DEFINE_MONT_MUL
 #else
 /* Fallback: split to 32-bit */
-static void mont_mul(const felem a, const felem b, felem r) {
+static void mont_mul_generic(const felem a, const felem b, felem r) {
     /* convert to uint32_t, schoolbook mul, Solinas reduce */
     uint32_t a32[8], b32[8], r32[8];
     u64_to_u32(a, a32); u64_to_u32(b, b32);
@@ -671,6 +740,7 @@ static void field_inv_legacy(const uint32_t *a, uint32_t *r) {
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeMulCore(
     JNIEnv *env, jclass clz, jintArray aA, jintArray bA, jintArray eA) {
+    ensure_runtime_dispatch();
     jint a[8],b[8],e[16]; memset(e,0,sizeof(e));
     (*env)->GetIntArrayRegion(env,aA,0,8,a);
     (*env)->GetIntArrayRegion(env,bA,0,8,b);
@@ -690,6 +760,7 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeMulCore(
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeSqrCore(
     JNIEnv *env, jclass clz, jintArray aA, jintArray eA) {
+    ensure_runtime_dispatch();
     jint a[8],e[16];
     (*env)->GetIntArrayRegion(env,aA,0,8,a);
     memset(e,0,sizeof(e));
@@ -700,6 +771,7 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeSqrCore(
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeReduce(
     JNIEnv *env, jclass clz, jintArray eA, jintArray rA) {
+    ensure_runtime_dispatch();
     jint e[16],r[8];
     (*env)->GetIntArrayRegion(env,eA,0,16,e);
     reduce((const uint32_t*)e,(uint32_t*)r);
@@ -709,6 +781,7 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeReduce(
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeInv(
     JNIEnv *env, jclass clz, jintArray aA, jintArray rA) {
+    ensure_runtime_dispatch();
     jint a[8],r[8];
     (*env)->GetIntArrayRegion(env,aA,0,8,a);
     field_inv_legacy((const uint32_t*)a,(uint32_t*)r);
@@ -718,6 +791,7 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeInv(
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeMulMod(
     JNIEnv *env, jclass clz, jintArray aA, jintArray bA, jintArray rA) {
+    ensure_runtime_dispatch();
     jint a[8],b[8],r[8];
     (*env)->GetIntArrayRegion(env,aA,0,8,a);
     (*env)->GetIntArrayRegion(env,bA,0,8,b);
@@ -728,6 +802,7 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeMulMod(
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeSqrMod(
     JNIEnv *env, jclass clz, jintArray aA, jintArray rA) {
+    ensure_runtime_dispatch();
     jint a[8],r[8];
     (*env)->GetIntArrayRegion(env,aA,0,8,a);
     field_sqr_legacy((const uint32_t*)a,(uint32_t*)r);
@@ -737,6 +812,7 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeSqrMod(
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeFixedBaseMul(
     JNIEnv *env, jclass clz, jintArray kA, jintArray outA) {
+    ensure_runtime_dispatch();
     jint k[8], out[16];
     (*env)->GetIntArrayRegion(env,kA,0,8,k);
     fixed_base_mul((const uint32_t*)k,(uint32_t*)out,(uint32_t*)(out+8));
@@ -746,6 +822,7 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeFixedBaseMul(
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeFieldMul(
     JNIEnv *env, jclass clz, jintArray pxA, jintArray pyA, jintArray kA, jintArray outA) {
+    ensure_runtime_dispatch();
     jint px[8],py[8],k[8],out[16];
     (*env)->GetIntArrayRegion(env,pxA,0,8,px);
     (*env)->GetIntArrayRegion(env,pyA,0,8,py);
@@ -759,6 +836,7 @@ JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeShamirMul(
     JNIEnv *env, jclass clz,
     jintArray sA, jintArray pxA, jintArray pyA, jintArray tA, jintArray outA) {
+    ensure_runtime_dispatch();
     jint s[8],px[8],py[8],t[8],out[16];
     (*env)->GetIntArrayRegion(env,sA,0,8,s);
     (*env)->GetIntArrayRegion(env,pxA,0,8,px);
@@ -791,34 +869,42 @@ static const uint32_t N_MINUS_2_U32[8] = {
 };
 
 #if HAS_INT128
-static void modn_mul(const felem a, const felem b, felem r) {
-    uint64_t z0=0,z1=0,z2=0,z3=0,z4=0;
-    for (int i = 0; i < 4; i++) {
-        uint128_t c = (uint128_t)a[i]*b[0]+z0; z0=(uint64_t)c; c>>=64;
-        c += (uint128_t)a[i]*b[1]+z1; z1=(uint64_t)c; c>>=64;
-        c += (uint128_t)a[i]*b[2]+z2; z2=(uint64_t)c; c>>=64;
-        c += (uint128_t)a[i]*b[3]+z3; z3=(uint64_t)c; c>>=64;
-        uint128_t c1 = (uint128_t)(uint64_t)c + z4;
-        uint64_t m = z0 * N_PRIME_ORD;
-        c = (uint128_t)m*N_ORD[0]+z0; c>>=64;
-        c += (uint128_t)m*N_ORD[1]+z1; z1=(uint64_t)c; c>>=64;
-        c += (uint128_t)m*N_ORD[2]+z2; z2=(uint64_t)c; c>>=64;
-        c += (uint128_t)m*N_ORD[3]+z3; z3=(uint64_t)c; c>>=64;
-        c1 += (uint64_t)c;
-        z0=z1; z1=z2; z2=z3; z3=(uint64_t)c1; z4=(uint64_t)(c1>>64);
-    }
-    uint64_t d[4];
-    int128_t bw = (int128_t)z0-N_ORD[0]; d[0]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z1-N_ORD[1]; d[1]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z2-N_ORD[2]; d[2]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z3-N_ORD[3]; d[3]=(uint64_t)bw; bw>>=64;
-    bw += z4;
-    uint64_t mask = (uint64_t)((int64_t)bw >> 63);
-    r[0]=(z0&mask)|(d[0]&~mask); r[1]=(z1&mask)|(d[1]&~mask);
-    r[2]=(z2&mask)|(d[2]&~mask); r[3]=(z3&mask)|(d[3]&~mask);
+#define DEFINE_MODN_MUL(NAME, ATTR) \
+ATTR static void NAME(const felem a, const felem b, felem r) { \
+    uint64_t z0=0,z1=0,z2=0,z3=0,z4=0; \
+    for (int i = 0; i < 4; i++) { \
+        uint128_t c = (uint128_t)a[i]*b[0]+z0; z0=(uint64_t)c; c>>=64; \
+        c += (uint128_t)a[i]*b[1]+z1; z1=(uint64_t)c; c>>=64; \
+        c += (uint128_t)a[i]*b[2]+z2; z2=(uint64_t)c; c>>=64; \
+        c += (uint128_t)a[i]*b[3]+z3; z3=(uint64_t)c; c>>=64; \
+        uint128_t c1 = (uint128_t)(uint64_t)c + z4; \
+        uint64_t m = z0 * N_PRIME_ORD; \
+        c = (uint128_t)m*N_ORD[0]+z0; c>>=64; \
+        c += (uint128_t)m*N_ORD[1]+z1; z1=(uint64_t)c; c>>=64; \
+        c += (uint128_t)m*N_ORD[2]+z2; z2=(uint64_t)c; c>>=64; \
+        c += (uint128_t)m*N_ORD[3]+z3; z3=(uint64_t)c; c>>=64; \
+        c1 += (uint64_t)c; \
+        z0=z1; z1=z2; z2=z3; z3=(uint64_t)c1; z4=(uint64_t)(c1>>64); \
+    } \
+    uint64_t d[4]; \
+    int128_t bw = (int128_t)z0-N_ORD[0]; d[0]=(uint64_t)bw; bw>>=64; \
+    bw += (int128_t)z1-N_ORD[1]; d[1]=(uint64_t)bw; bw>>=64; \
+    bw += (int128_t)z2-N_ORD[2]; d[2]=(uint64_t)bw; bw>>=64; \
+    bw += (int128_t)z3-N_ORD[3]; d[3]=(uint64_t)bw; bw>>=64; \
+    bw += z4; \
+    uint64_t mask = (uint64_t)((int64_t)bw >> 63); \
+    r[0]=(z0&mask)|(d[0]&~mask); r[1]=(z1&mask)|(d[1]&~mask); \
+    r[2]=(z2&mask)|(d[2]&~mask); r[3]=(z3&mask)|(d[3]&~mask); \
 }
+
+DEFINE_MODN_MUL(modn_mul_generic, )
+#if GM_HAS_X86_RUNTIME_DISPATCH
+DEFINE_MODN_MUL(modn_mul_bmi2, GM_TARGET_BMI2)
+DEFINE_MODN_MUL(modn_mul_bmi2_adx, GM_TARGET_BMI2_ADX)
+#endif
+#undef DEFINE_MODN_MUL
 #else
-static void modn_mul(const felem a, const felem b, felem r) {
+static void modn_mul_generic(const felem a, const felem b, felem r) {
     /* 32-bit fallback: schoolbook mul + trial subtraction */
     uint32_t a32[8],b32[8]; u64_to_u32(a,a32); u64_to_u32(b,b32);
     uint64_t prod[16]; memset(prod,0,sizeof(prod));
@@ -1093,6 +1179,7 @@ static int verify_core_impl(const jbyte *e32, const jbyte *r32,
 JNIEXPORT jint JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeKeyGen(
     JNIEnv *env, jclass clz, jbyteArray randA, jbyteArray outA) {
+    ensure_runtime_dispatch();
     jbyte rand[32], out[96];
     (*env)->GetByteArrayRegion(env,randA,0,32,rand);
     int ok = keygen_point_impl(rand, out);
@@ -1104,6 +1191,7 @@ JNIEXPORT jint JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeSignCore(
     JNIEnv *env, jclass clz,
     jbyteArray eA, jbyteArray dA, jbyteArray daInvA, jbyteArray kA, jbyteArray outA) {
+    ensure_runtime_dispatch();
     jbyte e[32],d[32],inv[32],k[32],out[64];
     (*env)->GetByteArrayRegion(env,eA,0,32,e);
     (*env)->GetByteArrayRegion(env,dA,0,32,d);
@@ -1118,6 +1206,7 @@ JNIEXPORT jboolean JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeVerifyCore(
     JNIEnv *env, jclass clz,
     jbyteArray eA, jbyteArray rA, jbyteArray sA, jbyteArray pubA) {
+    ensure_runtime_dispatch();
     jbyte e[32],r[32],s[32],pub[64];
     (*env)->GetByteArrayRegion(env,eA,0,32,e);
     (*env)->GetByteArrayRegion(env,rA,0,32,r);
@@ -1130,6 +1219,7 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeVerifyCore(
 JNIEXPORT void JNICALL
 Java_com_yxj_gm_util_JNI_Nat256Native_nativeCombFixedBaseMul(
     JNIEnv *env, jclass clz, jintArray kA, jintArray outA) {
+    ensure_runtime_dispatch();
     jint k[8], out[16];
     (*env)->GetIntArrayRegion(env,kA,0,8,k);
     comb_fixed_base_mul((const uint32_t*)k,(uint32_t*)out,(uint32_t*)(out+8));

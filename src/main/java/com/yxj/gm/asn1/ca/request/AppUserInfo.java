@@ -9,8 +9,8 @@ public class AppUserInfo extends ASN1Object {
     private ASN1GeneralizedTime notBefore;
     private ASN1GeneralizedTime notAfter;
     private ASN1OctetString userName;
-    private ASN1IA5String dsCode;
-    private ASN1IA5String extendInfo;
+    private DERIA5String dsCode;
+    private DERIA5String extendInfo;
 
     private static final int TAG_USER_NAME = 0;
     private static final int TAG_DS_CODE = 1;
@@ -44,10 +44,10 @@ public class AppUserInfo extends ASN1Object {
                         userName=ASN1OctetString.getInstance(extra,true);
                         break;
                     case 1:
-                        dsCode = ASN1IA5String.getInstance(extra,true);
+                        dsCode = DERIA5String.getInstance(extra,true);
                         break;
                     case 2:
-                        extendInfo = ASN1IA5String.getInstance(extra,true);
+                        extendInfo = DERIA5String.getInstance(extra,true);
                         break;
                     default:
                         throw new IllegalArgumentException("Unknown tag encountered in structure: " + extra.getTagNo());

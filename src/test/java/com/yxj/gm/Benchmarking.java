@@ -212,6 +212,7 @@ public class Benchmarking {
                 throw new RuntimeException(e);
             }
         }).start();
+        Thread.sleep(100);
         new Thread(()->{
             while (true){
                 try {

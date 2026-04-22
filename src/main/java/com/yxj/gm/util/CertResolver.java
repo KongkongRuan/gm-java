@@ -92,7 +92,7 @@ public class CertResolver {
                                     } else if (primitive instanceof DLTaggedObject) {
                                         //Sequence->Sequence->Contex
                                         DLTaggedObject dlTaggedObject = (DLTaggedObject) primitive;
-                                        ASN1Object baseObject = dlTaggedObject.getBaseObject();
+                                        ASN1Primitive baseObject = dlTaggedObject.getObject();
 
                                         if (baseObject instanceof ASN1Integer) {
                                             //证书版本

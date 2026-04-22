@@ -3,6 +3,9 @@ REM Build nat256mul.dll for Windows x64
 REM Requires: MinGW-w64 gcc in PATH
 REM JDK: auto-detect or set manually below
 
+set SCRIPT_DIR=%~dp0
+if "%SCRIPT_DIR:~-1%"=="\" set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
+
 set JDK=
 if defined JAVA_HOME set JDK=%JAVA_HOME%
 if "%JDK%"=="" if exist "D:\jdk\jdk-17.0.5" set JDK=D:\jdk\jdk-17.0.5
@@ -12,8 +15,8 @@ if "%JDK%"=="" for /f "delims=" %%i in ('where java 2^>nul') do set JDK=%%~dpi..
 set INC=%JDK%\include
 set INC_WIN=%JDK%\include\win32
 
-set SRC=native_mul.c
-set OUT=..\src\main\resources\native\win-x86_64\nat256mul.dll
+set SRC=%SCRIPT_DIR%\native_mul.c
+set OUT=%SCRIPT_DIR%\..\src\main\resources\native\win-x86_64\nat256mul.dll
 
 if not exist "%INC%\jni.h" (
     echo ERROR: JDK not found. Set JAVA_HOME or edit this script.
@@ -34,12 +37,12 @@ if "%GCC%"=="" (
     exit /b 1
 )
 
-mkdir "..\src\main\resources\native\win-x86_64" 2>nul
+mkdir "%SCRIPT_DIR%\..\src\main\resources\native\win-x86_64" 2>nul
 
 echo Using GCC: %GCC%
 echo Using JDK: %JDK%
-echo Building %OUT% (C, -O3 -flto) ...
-"%GCC%" -shared -O3 -fPIC -march=native -funroll-loops -flto -I"%INC%" -I"%INC_WIN%" -o "%OUT%" %SRC%
+echo Building %OUT% (C, portable x86-64 baseline + runtime BMI2/ADX dispatch) ...
+"%GCC%" -shared -O3 -fPIC -march=x86-64 -mtune=generic -funroll-loops -flto -I"%INC%" -I"%INC_WIN%" -o "%OUT%" "%SRC%"
 
 if %ERRORLEVEL% neq 0 (
     echo Build failed.

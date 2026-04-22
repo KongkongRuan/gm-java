@@ -35,7 +35,7 @@ public class ExtendedCertificateOrCertificate extends ASN1Object implements ASN1
                 value = Certificate.getInstance(choice, false);
                 break;
             default:
-                throw new IllegalArgumentException("Unknown tag encountered: " + ASN1Util.getTagText(choice));
+                throw new IllegalArgumentException("Unknown tag encountered: " + choice.getTagNo());
         }
 
         this.tagNo = tagNo;
