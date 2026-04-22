@@ -15,18 +15,19 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1GeneralizedTime;
+import org.bouncycastle.asn1.ASN1IA5String;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1Object;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.bouncycastle.asn1.ASN1SequenceParser;
 import org.bouncycastle.asn1.DERBitString;
-import org.bouncycastle.asn1.DERIA5String;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DLSequence;
-import org.bouncycastle.asn1.DLTaggedObject;
+import org.bouncycastle.asn1.ASN1TaggedObject;
 import org.bouncycastle.asn1.x500.X500Name;
 
 public class RequestResolver {
@@ -95,18 +96,18 @@ public class RequestResolver {
                                                 }
                                             }
                                         }
-                                        if (primitive instanceof DLTaggedObject) {
-                                            DLTaggedObject dlTaggedObject = (DLTaggedObject)primitive;
+                                        if (primitive instanceof ASN1TaggedObject) {
+                                            ASN1TaggedObject dlTaggedObject = (ASN1TaggedObject)primitive;
                                             int tagNo = dlTaggedObject.getTagNo();
                                             if (caApplyKeyReq.getEntName() == null && tagNo == 4) {
-                                                ASN1Primitive baseObject = dlTaggedObject.getObject();
+                                                ASN1Primitive baseObject = dlTaggedObject.getBaseObject().toASN1Primitive();
                                                 if (baseObject instanceof DLSequence) {
                                                     X500Name x500Name = X500Name.getInstance(baseObject);
                                                     caApplyKeyReq.setEntName(x500Name.toString());
                                                 }
                                             } else {
                                                 caApplyKeyReq.setApplyType(ApplyTypeEnum.stateOf(tagNo));
-                                                ASN1Primitive baseObject = dlTaggedObject.getObject();
+                                                ASN1Primitive baseObject = dlTaggedObject.getBaseObject().toASN1Primitive();
                                                 if (baseObject instanceof DLSequence) {
                                                     DLSequence dlSequence = (DLSequence)baseObject;
                                                     ASN1SequenceParser parser2_1 = dlSequence.parser();
@@ -180,20 +181,20 @@ public class RequestResolver {
                                                                             caApplyKeyReq.setNotAfter(date);
                                                                         }
                                                                     }
-                                                                    if (primitive instanceof DLTaggedObject) {
-                                                                        DLTaggedObject dlTaggedObject1 = (DLTaggedObject)primitive;
-                                                                        ASN1Primitive baseObject1 = dlTaggedObject1.getObject();
+                                                                    if (primitive instanceof ASN1TaggedObject) {
+                                                                        ASN1TaggedObject dlTaggedObject1 = (ASN1TaggedObject)primitive;
+                                                                        ASN1Primitive baseObject1 = dlTaggedObject1.getBaseObject().toASN1Primitive();
                                                                         int tagNo1 = dlTaggedObject1.getTagNo();
                                                                         if (tagNo1 == 0) {
-                                                                            DEROctetString userName = (DEROctetString)baseObject1;
+                                                                            ASN1OctetString userName = ASN1OctetString.getInstance(baseObject1);
                                                                             caApplyKeyReq.setUserName(new String(userName.getOctets()));
                                                                         }
                                                                         if (tagNo1 == 1) {
-                                                                            DERIA5String dsCode = (DERIA5String)baseObject1;
+                                                                            ASN1IA5String dsCode = ASN1IA5String.getInstance(baseObject1);
                                                                             caApplyKeyReq.setDsCode(dsCode.toString());
                                                                         }
                                                                         if (tagNo1 == 2) {
-                                                                            DERIA5String extendInfo = (DERIA5String)baseObject1;
+                                                                            ASN1IA5String extendInfo = ASN1IA5String.getInstance(baseObject1);
                                                                             caApplyKeyReq.setExtendInfo(extendInfo.toString());
                                                                         }
                                                                     }

@@ -9,9 +9,10 @@ import java.nio.ByteBuffer;
 public class BusinessHandlerServer extends SimpleChannelInboundHandler<ByteBuffer> {
 
 
+
     @Override
-    protected void channelRead0(ChannelHandlerContext channelHandlerContext, ByteBuffer o) throws Exception {
-        System.out.println("服务端收到数据"+o);
+    protected void messageReceived(ChannelHandlerContext channelHandlerContext, ByteBuffer byteBuffer) throws Exception {
+        System.out.println("服务端收到数据"+byteBuffer);
         channelHandlerContext.writeAndFlush("server: hi,client");
     }
 }

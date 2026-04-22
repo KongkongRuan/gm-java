@@ -397,11 +397,11 @@ public class ASN1Util {
                                 return priKeyWitchHead;
                             }
                         }
-                        if (primitive instanceof DLTaggedObject) {
-                            DLTaggedObject dlTaggedObject = (DLTaggedObject) primitive;
+                        if (primitive instanceof ASN1TaggedObject) {
+                            ASN1TaggedObject dlTaggedObject = (ASN1TaggedObject) primitive;
                             int tagNo = dlTaggedObject.getTagNo();
                             if(tagNo==1){
-                                ASN1Primitive baseObject = dlTaggedObject.getObject();
+                                ASN1Primitive baseObject = dlTaggedObject.getBaseObject().toASN1Primitive();
                                 if(baseObject instanceof DERBitString){
                                     DERBitString derBitString = (DERBitString) baseObject;
                                     byte[] priKeyWitchHead = derBitString.getBytes();

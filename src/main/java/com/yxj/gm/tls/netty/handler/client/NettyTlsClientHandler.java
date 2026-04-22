@@ -85,7 +85,7 @@ public class NettyTlsClientHandler extends SimpleChannelInboundHandler<ByteBuf> 
 
     int count = 0;
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, ByteBuf byteBuf) throws Exception {
+    protected void messageReceived(ChannelHandlerContext ctx, ByteBuf byteBuf) throws Exception {
         if(DEBUG) System.out.println(count++);
         ASN1Util.GetContent(byteBuf, dataRecive);
 

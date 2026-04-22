@@ -171,6 +171,7 @@ public class Benchmarking {
         new Thread(serverFutureTask).start();
         TlsClientCallable tlsClientCallable = new TlsClientCallable();
         FutureTask clientFutureTask = new FutureTask<>(tlsClientCallable);
+        Thread.sleep(100);
         new Thread(clientFutureTask).start();
         String serverResultRandom = (String)serverFutureTask.get();
         System.out.println("serverResultRandom:"+serverResultRandom);
@@ -203,7 +204,7 @@ public class Benchmarking {
             nettyTlsServer.shutdown();
         }).start();
 
-
+        Thread.sleep(100);
         NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost", 4432);
         new Thread(()->{
             try {

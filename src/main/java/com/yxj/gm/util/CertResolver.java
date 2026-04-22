@@ -89,10 +89,10 @@ public class CertResolver {
                                         ASN1Integer integer = (ASN1Integer) primitive;
                                         // System.out.println("证书序列号：" + Hex.toHexString(integer.getValue().toByteArray()));
                                         resultVo.setSerial(integer.getValue().toByteArray());
-                                    } else if (primitive instanceof DLTaggedObject) {
+                                    } else if (primitive instanceof ASN1TaggedObject) {
                                         //Sequence->Sequence->Contex
-                                        DLTaggedObject dlTaggedObject = (DLTaggedObject) primitive;
-                                        ASN1Primitive baseObject = dlTaggedObject.getObject();
+                                        ASN1TaggedObject dlTaggedObject = (ASN1TaggedObject) primitive;
+                                        ASN1Primitive baseObject = dlTaggedObject.getBaseObject().toASN1Primitive();
 
                                         if (baseObject instanceof ASN1Integer) {
                                             //证书版本

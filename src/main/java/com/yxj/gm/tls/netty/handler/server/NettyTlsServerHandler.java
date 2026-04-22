@@ -107,7 +107,7 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
 
 
     @Override
-    public void channelRead0(ChannelHandlerContext ctx, ByteBuf bf) throws Exception {
+    protected void messageReceived(ChannelHandlerContext ctx, ByteBuf bf) throws Exception {
 //        byte[] bytes = ;
          ASN1Util.GetContent(bf, dataRecive);
             TlsMessage tlsMessage  ;

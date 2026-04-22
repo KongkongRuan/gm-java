@@ -9,7 +9,6 @@ import com.yxj.gm.SM2.Key.SM2PrivateKey;
 import com.yxj.gm.SM2.Key.SM2PublicKey;
 import com.yxj.gm.SM2.Signature.SM2Signature;
 import com.yxj.gm.util.FileUtils;
-import com.yxj.gm.util.SM2Util;
 import com.yxj.gm.util.X509Util;
 import java.io.IOException;
 import java.security.PrivateKey;
@@ -68,7 +67,7 @@ public class SM2CertGenerator {
 
         X509CertificateHolder certificateHolder;
         try {
-            certificateHolder = new X509CertificateHolder(X509Util.generateStructure(tbsCert, SM2Util.sigAlgId, signature.signature(certMsg, (byte[])null, privateKey.getEncoded())));
+            certificateHolder = new X509CertificateHolder(X509Util.generateStructure(tbsCert, X509Util.SM2_SIG_ALG_ID, signature.signature(certMsg, (byte[])null, privateKey.getEncoded())));
         } catch (IOException var25) {
             throw new RuntimeException("组合证书体失败：" + var25);
         }
@@ -104,7 +103,7 @@ public class SM2CertGenerator {
     public byte[] generatorCertByHsmStep2GetCert(TBSCertificate tbs, byte[] signatureValue) {
         X509CertificateHolder certificateHolder;
         try {
-            certificateHolder = new X509CertificateHolder(X509Util.generateStructure(tbs, SM2Util.sigAlgId, signatureValue));
+            certificateHolder = new X509CertificateHolder(X509Util.generateStructure(tbs, X509Util.SM2_SIG_ALG_ID, signatureValue));
         } catch (IOException var7) {
             throw new RuntimeException("组合证书体失败：" + var7);
         }
@@ -121,7 +120,7 @@ public class SM2CertGenerator {
     private void X509v3CertificateInit(X500Name issuer, ASN1Integer serial, Time notBefore, Time notAfter, X500Name subject, SubjectPublicKeyInfo publicKeyInfo, KeyUsage keyUsage, boolean isCa) throws IOException {
         this.tbsGen = new V3TBSCertificateGenerator();
         this.tbsGen.setSerialNumber(serial);
-        this.tbsGen.setSignature(SM2Util.sigAlgId);
+        this.tbsGen.setSignature(X509Util.SM2_SIG_ALG_ID);
         this.tbsGen.setIssuer(issuer);
         this.tbsGen.setStartDate(notBefore);
         this.tbsGen.setEndDate(notAfter);

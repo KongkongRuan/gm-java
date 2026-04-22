@@ -1,6 +1,7 @@
 package com.yxj.gm.util;
 
 import org.bouncycastle.asn1.*;
+import org.bouncycastle.asn1.gm.GMNamedCurves;
 import org.bouncycastle.asn1.gm.GMObjectIdentifiers;
 import org.bouncycastle.asn1.x500.X500NameStyle;
 import org.bouncycastle.asn1.x500.style.BCStyle;
@@ -9,6 +10,7 @@ import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.Certificate;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.asn1.x509.TBSCertificate;
+import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.asn1.x9.X9ECPoint;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 import org.bouncycastle.crypto.params.ECDomainParameters;
@@ -24,10 +26,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class X509Util {
+    public static final ECDomainParameters SM2_DOMAIN_PARAMS = toDomainParams(GMNamedCurves.getByName("sm2p256v1"));
+    public static final AlgorithmIdentifier SM2_SIG_ALG_ID =
+            new AlgorithmIdentifier(new ASN1ObjectIdentifier("1.2.156.10197.1.501"));
 
     static String[] keyUsage = {"digitalSignature","nonRepudiation","keyEncipherment","dataEncipherment","keyAgreement","keyCertSign","cRLSign","encipherOnly","decipherOnly"};
     public static ECPublicKeyParameters toSm2PublicParams(byte[] xBytes, byte[] yBytes){
-        return toPublicParams(xBytes,yBytes,SM2Util.SM2_DOMAIN_PARAMS);
+        return toPublicParams(xBytes,yBytes,SM2_DOMAIN_PARAMS);
+    }
+    public static ECDomainParameters toDomainParams(X9ECParameters x9ECParameters) {
+        return new ECDomainParameters(x9ECParameters.getCurve(), x9ECParameters.getG(), x9ECParameters.getN(), x9ECParameters.getH());
     }
     public static ECPublicKeyParameters toPublicParams(byte[] xBytes, byte[] yBytes, ECDomainParameters domainParameters) {
         return null != xBytes && null != yBytes ? toPublicParams(BigIntegers.fromUnsignedByteArray(xBytes), BigIntegers.fromUnsignedByteArray(yBytes), domainParameters) : null;

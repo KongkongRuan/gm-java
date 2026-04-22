@@ -3,8 +3,6 @@ package com.yxj.gm.util;
 import com.yxj.gm.SM3.SM3Digest;
 import com.yxj.gm.util.JNI.Nat256Native;
 import com.yxj.gm.constant.SM2Constant;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.gm.GMNamedCurves;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x9.X9ECParameters;
 import org.bouncycastle.crypto.params.ECDomainParameters;
@@ -30,8 +28,17 @@ public class SM2Util {
         Nat256Native.isAvailable();
     }
 
-    public static final ECDomainParameters SM2_DOMAIN_PARAMS = SM2Util.toDomainParams(GMNamedCurves.getByName("sm2p256v1"));
-    public static final AlgorithmIdentifier sigAlgId = new AlgorithmIdentifier(new ASN1ObjectIdentifier("1.2.156.10197.1.501"));
+    /**
+     * @deprecated use {@link X509Util#SM2_DOMAIN_PARAMS}
+     */
+    @Deprecated
+    public static final ECDomainParameters SM2_DOMAIN_PARAMS = X509Util.SM2_DOMAIN_PARAMS;
+
+    /**
+     * @deprecated use {@link X509Util#SM2_SIG_ALG_ID}
+     */
+    @Deprecated
+    public static final AlgorithmIdentifier sigAlgId = X509Util.SM2_SIG_ALG_ID;
 
     private static final BigInteger TWO = BigInteger.valueOf(2);
     private static final BigInteger THREE = BigInteger.valueOf(3);
@@ -139,8 +146,12 @@ public class SM2Util {
         return digest.doFinal();
     }
 
+    /**
+     * @deprecated use {@link X509Util#toDomainParams(X9ECParameters)}
+     */
+    @Deprecated
     public static ECDomainParameters toDomainParams(X9ECParameters x9ECParameters) {
-        return new ECDomainParameters(x9ECParameters.getCurve(), x9ECParameters.getG(), x9ECParameters.getN(), x9ECParameters.getH());
+        return X509Util.toDomainParams(x9ECParameters);
     }
 
     // ==================== 核心点运算（雅可比坐标） ====================

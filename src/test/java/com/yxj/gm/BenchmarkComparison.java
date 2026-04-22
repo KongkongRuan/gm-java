@@ -31,6 +31,7 @@ import java.security.*;
 import java.util.Arrays;
 
 public class BenchmarkComparison {
+    static final int MIN_RECOMMENDED_JAVA8_UPDATE = 161;
 
     static {
         Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
@@ -53,6 +54,7 @@ public class BenchmarkComparison {
         System.out.printf("  Java    : %s (%s)%n", System.getProperty("java.version"), System.getProperty("java.vm.name"));
         System.out.printf("  OS      : %s %s%n", System.getProperty("os.name"), System.getProperty("os.arch"));
         System.out.printf("  CPUs    : %d%n", Runtime.getRuntime().availableProcessors());
+        printLegacyJava8Hint();
         System.out.printf("  SM2     : 预热 %d 次, 测量 %d 次 × %d 轮%n", sm2Warmup, sm2Rounds, sm2Sets);
         System.out.printf("  SM3     : 预热 %d 次, 测量 %d 次 × %d 轮%n", sm3Warmup, sm3Rounds, sm3Sets);
         System.out.printf("  SM4     : 预热 %d 次, 测量 %d 次 × %d 轮, 数据 %dMB%n", sm4Warmup, sm4Rounds, sm4Sets, sm4DataMB);
@@ -67,6 +69,109 @@ public class BenchmarkComparison {
         System.out.println("════════════════════════════════════════════════════════");
         System.out.println("  全部测试完成");
         System.out.println("════════════════════════════════════════════════════════");
+    }
+
+    static void printLegacyJava8Hint() {
+        if (isLegacyJava8Runtime()) {
+            int update = java8UpdateVersion();
+            String runtime = update > 0 ? "JDK 8u" + update : "JDK " + System.getProperty("java.version");
+            System.out.printf("  提示    : 检测到较老的 %s，Hutool SM4 在当前 BC Provider 下可能因 JAR 验签失败而不可用。%n", runtime);
+            System.out.println("           如出现 'JCE cannot authenticate the provider BC'，程序会给出明确提示并跳过 Hutool SM4。");
+            System.out.println("           建议升级到更新的 JDK 8，或直接使用 JDK 11+/21。");
+        }
+    }
+
+    static boolean isLegacyJava8Runtime() {
+        return javaMajorVersion() == 8 && java8UpdateVersion() > 0 && java8UpdateVersion() < MIN_RECOMMENDED_JAVA8_UPDATE;
+    }
+
+    static int javaMajorVersion() {
+        String spec = System.getProperty("java.specification.version", "");
+        if (spec.startsWith("1.")) {
+            spec = spec.substring(2);
+        }
+        try {
+            return Integer.parseInt(spec);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    static int java8UpdateVersion() {
+        if (javaMajorVersion() != 8) {
+            return -1;
+        }
+        String version = System.getProperty("java.version", "");
+        int underscore = version.indexOf('_');
+        if (underscore < 0 || underscore == version.length() - 1) {
+            return -1;
+        }
+        int end = underscore + 1;
+        while (end < version.length() && Character.isDigit(version.charAt(end))) {
+            end++;
+        }
+        try {
+            return Integer.parseInt(version.substring(underscore + 1, end));
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    static final class HutoolSm4Support {
+        final SM4 ecb;
+        final SM4 cbc;
+        final SM4 ctr;
+        final String unavailableReason;
+
+        HutoolSm4Support(SM4 ecb, SM4 cbc, SM4 ctr, String unavailableReason) {
+            this.ecb = ecb;
+            this.cbc = cbc;
+            this.ctr = ctr;
+            this.unavailableReason = unavailableReason;
+        }
+
+        boolean isAvailable() {
+            return unavailableReason == null;
+        }
+    }
+
+    static HutoolSm4Support initHutoolSm4(byte[] key, byte[] iv) {
+        try {
+            return new HutoolSm4Support(
+                    SmUtil.sm4(key),
+                    new SM4(cn.hutool.crypto.Mode.CBC, cn.hutool.crypto.Padding.PKCS5Padding, key, iv),
+                    new SM4(cn.hutool.crypto.Mode.CTR, cn.hutool.crypto.Padding.NoPadding, key, iv),
+                    null
+            );
+        } catch (RuntimeException e) {
+            String reason = buildHutoolSm4UnavailableReason(e);
+            System.out.println("    [提示] Hutool SM4 已跳过。");
+            System.out.println("           " + reason);
+            return new HutoolSm4Support(null, null, null, reason);
+        }
+    }
+
+    static String buildHutoolSm4UnavailableReason(Throwable error) {
+        Throwable root = rootCause(error);
+        String javaVersion = System.getProperty("java.version");
+        String rootMessage = root.getMessage() == null ? root.getClass().getSimpleName() : root.getMessage();
+        if (rootMessage.contains("JCE cannot authenticate the provider BC")
+                || rootMessage.contains("trusted signer")
+                || rootMessage.contains("trust anchors")) {
+            return "当前 Java 运行时为 " + javaVersion
+                    + "，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。"
+                    + " 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。"
+                    + " 原始原因: " + rootMessage;
+        }
+        return "初始化 Hutool SM4 失败，已跳过该项。原始原因: " + rootMessage;
+    }
+
+    static Throwable rootCause(Throwable error) {
+        Throwable current = error;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
     }
 
     // ==================== SM2 密钥生成 ====================
@@ -304,31 +409,38 @@ public class BenchmarkComparison {
         SM4Cipher gmSm4Cbc = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.CBC);
         SM4Cipher gmSm4Ctr = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.CTR);
 
-        SM4 htEcb = SmUtil.sm4(key);
-        SM4 htCbc = new SM4(cn.hutool.crypto.Mode.CBC, cn.hutool.crypto.Padding.PKCS5Padding, key, iv);
+        HutoolSm4Support hutoolSm4 = initHutoolSm4(key, iv);
 
-        benchSM4Mode("SM4-ECB", gmSm4Ecb, key, data, iv, htEcb, null, warmup, rounds, sets, dataMB, true);
-        benchSM4Mode("SM4-CBC", gmSm4Cbc, key, data, iv, htCbc, iv, warmup, rounds, sets, dataMB, true);
-        benchSM4CTR(gmSm4Ctr, key, data, iv, warmup, rounds, sets, dataMB);
+        benchSM4Mode("SM4-ECB", gmSm4Ecb, key, data, iv, hutoolSm4.ecb, warmup, rounds, sets, dataMB, true, hutoolSm4.unavailableReason);
+        benchSM4Mode("SM4-CBC", gmSm4Cbc, key, data, iv, hutoolSm4.cbc, warmup, rounds, sets, dataMB, true, hutoolSm4.unavailableReason);
+        benchSM4CTR(gmSm4Ctr, key, data, iv, hutoolSm4.ctr, warmup, rounds, sets, dataMB, hutoolSm4.unavailableReason);
     }
 
     static void benchSM4Mode(String name, SM4Cipher gmSm4, byte[] key, byte[] data, byte[] iv,
-                              SM4 htSm4, byte[] htIv, int warmup, int rounds, int sets, int dataMB, boolean testDecrypt) {
+                              SM4 htSm4, int warmup, int rounds, int sets, int dataMB, boolean testDecrypt,
+                              String htUnavailableReason) {
         long t0 = System.currentTimeMillis();
         for (int i = 0; i < warmup; i++) gmSm4.cipherEncrypt(key, data, iv);
         System.out.printf("    预热 gm-%s       %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
         t0 = System.currentTimeMillis();
         for (int i = 0; i < warmup; i++) bcSM4Encrypt(data, key);
         System.out.printf("    预热 BC-%s       %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) htSm4.encrypt(data);
-        System.out.printf("    预热 HT-%s       %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
+        if (htSm4 != null) {
+            t0 = System.currentTimeMillis();
+            for (int i = 0; i < warmup; i++) htSm4.encrypt(data);
+            System.out.printf("    预热 HT-%s       %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
+        } else {
+            System.out.printf("    跳过 HT-%s       %s%n", name.substring(4), "当前 JDK/Provider 组合不兼容");
+        }
 
         byte[] gmEnc = gmSm4.cipherEncrypt(key, data, iv);
         byte[] bcEnc = bcSM4Encrypt(data, key);
-        byte[] htEnc = htSm4.encrypt(data);
+        byte[] htEnc = htSm4 != null ? htSm4.encrypt(data) : null;
 
         double[] gmE = new double[sets], bcE = new double[sets], htE = new double[sets];
+        if (htSm4 == null) {
+            Arrays.fill(htE, Double.NaN);
+        }
         for (int s = 0; s < sets; s++) {
             t0 = System.currentTimeMillis();
             for (int i = 0; i < rounds; i++) gmSm4.cipherEncrypt(key, data, iv);
@@ -336,14 +448,19 @@ public class BenchmarkComparison {
             t0 = System.currentTimeMillis();
             for (int i = 0; i < rounds; i++) bcSM4Encrypt(data, key);
             bcE[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) htSm4.encrypt(data);
-            htE[s] = System.currentTimeMillis() - t0;
+            if (htSm4 != null) {
+                t0 = System.currentTimeMillis();
+                for (int i = 0; i < rounds; i++) htSm4.encrypt(data);
+                htE[s] = System.currentTimeMillis() - t0;
+            }
         }
-        printResultMB(name + " 加密", rounds, gmE, bcE, htE, sets, dataMB);
+        printResultMB(name + " 加密", rounds, gmE, bcE, htE, sets, dataMB, htUnavailableReason);
 
         if (testDecrypt) {
             double[] gmD = new double[sets], bcD = new double[sets], htD = new double[sets];
+            if (htSm4 == null) {
+                Arrays.fill(htD, Double.NaN);
+            }
             for (int s = 0; s < sets; s++) {
                 t0 = System.currentTimeMillis();
                 for (int i = 0; i < rounds; i++) gmSm4.cipherDecrypt(key, gmEnc, iv);
@@ -351,30 +468,39 @@ public class BenchmarkComparison {
                 t0 = System.currentTimeMillis();
                 for (int i = 0; i < rounds; i++) bcSM4Decrypt(bcEnc, key);
                 bcD[s] = System.currentTimeMillis() - t0;
-                t0 = System.currentTimeMillis();
-                for (int i = 0; i < rounds; i++) htSm4.decrypt(htEnc);
-                htD[s] = System.currentTimeMillis() - t0;
+                if (htSm4 != null) {
+                    t0 = System.currentTimeMillis();
+                    for (int i = 0; i < rounds; i++) htSm4.decrypt(htEnc);
+                    htD[s] = System.currentTimeMillis() - t0;
+                }
             }
-            printResultMB(name + " 解密", rounds, gmD, bcD, htD, sets, dataMB);
+            printResultMB(name + " 解密", rounds, gmD, bcD, htD, sets, dataMB, htUnavailableReason);
         }
     }
 
-    static void benchSM4CTR(SM4Cipher gmSm4, byte[] key, byte[] data, byte[] iv,
-                             int warmup, int rounds, int sets, int dataMB) {
+    static void benchSM4CTR(SM4Cipher gmSm4, byte[] key, byte[] data, byte[] iv, SM4 htCtr,
+                             int warmup, int rounds, int sets, int dataMB, String htUnavailableReason) {
         long t0 = System.currentTimeMillis();
         for (int i = 0; i < warmup; i++) gmSm4.cipherEncrypt(key, data, iv);
         System.out.printf("    预热 gm-CTR       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
         t0 = System.currentTimeMillis();
         for (int i = 0; i < warmup; i++) bcSM4Encrypt(data, key);
         System.out.printf("    预热 BC-CTR       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
-        SM4 htCtr = new SM4(cn.hutool.crypto.Mode.CTR, cn.hutool.crypto.Padding.NoPadding, key, iv);
-        for (int i = 0; i < warmup; i++) htCtr.encrypt(data);
-        System.out.printf("    预热 HT-CTR       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        if (htCtr != null) {
+            t0 = System.currentTimeMillis();
+            for (int i = 0; i < warmup; i++) htCtr.encrypt(data);
+            System.out.printf("    预热 HT-CTR       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        } else {
+            System.out.printf("    跳过 HT-CTR       %s%n", "当前 JDK/Provider 组合不兼容");
+        }
 
         byte[] gmEnc = gmSm4.cipherEncrypt(key, data, iv);
         double[] gmE = new double[sets], bcE = new double[sets], htE = new double[sets];
         double[] gmD = new double[sets], bcD = new double[sets], htD = new double[sets];
+        if (htCtr == null) {
+            Arrays.fill(htE, Double.NaN);
+            Arrays.fill(htD, Double.NaN);
+        }
         for (int s = 0; s < sets; s++) {
             t0 = System.currentTimeMillis();
             for (int i = 0; i < rounds; i++) gmSm4.cipherEncrypt(key, data, iv);
@@ -382,9 +508,11 @@ public class BenchmarkComparison {
             t0 = System.currentTimeMillis();
             for (int i = 0; i < rounds; i++) bcSM4Encrypt(data, key);
             bcE[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) htCtr.encrypt(data);
-            htE[s] = System.currentTimeMillis() - t0;
+            if (htCtr != null) {
+                t0 = System.currentTimeMillis();
+                for (int i = 0; i < rounds; i++) htCtr.encrypt(data);
+                htE[s] = System.currentTimeMillis() - t0;
+            }
 
             t0 = System.currentTimeMillis();
             for (int i = 0; i < rounds; i++) gmSm4.cipherDecrypt(key, gmEnc, iv);
@@ -392,12 +520,14 @@ public class BenchmarkComparison {
             t0 = System.currentTimeMillis();
             for (int i = 0; i < rounds; i++) bcSM4Decrypt(bcSM4Encrypt(data, key), key);
             bcD[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) htCtr.decrypt(htCtr.encrypt(data));
-            htD[s] = System.currentTimeMillis() - t0;
+            if (htCtr != null) {
+                t0 = System.currentTimeMillis();
+                for (int i = 0; i < rounds; i++) htCtr.decrypt(htCtr.encrypt(data));
+                htD[s] = System.currentTimeMillis() - t0;
+            }
         }
-        printResultMB("SM4-CTR 加密 [gm多线程]", rounds, gmE, bcE, htE, sets, dataMB);
-        printResultMB("SM4-CTR 解密 [gm多线程]", rounds, gmD, bcD, htD, sets, dataMB);
+        printResultMB("SM4-CTR 加密 [gm多线程]", rounds, gmE, bcE, htE, sets, dataMB, htUnavailableReason);
+        printResultMB("SM4-CTR 解密 [gm多线程]", rounds, gmD, bcD, htD, sets, dataMB, htUnavailableReason);
     }
 
     // ==================== BC helpers ====================
@@ -490,28 +620,34 @@ public class BenchmarkComparison {
         System.out.println();
     }
 
-    static void printResultMB(String name, int rounds, double[] gm, double[] bc, double[] ht, int sets, int dataMB) {
+    static void printResultMB(String name, int rounds, double[] gm, double[] bc, double[] ht, int sets, int dataMB,
+                              String htUnavailableReason) {
         Arrays.sort(gm); Arrays.sort(bc); Arrays.sort(ht);
         double gmMed = gm[sets/2], bcMed = bc[sets/2], htMed = ht[sets/2];
         double gmAvg = avg(gm), bcAvg = avg(bc), htAvg = avg(ht);
 
         double gmMBs = rounds * dataMB * 1000.0 / gmMed;
         double bcMBs = rounds * dataMB * 1000.0 / bcMed;
-        double htMBs = rounds * dataMB * 1000.0 / htMed;
+        boolean htAvailable = !Double.isNaN(htMed);
+        double htMBs = htAvailable ? rounds * dataMB * 1000.0 / htMed : Double.NaN;
 
         System.out.printf("%n  %-30s │ %d × %dMB%n", name, rounds, dataMB);
         System.out.printf("    gm-java   : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ %.1f MB/s%n",
                 gmMed, gmAvg, gm[0], gm[sets-1], gmMBs);
         System.out.printf("    BC        : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ %.1f MB/s%n",
                 bcMed, bcAvg, bc[0], bc[sets-1], bcMBs);
-        System.out.printf("    Hutool    : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ %.1f MB/s%n",
-                htMed, htAvg, ht[0], ht[sets-1], htMBs);
+        if (htAvailable) {
+            System.out.printf("    Hutool    : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ %.1f MB/s%n",
+                    htMed, htAvg, ht[0], ht[sets-1], htMBs);
+        } else {
+            System.out.printf("    Hutool    : %s%n", htUnavailableReason == null ? "N/A" : "N/A │ " + htUnavailableReason);
+        }
 
-        double best = Math.min(gmMed, Math.min(bcMed, htMed));
+        double best = htAvailable ? Math.min(gmMed, Math.min(bcMed, htMed)) : Math.min(gmMed, bcMed);
         String winner = gmMed == best ? "gm-java" : bcMed == best ? "BC" : "Hutool";
         double pctGm = gmMed == best ? 0 : (gmMed - best) / best * 100;
         double pctBc = bcMed == best ? 0 : (bcMed - best) / best * 100;
-        double pctHt = htMed == best ? 0 : (htMed - best) / best * 100;
+        double pctHt = htAvailable && htMed != best ? (htMed - best) / best * 100 : 0;
         System.out.printf("    >>> %s 最快", winner);
         if (pctGm > 0) System.out.printf("  gm-java慢 %.1f%%", pctGm);
         if (pctBc > 0) System.out.printf("  BC慢 %.1f%%", pctBc);
