@@ -8,6 +8,7 @@ import javax.crypto.*;
 import java.io.Serializable;
 import java.security.*;
 import java.security.spec.AlgorithmParameterSpec;
+import java.util.Locale;
 
 public class XaSM4Cipher extends CipherSpi implements Serializable {
     private String mode="CTR";
@@ -22,15 +23,20 @@ public class XaSM4Cipher extends CipherSpi implements Serializable {
 
     @Override
     protected void engineSetMode(String mode) throws NoSuchAlgorithmException {
-        this.mode=mode;
+        this.mode = mode.toUpperCase(Locale.ROOT);
     }
 
     @Override
     protected void engineSetPadding(String padding) throws NoSuchPaddingException {
-        this.padding=padding;
-        if(padding.equals("Pkcs7")){
+        this.padding = padding;
+        String normalized = padding.toUpperCase(Locale.ROOT);
+        if(normalized.equals("PKCS7") || normalized.equals("PKCS7PADDING")){
             sm4.setPadding(PaddingEnum.Pkcs7);
-        }else {
+        } else if(normalized.equals("PKCS5") || normalized.equals("PKCS5PADDING")){
+            sm4.setPadding(PaddingEnum.Pkcs5);
+        } else if(normalized.equals("NOPADDING")){
+            sm4.setPadding(PaddingEnum.NoPadding);
+        } else {
             throw new RuntimeException("不支持的填充模式");
         }
     }
@@ -108,7 +114,10 @@ public class XaSM4Cipher extends CipherSpi implements Serializable {
                     result = sm4.blockEncryptCBC(bytes,iv,rks);
                     break;
                 case "CFB":
+                    result = sm4.blockEncryptCFB(bytes,iv,rks);
+                    break;
                 case "OFB":
+                    result = sm4.blockEncryptOFB(bytes,iv,rks);
                     break;
                 case "CTR":
                     result= sm4.blockEncryptCTR(bytes,iv,rks);
@@ -129,7 +138,10 @@ public class XaSM4Cipher extends CipherSpi implements Serializable {
                     result = sm4.blockDecryptCBC(bytes,iv,rks);
                     break;
                 case "CFB":
+                    result = sm4.blockDecryptCFB(bytes,iv,rks);
+                    break;
                 case "OFB":
+                    result = sm4.blockDecryptOFB(bytes,iv,rks);
                     break;
                 case "CTR":
                     result= sm4.blockEncryptCTR(bytes,iv,rks);

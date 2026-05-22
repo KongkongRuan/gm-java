@@ -6,12 +6,16 @@ import java.security.Provider;
 public class XaProvider extends Provider {
     public static final String PACKAGE_NAME = XaProvider.class.getPackage().getName();
     private static final long serialVersionUID = 6440182097568097204L;
-    private static final String INFO = "XaProvider (SM2 key/cipher ; SM2 signing;  SM3 digests; SM4 cipher;)";
+    private static final String INFO = "XaProvider (SM2 key/cipher; SM2 signing; SM3 digests; SM4 cipher; HMAC-SM3;)";
 
     public XaProvider(){
         super("XaProvider", 1.8, INFO);
 //            this.put("SecureRandom.SM4", PACKAGE_NAME + ".secureRandom.ZyxxSecureRandom");
             this.put("MessageDigest.SM3", PACKAGE_NAME + ".messageDigest.XaSM3MessageDigest");
+            this.put("Mac.HmacSM3", PACKAGE_NAME + ".mac.XaHMacSM3");
+            this.put("Alg.Alias.Mac.SM3HMAC", "HmacSM3");
+            this.put("Alg.Alias.Mac.HMACSM3", "HmacSM3");
+            this.put("Alg.Alias.Mac.HMAC-SM3", "HmacSM3");
             this.put("Cipher.SM4", PACKAGE_NAME + ".cipher.XaSM4Cipher");
             this.put("KeyPairGenerator.SM2", PACKAGE_NAME + ".key.XaSM2KeyPairGenerator");
             this.put("Cipher.SM2", PACKAGE_NAME + ".cipher.XaSM2Cipher");

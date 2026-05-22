@@ -20,10 +20,15 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 <dependency>
     <groupId>io.github.kongkongruan</groupId>
     <artifactId>gm-java</artifactId>
-    <version>3.1.0</version>
+    <version>3.2.1</version>
 </dependency>
 ```
- - 下载源码编译之后引入或者直接下载gm-java-3.1.0.jar引入
+ - 下载源码编译之后引入或者直接下载gm-java-3.2.1.jar引入
+### 3.2.1更新内容
+- 新增 `SM3HMac` 直接调用 API，和现有 `SM2` / `SM3` / `SM4` 的使用方式保持一致
+- 新增 `XaProvider` 的 `HmacSM3` JCA `Mac` 注册，并提供 `SM3HMAC`、`HMACSM3`、`HMAC-SM3` 别名
+- 补齐 `SM4` 的 `CFB` / `OFB` 模式，并补充 `NoPadding` 适配
+- 补充 HMAC-SM3 与 SM4 新模式的 README 说明和单元测试
 ### 3.1.0更新内容
 修复依赖中的bug并解决BC库依赖传递问题
 ### 3.0.0更新内容
@@ -67,9 +72,10 @@ T mod p ≡ T_low + T_high * (2^224 + 2^96 - 2^64 + 1) (mod p)
 ## 主要功能
 ### 密码算法
 
- - 对称密码算法 SM4（ECB/CBC/CTR/GCM）
+ - 对称密码算法 SM4（ECB/CBC/CFB/OFB/CTR/GCM）
  - 非对称密码算法 SM2（加解密/签名验签）
  - Hash算法 SM3
+ - 消息认证码 HMAC-SM3（直接调用 / JCA `Mac`）
  - 基于SM3实现的随机数生成器（多线程加速）
 ### 证书
  - 证书解析以及证书SHA1指纹计算
@@ -142,6 +148,25 @@ T mod p ≡ T_low + T_high * (2^224 + 2^96 - 2^64 + 1) (mod p)
         System.out.println(Hex.toHexString(md2));
         System.out.println(Hex.toHexString(md3));
 ```
+### HMAC-SM3（直接调用）
+```java
+        byte[] key = "1234567890abcdef".getBytes();
+        SM3HMac sm3HMac = new SM3HMac(key);
+        sm3HMac.update(msg.getBytes());
+        byte[] tag = sm3HMac.doFinal();
+        System.out.println(Hex.toHexString(tag));
+```
+### HMAC-SM3（JCA）
+```java
+        Security.addProvider(new XaProvider());
+        Mac mac = Mac.getInstance("HmacSM3", "XaProvider");
+        SecretKeySpec keySpec = new SecretKeySpec("1234567890abcdef".getBytes(), "HmacSM3");
+        mac.init(keySpec);
+        mac.update(msg.getBytes());
+        byte[] tag = mac.doFinal();
+        System.out.println(Hex.toHexString(tag));
+```
+如果源码目录下直接运行 JCA `Mac` 遇到 `JCE cannot authenticate the provider`，优先使用上面的直接调用方式；这是 JCE Provider 认证限制，不影响 `SM3HMac` 直接 API。
 ### 随机数生成（通过SM3实现）
 ```java
         byte[] random = Random.RandomBySM3(16);

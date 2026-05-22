@@ -190,6 +190,8 @@ public class SM4Cipher {
         switch (Mode) {
             case ECB: result = blockEncryptECBInt(ming, rk); break;
             case CBC: result = blockEncryptCBCInt(ming, iv, rk); break;
+            case CFB: result = blockEncryptCFBInt(ming, iv, rk); break;
+            case OFB: result = blockEncryptOFBInt(ming, iv, rk); break;
             case CTR: result = blockEncryptCTRInt(ming, iv, rk); break;
             default: throw new RuntimeException("加密模式错误：" + Mode);
         }
@@ -203,6 +205,8 @@ public class SM4Cipher {
         switch (Mode) {
             case ECB: result = blockDecryptECBInt(mi, rk); break;
             case CBC: result = blockDecryptCBCInt(mi, iv, rk); break;
+            case CFB: result = blockDecryptCFBInt(mi, iv, rk); break;
+            case OFB: result = blockEncryptOFBInt(mi, iv, rk); break;
             case CTR: result = blockEncryptCTRInt(mi, iv, rk); break;
             default: throw new RuntimeException("解密模式错误：" + Mode);
         }
@@ -223,12 +227,28 @@ public class SM4Cipher {
         return blockEncryptCTRInt(m, iv, toIntKeys(rks));
     }
 
+    public byte[] blockEncryptCFB(byte[] m, byte[] iv, byte[][] rks) {
+        return blockEncryptCFBInt(m, iv, toIntKeys(rks));
+    }
+
+    public byte[] blockEncryptOFB(byte[] m, byte[] iv, byte[][] rks) {
+        return blockEncryptOFBInt(m, iv, toIntKeys(rks));
+    }
+
     public byte[] blockDecryptECB(byte[] m, byte[][] rks) {
         return blockDecryptECBInt(m, toIntKeys(rks));
     }
 
     public byte[] blockDecryptCBC(byte[] m, byte[] iv, byte[][] rks) {
         return blockDecryptCBCInt(m, iv, toIntKeys(rks));
+    }
+
+    public byte[] blockDecryptCFB(byte[] m, byte[] iv, byte[][] rks) {
+        return blockDecryptCFBInt(m, iv, toIntKeys(rks));
+    }
+
+    public byte[] blockDecryptOFB(byte[] m, byte[] iv, byte[][] rks) {
+        return blockEncryptOFBInt(m, iv, toIntKeys(rks));
     }
 
     // ==================== int 轮密钥版本的分组加解密 ====================
@@ -258,9 +278,7 @@ public class SM4Cipher {
     }
 
     private byte[] blockEncryptCTRInt(byte[] m, byte[] iv, int[] rk) {
-        if (iv.length != 16) {
-            throw new RuntimeException("iv 长度错误 iv len=" + iv.length);
-        }
+        checkIvLength(iv);
         int totalBlocks = (m.length + 15) / 16;
         byte[] result = new byte[m.length];
         int procs = Math.min(processorCount, totalBlocks);
@@ -292,6 +310,52 @@ public class SM4Cipher {
             latch.await();
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
+        }
+        return result;
+    }
+
+    private byte[] blockEncryptCFBInt(byte[] m, byte[] iv, int[] rk) {
+        checkIvLength(iv);
+        byte[] result = new byte[m.length];
+        byte[] feedback = iv.clone();
+        byte[] keystream = new byte[16];
+        for (int off = 0; off < m.length; off += 16) {
+            int len = Math.min(16, m.length - off);
+            cipherCoreOff(feedback, 0, keystream, 0, rk);
+            for (int i = 0; i < len; i++) {
+                result[off + i] = (byte) (m[off + i] ^ keystream[i]);
+            }
+            updateShiftRegister(feedback, result, off, len);
+        }
+        return result;
+    }
+
+    private byte[] blockDecryptCFBInt(byte[] m, byte[] iv, int[] rk) {
+        checkIvLength(iv);
+        byte[] result = new byte[m.length];
+        byte[] feedback = iv.clone();
+        byte[] keystream = new byte[16];
+        for (int off = 0; off < m.length; off += 16) {
+            int len = Math.min(16, m.length - off);
+            cipherCoreOff(feedback, 0, keystream, 0, rk);
+            for (int i = 0; i < len; i++) {
+                result[off + i] = (byte) (m[off + i] ^ keystream[i]);
+            }
+            updateShiftRegister(feedback, m, off, len);
+        }
+        return result;
+    }
+
+    private byte[] blockEncryptOFBInt(byte[] m, byte[] iv, int[] rk) {
+        checkIvLength(iv);
+        byte[] result = new byte[m.length];
+        byte[] feedback = iv.clone();
+        for (int off = 0; off < m.length; off += 16) {
+            int len = Math.min(16, m.length - off);
+            feedback = cipherCore(feedback, rk);
+            for (int i = 0; i < len; i++) {
+                result[off + i] = (byte) (m[off + i] ^ feedback[i]);
+            }
         }
         return result;
     }
@@ -335,6 +399,12 @@ public class SM4Cipher {
     }
 
     private byte[] padding(byte[] m) {
+        if (Padding == PaddingEnum.NoPadding) {
+            if (m.length % 16 != 0) {
+                throw new RuntimeException("NoPadding 模式下输入长度必须是16的倍数");
+            }
+            return Arrays.copyOf(m, m.length);
+        }
         int blockLength;
         if (Padding == PaddingEnum.Pkcs7) {
             blockLength = 16;
@@ -351,10 +421,31 @@ public class SM4Cipher {
     }
 
     private byte[] unPadding(byte[] m) {
+        if (Padding == PaddingEnum.NoPadding) {
+            return Arrays.copyOf(m, m.length);
+        }
         int count = m[m.length - 1] & 0xFF;
         byte[] result = new byte[m.length - count];
         System.arraycopy(m, 0, result, 0, result.length);
         return result;
+    }
+
+    private static void updateShiftRegister(byte[] feedback, byte[] input, int off, int len) {
+        if (len == feedback.length) {
+            System.arraycopy(input, off, feedback, 0, feedback.length);
+            return;
+        }
+        System.arraycopy(feedback, len, feedback, 0, feedback.length - len);
+        System.arraycopy(input, off, feedback, feedback.length - len, len);
+    }
+
+    private static void checkIvLength(byte[] iv) {
+        if (iv == null) {
+            throw new RuntimeException("iv 不能为空");
+        }
+        if (iv.length != 16) {
+            throw new RuntimeException("iv 长度错误 iv len=" + iv.length);
+        }
     }
 
     private byte[][] block(byte[] m) {
