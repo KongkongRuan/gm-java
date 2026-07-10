@@ -24,6 +24,10 @@ out/
 *.exe
 *.o
 *.so
+# but keep bundled native libraries
+!src/main/resources/native/**/*.dll
+!src/main/resources/native/**/*.so
+!src/main/resources/native/**/*.dylib
 
 # compression file
 *.7z
