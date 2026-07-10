@@ -39,6 +39,14 @@ typedef signed   __int128 int128_t;
 #define GM_TARGET_BMI2_ADX
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+#define ALWAYS_INLINE static inline __attribute__((always_inline))
+#define THREAD_LOCAL __thread
+#else
+#define ALWAYS_INLINE static inline
+#define THREAD_LOCAL
+#endif
+
 typedef uint64_t felem[4];
 typedef uint64_t felem_wide[8]; /* 512-bit */
 typedef void (*felem_mul_impl)(const felem a, const felem b, felem r);
@@ -122,22 +130,22 @@ static const uint32_t GY32[8] = {
 /* ================================================================
  * Section 2 — helpers
  * ================================================================ */
-static inline int felem_is_zero(const felem a) {
+ALWAYS_INLINE int felem_is_zero(const felem a) {
     return (a[0] | a[1] | a[2] | a[3]) == 0;
 }
 
-static inline void felem_copy(felem r, const felem a) {
+ALWAYS_INLINE void felem_copy(felem r, const felem a) {
     r[0]=a[0]; r[1]=a[1]; r[2]=a[2]; r[3]=a[3];
 }
 
-static inline void u32_to_u64(const uint32_t *s, felem d) {
+ALWAYS_INLINE void u32_to_u64(const uint32_t *s, felem d) {
     d[0] = (uint64_t)s[0] | ((uint64_t)s[1] << 32);
     d[1] = (uint64_t)s[2] | ((uint64_t)s[3] << 32);
     d[2] = (uint64_t)s[4] | ((uint64_t)s[5] << 32);
     d[3] = (uint64_t)s[6] | ((uint64_t)s[7] << 32);
 }
 
-static inline void u64_to_u32(const felem s, uint32_t *d) {
+ALWAYS_INLINE void u64_to_u32(const felem s, uint32_t *d) {
     d[0]=(uint32_t)s[0]; d[1]=(uint32_t)(s[0]>>32);
     d[2]=(uint32_t)s[1]; d[3]=(uint32_t)(s[1]>>32);
     d[4]=(uint32_t)s[2]; d[5]=(uint32_t)(s[2]>>32);
@@ -153,7 +161,7 @@ static inline void u64_to_u32(const felem s, uint32_t *d) {
  * ================================================================ */
 #if HAS_INT128
 #define DEFINE_MONT_MUL(NAME, ATTR) \
-ATTR static void NAME(const felem a, const felem b, felem r) { \
+ATTR ALWAYS_INLINE void NAME(const felem a, const felem b, felem r) { \
     uint64_t z0=0, z1=0, z2=0, z3=0, z4=0; \
 \
     for (int i = 0; i < 4; i++) { \
@@ -271,30 +279,30 @@ static void mont_mul_generic(const felem a, const felem b, felem r) {
 }
 #endif
 
-static inline void mont_sqr(const felem a, felem r) {
+ALWAYS_INLINE void mont_sqr(const felem a, felem r) {
     mont_mul(a, a, r);
 }
 
 /* convert normal → Montgomery: mont(a) = a * R mod p = mont_mul(a, R^2 mod p) */
-static void to_mont(const felem a, felem r) {
+ALWAYS_INLINE void to_mont(const felem a, felem r) {
     mont_mul(a, R2_MODP, r);
 }
 
 /* convert Montgomery → normal: from_mont(a) = a * R^{-1} mod p = mont_mul(a, 1) */
-static void from_mont(const felem a, felem r) {
+ALWAYS_INLINE void from_mont(const felem a, felem r) {
     felem one = {1, 0, 0, 0};
     mont_mul(a, one, r);
 }
 
 /* Convert uint32_t[8] → Montgomery felem */
-static void u32_to_mont(const uint32_t *s, felem r) {
+ALWAYS_INLINE void u32_to_mont(const uint32_t *s, felem r) {
     felem tmp;
     u32_to_u64(s, tmp);
     to_mont(tmp, r);
 }
 
 /* Convert Montgomery felem → uint32_t[8] */
-static void mont_to_u32(const felem a, uint32_t *d) {
+ALWAYS_INLINE void mont_to_u32(const felem a, uint32_t *d) {
     felem tmp;
     from_mont(a, tmp);
     u64_to_u32(tmp, d);
@@ -303,7 +311,7 @@ static void mont_to_u32(const felem a, uint32_t *d) {
 /* ================================================================
  * Section 4 — Field add / sub / neg  (same in Montgomery domain)
  * ================================================================ */
-static void felem_add(const felem a, const felem b, felem r) {
+ALWAYS_INLINE void felem_add(const felem a, const felem b, felem r) {
     uint128_t cc = 0;
     for (int i = 0; i < 4; i++) { cc += (uint128_t)a[i]+b[i]; r[i]=(uint64_t)cc; cc>>=64; }
     uint64_t carry = (uint64_t)cc;
@@ -317,7 +325,7 @@ static void felem_add(const felem a, const felem b, felem r) {
     for (int i = 0; i < 4; i++) r[i] = (r[i] & mask) | (d[i] & ~mask);
 }
 
-static void felem_sub(const felem a, const felem b, felem r) {
+ALWAYS_INLINE void felem_sub(const felem a, const felem b, felem r) {
     int128_t bw = 0;
     for (int i = 0; i < 4; i++) {
         bw += (int128_t)a[i] - b[i];
@@ -330,7 +338,7 @@ static void felem_sub(const felem a, const felem b, felem r) {
     }
 }
 
-static void felem_neg(const felem a, felem r) {
+ALWAYS_INLINE void felem_neg(const felem a, felem r) {
     if (felem_is_zero(a)) { felem_copy(r, a); return; }
     int128_t bw = 0;
     for (int i = 0; i < 4; i++) {
@@ -340,17 +348,17 @@ static void felem_neg(const felem a, felem r) {
     }
 }
 
-static void felem_twice(const felem a, felem r) {
+ALWAYS_INLINE void felem_twice(const felem a, felem r) {
     felem_add(a, a, r);
 }
 
-static void felem_thrice(const felem a, felem r) {
+ALWAYS_INLINE void felem_thrice(const felem a, felem r) {
     felem t;
     felem_add(a, a, t);
     felem_add(t, a, r);
 }
 
-static void sqrN(const felem a, int n, felem r) {
+ALWAYS_INLINE void sqrN(const felem a, int n, felem r) {
     mont_sqr(a, r);
     for (int i = 1; i < n; i++) mont_sqr(r, r);
 }
@@ -388,7 +396,7 @@ static void felem_inv(const felem a, felem r) {
  * Section 6 — Jacobian point operations (all in Montgomery domain)
  * ================================================================ */
 
-static void jac_double(const felem X1, const felem Y1, const felem Z1,
+ALWAYS_INLINE void jac_double(const felem X1, const felem Y1, const felem Z1,
                         felem X3, felem Y3, felem Z3) {
     if (felem_is_zero(Z1)) {
         felem_copy(X3,X1); felem_copy(Y3,Y1); memset(Z3,0,32); return;
@@ -413,7 +421,7 @@ static void jac_double(const felem X1, const felem Y1, const felem Z1,
     felem_twice(Z3,Z3);
 }
 
-static void jac_add_mixed(const felem X1, const felem Y1, const felem Z1,
+ALWAYS_INLINE void jac_add_mixed(const felem X1, const felem Y1, const felem Z1,
                             const felem x2, const felem y2,
                             felem X3, felem Y3, felem Z3) {
     if (felem_is_zero(Z1)) {
@@ -444,7 +452,7 @@ static void jac_add_mixed(const felem X1, const felem Y1, const felem Z1,
     mont_mul(Z1,H,Z3);
 }
 
-static void jac_add(const felem X1, const felem Y1, const felem Z1,
+ALWAYS_INLINE void jac_add(const felem X1, const felem Y1, const felem Z1,
                      const felem X2, const felem Y2, const felem Z2,
                      felem X3, felem Y3, felem Z3) {
     if (felem_is_zero(Z1)) { felem_copy(X3,X2); felem_copy(Y3,Y2); felem_copy(Z3,Z2); return; }
@@ -467,7 +475,7 @@ static void jac_add(const felem X1, const felem Y1, const felem Z1,
     mont_mul(Z1,Z2,Z3); mont_mul(Z3,H,Z3);
 }
 
-static void jac_to_affine(const felem X, const felem Y, const felem Z,
+ALWAYS_INLINE void jac_to_affine(const felem X, const felem Y, const felem Z,
                             felem rx, felem ry) {
     if (felem_is_zero(Z)) { memset(rx,0,32); memset(ry,0,32); return; }
     felem zi,zi2,zi3;
@@ -567,6 +575,16 @@ static void ensure_base_table(void) {
     g_base_ready = 1;
 }
 
+/* Thread-local cache for the variable-base P table used in verify.
+ * Real-world verifiers often see the same public key repeatedly;
+ * this saves rebuilding the 16-entry WNAF table on every call.
+ * Memory per thread: ~16 * 64 B = 1 KB. */
+static THREAD_LOCAL struct {
+    uint32_t px[8], py[8];
+    affine_pt tbl[WNAF_FIELD_SIZE];
+    int valid;
+} g_pcache;
+
 /* ================================================================
  * Section 9 — Scalar multiply (all in Montgomery domain)
  * ================================================================ */
@@ -620,9 +638,20 @@ static void field_point_mul(const uint32_t *px32, const uint32_t *py32,
 static void shamir_mul(const uint32_t *s, const uint32_t *px32, const uint32_t *py32,
                         const uint32_t *t, uint32_t *rx, uint32_t *ry) {
     ensure_base_table();
-    felem px, py_; u32_to_mont(px32, px); u32_to_mont(py32, py_);
     affine_pt pTbl[WNAF_FIELD_SIZE];
-    build_table(px, py_, pTbl, WNAF_FIELD_SIZE);
+    int cache_hit = g_pcache.valid &&
+                    memcmp(g_pcache.px, px32, 32) == 0 &&
+                    memcmp(g_pcache.py, py32, 32) == 0;
+    if (cache_hit) {
+        memcpy(pTbl, g_pcache.tbl, sizeof(g_pcache.tbl));
+    } else {
+        felem px, py_; u32_to_mont(px32, px); u32_to_mont(py32, py_);
+        build_table(px, py_, pTbl, WNAF_FIELD_SIZE);
+        memcpy(g_pcache.px, px32, 32);
+        memcpy(g_pcache.py, py32, 32);
+        memcpy(g_pcache.tbl, pTbl, sizeof(g_pcache.tbl));
+        g_pcache.valid = 1;
+    }
     int wS[258], wT[258];
     int lenS = wnaf_encode(s, WNAF_BASE_W, wS, 258);
     int lenT = wnaf_encode(t, WNAF_FIELD_W, wT, 258);
@@ -870,7 +899,7 @@ static const uint32_t N_MINUS_2_U32[8] = {
 
 #if HAS_INT128
 #define DEFINE_MODN_MUL(NAME, ATTR) \
-ATTR static void NAME(const felem a, const felem b, felem r) { \
+ATTR ALWAYS_INLINE void NAME(const felem a, const felem b, felem r) { \
     uint64_t z0=0,z1=0,z2=0,z3=0,z4=0; \
     for (int i = 0; i < 4; i++) { \
         uint128_t c = (uint128_t)a[i]*b[0]+z0; z0=(uint64_t)c; c>>=64; \
@@ -929,7 +958,7 @@ static void modn_mul_generic(const felem a, const felem b, felem r) {
 }
 #endif
 
-static void modn_add(const felem a, const felem b, felem r) {
+ALWAYS_INLINE void modn_add(const felem a, const felem b, felem r) {
 #if HAS_INT128
     uint128_t cc=0;
     for(int i=0;i<4;i++){cc+=(uint128_t)a[i]+b[i];r[i]=(uint64_t)cc;cc>>=64;}
@@ -953,7 +982,7 @@ static void modn_add(const felem a, const felem b, felem r) {
 #endif
 }
 
-static void modn_sub(const felem a, const felem b, felem r) {
+ALWAYS_INLINE void modn_sub(const felem a, const felem b, felem r) {
 #if HAS_INT128
     int128_t bw=0;
     for(int i=0;i<4;i++){bw+=(int128_t)a[i]-b[i];r[i]=(uint64_t)bw;bw>>=64;}
