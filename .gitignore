@@ -5,6 +5,7 @@ target/
 .vscode/
 bin/
 out/
+.workbuddy/
 
 # ignore these files
 .classpath

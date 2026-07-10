@@ -1,6 +1,6 @@
 # GM-JAVA 性能优化修复文档
 
-## 本次更新（3.2.2）
+## 本次更新（3.2.2-SNAPSHOT，未发布到 Maven 中央仓库）
 
 ### SM3 streaming update 优化
 

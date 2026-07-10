@@ -24,7 +24,9 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 </dependency>
 ```
  - 下载源码编译之后引入或者直接下载gm-java-3.2.1.jar引入
-### 3.2.2更新内容（性能优化）
+> **注意**：当前仓库源码版本为 `3.2.2-SNAPSHOT`，对应下方“3.2.2 更新内容”。Maven 中央仓库最新 Release 为 `3.2.1`，如需使用已发布版本请引用 `3.2.1`；如需使用 3.2.2 新特性，请克隆源码后执行 `mvn clean install` 安装到本地仓库。
+
+### 3.2.2更新内容（性能优化，SNAPSHOT 开发中）
 - **SM3 哈希性能优化**：将 `SM3Digest` 改为 streaming update，在 `update()` 阶段直接消化完整 64 字节分组，仅缓存不足 64 字节的尾部，消除了大数组拷贝与 `doFinal()` 前的扩容分配
 - **实测提升**：SM3 1MB 哈希，JDK25 从 3339ms 降至 2996ms（**-10.3%**），JDK8 从 3339ms 降至 3054ms（**-8.5%**）
 - **项目回归单版本 Java 8 构建**：移除此前无收益的 MRJAR 多版本结构、VarHandle、Vector API、Virtual Threads、JNI SM3 CF 等改动，降低维护复杂度
