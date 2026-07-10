@@ -1,8 +1,11 @@
 package com.yxj.gm.SM3;
 
+import sun.misc.Unsafe;
+
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Field;
 import java.nio.ByteOrder;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -46,11 +49,15 @@ public class SM3Digest {
      */
     private static final class FastIntView {
         static final boolean AVAILABLE;
-        private static final MethodHandle GET;
-        private static final MethodHandle SET;
+        private static final MethodHandle VH_GET;
+        private static final MethodHandle VH_SET;
+        private static final Unsafe UNSAFE;
+        private static final long BYTE_ARRAY_BASE_OFFSET;
 
         static {
             MethodHandle get = null, set = null;
+            Unsafe unsafe = null;
+            long baseOffset = 0;
             try {
                 Class<?> vhClass = Class.forName("java.lang.invoke.VarHandle");
                 MethodHandles.Lookup lookup = MethodHandles.publicLookup();
@@ -62,25 +69,44 @@ public class SM3Digest {
                 set = lookup.findVirtual(vhClass, "set", MethodType.methodType(void.class, byte[].class, int.class, int.class)).bindTo(vh);
             } catch (Throwable ignored) {
             }
-            GET = get;
-            SET = set;
-            AVAILABLE = get != null;
+            if (get == null) {
+                try {
+                    Field f = Unsafe.class.getDeclaredField("theUnsafe");
+                    f.setAccessible(true);
+                    unsafe = (Unsafe) f.get(null);
+                    baseOffset = unsafe.arrayBaseOffset(byte[].class);
+                } catch (Throwable ignored2) {
+                }
+            }
+            VH_GET = get;
+            VH_SET = set;
+            UNSAFE = unsafe;
+            BYTE_ARRAY_BASE_OFFSET = baseOffset;
+            AVAILABLE = get != null || unsafe != null;
         }
 
         static int get(byte[] b, int off) {
-            try {
-                return (int) GET.invokeExact(b, off);
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
+            if (VH_GET != null) {
+                try {
+                    return (int) VH_GET.invokeExact(b, off);
+                } catch (Throwable t) {
+                    throw new RuntimeException(t);
+                }
             }
+            int v = UNSAFE.getInt(b, BYTE_ARRAY_BASE_OFFSET + off);
+            return Integer.reverseBytes(v);
         }
 
         static void set(byte[] b, int off, int v) {
-            try {
-                SET.invokeExact(b, off, v);
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
+            if (VH_SET != null) {
+                try {
+                    VH_SET.invokeExact(b, off, v);
+                    return;
+                } catch (Throwable t) {
+                    throw new RuntimeException(t);
+                }
             }
+            UNSAFE.putInt(b, BYTE_ARRAY_BASE_OFFSET + off, Integer.reverseBytes(v));
         }
     }
 
