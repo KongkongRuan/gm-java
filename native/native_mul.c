@@ -176,15 +176,15 @@ ATTR ALWAYS_INLINE void NAME(const felem a, const felem b, felem r) { \
         z3 = (uint64_t)carry; carry >>= 64; \
         uint128_t c1 = (uint128_t)(uint64_t)carry + z4; \
 \
-        /* z += z[0] * p  (Montgomery reduction, m = z[0] since p' = 1) */ \
+        /* z += z[0] * p  (Montgomery reduction, m = z[0] since p' = 1).
+         * SM2 prime specific: p0=p2=2^64-1, p1=2^64-2^32, p3=2^64-2^32-1. */ \
         uint64_t m = z0; \
-        carry = (uint128_t)m * P64[0] + z0; \
-        /* z0 becomes 0 by construction */ carry >>= 64; \
-        carry += (uint128_t)m * P64[1] + z1; \
+        carry = m; /* m*p0 + z0 = m*2^64, high word = m */ \
+        carry += (uint128_t)z1 + (((uint128_t)m << 64) - ((uint128_t)m << 32)); \
         z1 = (uint64_t)carry; carry >>= 64; \
-        carry += (uint128_t)m * P64[2] + z2; \
+        carry += (uint128_t)z2 + (((uint128_t)m << 64) - (uint128_t)m); \
         z2 = (uint64_t)carry; carry >>= 64; \
-        carry += (uint128_t)m * P64[3] + z3; \
+        carry += (uint128_t)z3 + (((uint128_t)m << 64) - ((uint128_t)m << 32) - (uint128_t)m); \
         z3 = (uint64_t)carry; carry >>= 64; \
         c1 += (uint64_t)carry; \
 \
