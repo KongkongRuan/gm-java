@@ -11,9 +11,12 @@ import java.util.Arrays;
 
 public class SM2Cipher {
 
+    private static final boolean DEBUG = Boolean.getBoolean("gm.debug");
+
     private static final ThreadLocal<SecureRandom> SECURE_RANDOM = ThreadLocal.withInitial(SecureRandom::new);
 
     public byte[] SM2CipherEncrypt(byte[] M, byte[] pubKey) {
+        long t = DEBUG ? System.nanoTime() : 0L;
         byte[] k = new byte[32];
         SECURE_RANDOM.get().nextBytes(k);
         BigInteger bigK = new BigInteger(1, k);
@@ -46,10 +49,12 @@ public class SM2Cipher {
         System.arraycopy(c1y, 0, result, 33, 32);
         System.arraycopy(C3, 0, result, 65, 32);
         System.arraycopy(C2, 0, result, 97, M.length);
+        if (DEBUG) System.err.printf("[SM2 CIPHER encrypt] %.2f ms%n", (System.nanoTime() - t) / 1e6);
         return result;
     }
 
     public byte[] SM2CipherDecrypt(byte[] M, byte[] priKey) {
+        long t = DEBUG ? System.nanoTime() : 0L;
         if (M[0] != 0x04) {
             throw new RuntimeException("无法解密压缩C1");
         }
@@ -85,6 +90,7 @@ public class SM2Cipher {
         if (!Arrays.equals(u, C3)) {
             throw new RuntimeException("C3验证未通过");
         }
+        if (DEBUG) System.err.printf("[SM2 CIPHER decrypt] %.2f ms%n", (System.nanoTime() - t) / 1e6);
         return ming;
     }
 

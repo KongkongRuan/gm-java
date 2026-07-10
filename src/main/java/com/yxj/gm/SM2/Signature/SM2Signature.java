@@ -19,6 +19,8 @@ import java.security.SecureRandom;
  */
 public class SM2Signature {
 
+    private static final boolean DEBUG = Boolean.getBoolean("gm.debug");
+
     private static final BigInteger TWO = BigInteger.valueOf(2);
     private static final BigInteger N_MINUS_2 = SM2Constant.getBigN().subtract(TWO);
     private static final ThreadLocal<SecureRandom> SECURE_RANDOM = ThreadLocal.withInitial(SecureRandom::new);
@@ -129,11 +131,13 @@ public class SM2Signature {
      * 签名（传入公钥避免额外的标量乘法）
      */
     public byte[] signature(byte[] msg, byte[] id, byte[] priKey, byte[] pubKey) {
+        long t = DEBUG ? System.nanoTime() : 0L;
         byte[] za = SM2Util.initZa(id, pubKey);
         byte[][] bytes = internalSignature(msg, priKey, za);
         byte[] temp = new byte[bytes[0].length + bytes[1].length];
         System.arraycopy(bytes[0], 0, temp, 0, bytes[0].length);
         System.arraycopy(bytes[1], 0, temp, bytes[0].length, bytes[1].length);
+        if (DEBUG) System.err.printf("[SM2 SIGN] %.2f ms%n", (System.nanoTime() - t) / 1e6);
         return temp;
     }
 
@@ -150,11 +154,14 @@ public class SM2Signature {
     }
 
     public boolean verify(byte[] msg, byte[] id, byte[] signature, byte[] pubKey) {
+        long t = DEBUG ? System.nanoTime() : 0L;
         byte[] Za = SM2Util.initZa(id, pubKey);
         byte[] r = new byte[32];
         byte[] s = new byte[32];
         System.arraycopy(signature, 0, r, 0, 32);
         System.arraycopy(signature, 32, s, 0, 32);
-        return internalVerify(msg, new byte[][]{r, s}, Za, pubKey);
+        boolean ok = internalVerify(msg, new byte[][]{r, s}, Za, pubKey);
+        if (DEBUG) System.err.printf("[SM2 VERIFY] %.2f ms%n", (System.nanoTime() - t) / 1e6);
+        return ok;
     }
 }

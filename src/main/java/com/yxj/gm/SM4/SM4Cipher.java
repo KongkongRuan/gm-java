@@ -38,8 +38,9 @@ public class SM4Cipher {
     private ModeEnum Mode = CTR;
     private byte[][] VBox = new byte[129][16];
     private PaddingEnum Padding = PaddingEnum.Pkcs7;
-    private boolean DEBUG = false;
-    private boolean TIME = false;
+    // 调试开关：运行时加 -Dgm.debug 打印调试信息，-Dgm.time 打印分相位耗时（关闭时零开销）
+    private static final boolean DEBUG = Boolean.getBoolean("gm.debug");
+    private static final boolean TIME = Boolean.getBoolean("gm.time");
 
     public ModeEnum getMode() { return Mode; }
     public void setMode(ModeEnum mode) { Mode = mode; }
@@ -86,6 +87,40 @@ public class SM4Cipher {
                 ^ SM4Constant.T2[(A >>> 8) & 0xFF] ^ SM4Constant.T3[A & 0xFF];
     }
     private static int tPrimeInt(int A) { return lPrimeInt(tauInt(A)); }
+
+    /**
+     * 性能调试：按相位（填充分配 / 核心轮运算 / 结果拷贝 / 去填充）聚合耗时。
+     * 仅当 -Dgm.time=true 时生效，并通过 JVM 关闭钩子打印汇总。
+     * 用途：配合性能测试类定位 SM4 各模式的慢点（例如 ECB/CBC 串行时核心相位占 95%+）。
+     */
+    private static final class Timing {
+        static final boolean ON = TIME;
+        static final java.util.concurrent.atomic.LongAdder padNs = new java.util.concurrent.atomic.LongAdder();
+        static final java.util.concurrent.atomic.LongAdder coreNs = new java.util.concurrent.atomic.LongAdder();
+        static final java.util.concurrent.atomic.LongAdder copyNs = new java.util.concurrent.atomic.LongAdder();
+        static final java.util.concurrent.atomic.LongAdder unpadNs = new java.util.concurrent.atomic.LongAdder();
+        static final java.util.concurrent.atomic.LongAdder calls = new java.util.concurrent.atomic.LongAdder();
+        static {
+            if (ON) {
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    long c = calls.sum();
+                    if (c == 0) return;
+                    long pad = padNs.sum(), core = coreNs.sum(), copy = copyNs.sum(), unpad = unpadNs.sum();
+                    long total = pad + core + copy + unpad;
+                    if (total == 0) return;
+                    System.err.printf("[SM4 TIME] calls=%d total=%.2fs pad=%.1f%% core=%.1f%% copy=%.1f%% unpad=%.1f%%%n",
+                            c, total / 1e9,
+                            pad * 100.0 / total, core * 100.0 / total,
+                            copy * 100.0 / total, unpad * 100.0 / total);
+                }, "sm4-time"));
+            }
+        }
+        static long t0() { return ON ? System.nanoTime() : 0L; }
+        static void acc(java.util.concurrent.atomic.LongAdder a, long s) { if (ON) a.add(System.nanoTime() - s); }
+    }
+
+    // 并行化阈值：分组数小于该值时不值得线程调度开销，走串行
+    private static final int PARALLEL_THRESHOLD = 256;
 
     /**
      * 轮密钥扩展（int 版本）
@@ -253,31 +288,89 @@ public class SM4Cipher {
 
     // ==================== int 轮密钥版本的分组加解密 ====================
 
+    /**
+     * ECB 加密：各分组相互独立，可并行。
+     */
     private byte[] blockEncryptECBInt(byte[] m, int[] rk) {
+        Timing.calls.increment();
+        long s = Timing.t0();
         byte[] padded = padding(m);
+        Timing.acc(Timing.padNs, s);
         int blocks = padded.length / 16;
         byte[] result = new byte[padded.length];
-        for (int i = 0; i < blocks; i++) {
-            cipherCoreOff(padded, i * 16, result, i * 16, rk);
+        if (blocks >= PARALLEL_THRESHOLD) {
+            parallelCore(padded, result, rk, true);
+        } else {
+            long c = Timing.t0();
+            for (int i = 0; i < blocks; i++) {
+                cipherCoreOff(padded, i * 16, result, i * 16, rk);
+            }
+            Timing.acc(Timing.coreNs, c);
         }
         return result;
     }
 
+    /**
+     * 分块并行执行 SM4 核心轮运算（ECB 用）。
+     */
+    private void parallelCore(byte[] in, byte[] out, int[] rk, boolean encrypt) {
+        int blocks = in.length / 16;
+        int procs = Math.min(processorCount, blocks);
+        long size = blocks / procs;
+        long remainder = blocks % procs;
+        CountDownLatch latch = new CountDownLatch(procs);
+        long s = Timing.t0();
+        for (int j = 0; j < procs; j++) {
+            long start = j * size;
+            long end = (j == procs - 1) ? start + size + remainder : (j + 1) * size;
+            long fs = start, fe = end;
+            THREAD_POOL.execute(() -> {
+                if (encrypt) {
+                    for (int i = (int) fs; i < fe; i++) {
+                        cipherCoreOff(in, i * 16, out, i * 16, rk);
+                    }
+                } else {
+                    for (int i = (int) fs; i < fe; i++) {
+                        decryptCoreOff(in, i * 16, out, i * 16, rk);
+                    }
+                }
+                latch.countDown();
+            });
+        }
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        Timing.acc(Timing.coreNs, s);
+    }
+
+    /**
+     * CBC 加密：第 i 个密文分组依赖 C(i-1)，是链式串行，无法简单并行化（保留串行）。
+     * 这里仅补充相位计时以便定位。
+     */
     private byte[] blockEncryptCBCInt(byte[] m, byte[] iv, int[] rk) {
+        Timing.calls.increment();
+        long s = Timing.t0();
         byte[] padded = padding(m);
+        Timing.acc(Timing.padNs, s);
         int blocks = padded.length / 16;
         byte[] result = new byte[padded.length];
-        for (int j = 0; j < 16; j++) padded[j] ^= iv[j];
-        cipherCoreOff(padded, 0, result, 0, rk);
-        for (int i = 1; i < blocks; i++) {
-            int off = i * 16;
-            for (int j = 0; j < 16; j++) padded[off + j] ^= result[off - 16 + j];
-            cipherCoreOff(padded, off, result, off, rk);
+        // 空输入（NoPadding + 0 字节）没有数据块，直接返回空结果，避免对空数组做首块异或越界
+        if (blocks > 0) {
+            for (int j = 0; j < 16; j++) padded[j] ^= iv[j];
+            cipherCoreOff(padded, 0, result, 0, rk);
+            for (int i = 1; i < blocks; i++) {
+                int off = i * 16;
+                for (int j = 0; j < 16; j++) padded[off + j] ^= result[off - 16 + j];
+                cipherCoreOff(padded, off, result, off, rk);
+            }
         }
         return result;
     }
 
     private byte[] blockEncryptCTRInt(byte[] m, byte[] iv, int[] rk) {
+        Timing.calls.increment();
         checkIvLength(iv);
         int totalBlocks = (m.length + 15) / 16;
         byte[] result = new byte[m.length];
@@ -360,26 +453,83 @@ public class SM4Cipher {
         return result;
     }
 
+    /**
+     * ECB 解密：各分组相互独立，可并行。
+     */
     private byte[] blockDecryptECBInt(byte[] m, int[] rk) {
+        Timing.calls.increment();
         int blocks = m.length / 16;
         byte[] result = new byte[m.length];
-        for (int i = 0; i < blocks; i++) {
-            decryptCoreOff(m, i * 16, result, i * 16, rk);
+        if (blocks >= PARALLEL_THRESHOLD) {
+            parallelCore(m, result, rk, false);
+        } else {
+            long c = Timing.t0();
+            for (int i = 0; i < blocks; i++) {
+                decryptCoreOff(m, i * 16, result, i * 16, rk);
+            }
+            Timing.acc(Timing.coreNs, c);
         }
-        return unPadding(result);
+        long u = Timing.t0();
+        result = unPadding(result);
+        Timing.acc(Timing.unpadNs, u);
+        return result;
     }
 
+    /**
+     * CBC 解密：第 i 个明文分组 = 解密(Ci) XOR C(i-1)，C(i-1) 来自输入密文（已知），
+     * 因此各分组相互独立，可并行（与 CTR 同理）。
+     */
     private byte[] blockDecryptCBCInt(byte[] m, byte[] iv, int[] rk) {
+        Timing.calls.increment();
         int blocks = m.length / 16;
         byte[] result = new byte[m.length];
-        for (int i = 0; i < blocks; i++) {
-            int off = i * 16;
-            decryptCoreOff(m, off, result, off, rk);
-            byte[] xorWith = (i == 0) ? iv : m;
-            int xorOff = (i == 0) ? 0 : off - 16;
-            for (int j = 0; j < 16; j++) result[off + j] ^= xorWith[xorOff + j];
+        if (blocks >= PARALLEL_THRESHOLD) {
+            parallelCbcDecrypt(m, iv, result, rk);
+        } else {
+            long c = Timing.t0();
+            for (int i = 0; i < blocks; i++) {
+                int off = i * 16;
+                decryptCoreOff(m, off, result, off, rk);
+                byte[] xorWith = (i == 0) ? iv : m;
+                int xorOff = (i == 0) ? 0 : off - 16;
+                for (int j = 0; j < 16; j++) result[off + j] ^= xorWith[xorOff + j];
+            }
+            Timing.acc(Timing.coreNs, c);
         }
-        return unPadding(result);
+        long u = Timing.t0();
+        result = unPadding(result);
+        Timing.acc(Timing.unpadNs, u);
+        return result;
+    }
+
+    private void parallelCbcDecrypt(byte[] m, byte[] iv, byte[] result, int[] rk) {
+        int blocks = m.length / 16;
+        int procs = Math.min(processorCount, blocks);
+        long size = blocks / procs;
+        long remainder = blocks % procs;
+        CountDownLatch latch = new CountDownLatch(procs);
+        long s = Timing.t0();
+        for (int j = 0; j < procs; j++) {
+            long start = j * size;
+            long end = (j == procs - 1) ? start + size + remainder : (j + 1) * size;
+            long fs = start, fe = end;
+            THREAD_POOL.execute(() -> {
+                for (int i = (int) fs; i < fe; i++) {
+                    int off = i * 16;
+                    decryptCoreOff(m, off, result, off, rk);
+                    byte[] xorWith = (i == 0) ? iv : m;
+                    int xorOff = (i == 0) ? 0 : off - 16;
+                    for (int j2 = 0; j2 < 16; j2++) result[off + j2] ^= xorWith[xorOff + j2];
+                }
+                latch.countDown();
+            });
+        }
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        Timing.acc(Timing.coreNs, s);
     }
 
     // ==================== 内部工具方法 ====================
