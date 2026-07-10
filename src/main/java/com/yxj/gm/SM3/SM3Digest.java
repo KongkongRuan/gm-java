@@ -1,17 +1,88 @@
 package com.yxj.gm.SM3;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.nio.ByteOrder;
+import java.util.concurrent.atomic.LongAdder;
+
 /**
  * SM3 哈希算法
  *
  * 性能优化：
- * - 直接 byte[] 缓冲区替代 ByteArrayOutputStream，避免 toByteArray() 拷贝
+ * - Streaming update：在 update 阶段直接消化完整 64 字节分组，避免先把全部数据缓存到大数组
  * - 压缩函数使用 int 寄存器运算
  * - 消息扩展使用 int 数组复用
  * - 预计算 T 的循环移位
  * - 主循环拆分 0-15 和 16-63 减少分支
- * - pad() 在缓冲区上原地操作，避免额外数组分配
+ * - 仅保留 64 字节内部缓冲 + 128 字节最终填充缓冲
  */
 public class SM3Digest {
+
+    private static final boolean DEBUG = Boolean.getBoolean("sm3.debug");
+    private static final LongAdder debugTotalNs = new LongAdder();
+    private static final LongAdder debugFullBlockNs = new LongAdder();
+    private static final LongAdder debugFinalBlockNs = new LongAdder();
+    private static final LongAdder debugCalls = new LongAdder();
+
+    static {
+        if (DEBUG) {
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                long calls = debugCalls.sum();
+                if (calls == 0) return;
+                long total = debugTotalNs.sum();
+                long full = debugFullBlockNs.sum();
+                long fin = debugFinalBlockNs.sum();
+                System.err.printf("[SM3 DEBUG] calls=%d total=%.3fs fullBlocks=%.3fs(%.1f%%) finalBlocks=%.3fs(%.1f%%)%n",
+                        calls, total / 1e9, full / 1e9, full * 100.0 / total,
+                        fin / 1e9, fin * 100.0 / total);
+            }, "sm3-debug"));
+        }
+    }
+
+    /**
+     * JDK 9+ 时使用 VarHandle 做 byte[] 与大端 int 之间的零开销转换；
+     * JDK 8 运行时自动降级为手动移位。
+     */
+    private static final class FastIntView {
+        static final boolean AVAILABLE;
+        private static final MethodHandle GET;
+        private static final MethodHandle SET;
+
+        static {
+            MethodHandle get = null, set = null;
+            try {
+                Class<?> vhClass = Class.forName("java.lang.invoke.VarHandle");
+                MethodHandles.Lookup lookup = MethodHandles.publicLookup();
+                MethodHandle factory = lookup.findStatic(
+                        MethodHandles.class, "byteArrayViewVarHandle",
+                        MethodType.methodType(vhClass, Class.class, ByteOrder.class));
+                Object vh = factory.invoke(int[].class, ByteOrder.BIG_ENDIAN);
+                get = lookup.findVirtual(vhClass, "get", MethodType.methodType(int.class, byte[].class, int.class)).bindTo(vh);
+                set = lookup.findVirtual(vhClass, "set", MethodType.methodType(void.class, byte[].class, int.class, int.class)).bindTo(vh);
+            } catch (Throwable ignored) {
+            }
+            GET = get;
+            SET = set;
+            AVAILABLE = get != null;
+        }
+
+        static int get(byte[] b, int off) {
+            try {
+                return (int) GET.invokeExact(b, off);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
+        }
+
+        static void set(byte[] b, int off, int v) {
+            try {
+                SET.invokeExact(b, off, v);
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
+        }
+    }
 
     private static final int[] IV = {
             0x7380166f, 0x4914b2b9, 0x172442d7, 0xda8a0600,
@@ -29,13 +100,29 @@ public class SM3Digest {
         }
     }
 
-    private byte[] msgBuf = new byte[256];
-    private int msgLen = 0;
+    // streaming 状态
+    private final byte[] buffer = new byte[64];
+    private int bufferLen = 0;
+    private long totalBytes = 0;
 
     private final int[] W = new int[68];
     private final int[] W1 = new int[64];
     private final int[] stateA = new int[8];
     private final int[] stateB = new int[8];
+    private int[] inState;
+    private int[] outState;
+
+    public SM3Digest() {
+        resetState();
+    }
+
+    private void resetState() {
+        System.arraycopy(IV, 0, stateA, 0, 8);
+        inState = stateA;
+        outState = stateB;
+        bufferLen = 0;
+        totalBytes = 0;
+    }
 
     private static int bytesToIntBE(byte[] b, int off) {
         return ((b[off] & 0xFF) << 24) | ((b[off + 1] & 0xFF) << 16) |
@@ -57,9 +144,22 @@ public class SM3Digest {
         return X ^ Integer.rotateLeft(X, 9) ^ Integer.rotateLeft(X, 17);
     }
 
-    private void CF(int[] V, byte[] padded, int offset, int[] out) {
-        for (int i = 0; i < 16; i++) {
-            W[i] = bytesToIntBE(padded, offset + i * 4);
+    private void processBlock(byte[] data, int offset) {
+        CF(inState, data, offset, outState, W, W1);
+        int[] tmp = inState;
+        inState = outState;
+        outState = tmp;
+    }
+
+    private static void CF(int[] V, byte[] padded, int offset, int[] out, int[] W, int[] W1) {
+        if (FastIntView.AVAILABLE) {
+            for (int i = 0; i < 16; i++) {
+                W[i] = FastIntView.get(padded, offset + i * 4);
+            }
+        } else {
+            for (int i = 0; i < 16; i++) {
+                W[i] = bytesToIntBE(padded, offset + i * 4);
+            }
         }
         for (int j = 16; j < 68; j++) {
             W[j] = P1(W[j - 16] ^ W[j - 9] ^ Integer.rotateLeft(W[j - 3], 15))
@@ -111,85 +211,111 @@ public class SM3Digest {
         out[7] = H ^ V[7];
     }
 
-    private void ensureCapacity(int needed) {
-        if (needed > msgBuf.length) {
-            int newCap = Math.max(needed, msgBuf.length * 2);
-            byte[] nb = new byte[newCap];
-            System.arraycopy(msgBuf, 0, nb, 0, msgLen);
-            msgBuf = nb;
+    public void update(byte[] msg) {
+        update(msg, 0, msg.length);
+    }
+
+    public void update(byte[] msg, int offset, int len) {
+        totalBytes += len;
+        int pos = offset;
+        int remaining = len;
+
+        // 先把内部 buffer 填满
+        if (bufferLen > 0) {
+            int need = 64 - bufferLen;
+            int copy = Math.min(need, remaining);
+            System.arraycopy(msg, pos, buffer, bufferLen, copy);
+            bufferLen += copy;
+            pos += copy;
+            remaining -= copy;
+            if (bufferLen == 64) {
+                processBlock(buffer, 0);
+                bufferLen = 0;
+            }
+        }
+
+        // 直接处理 msg 中的完整 64 字节分组
+        while (remaining >= 64) {
+            processBlock(msg, pos);
+            pos += 64;
+            remaining -= 64;
+        }
+
+        // 剩余不足 64 字节的缓存起来
+        if (remaining > 0) {
+            System.arraycopy(msg, pos, buffer, 0, remaining);
+            bufferLen = remaining;
         }
     }
 
-    private byte[] computeHash(byte[] msg, int len) {
-        long bitLen = len * 8L;
-        long k = 448 - ((bitLen + 1) % 512);
-        if (k < 0) k += 512;
-        int totalBytes = (int) ((bitLen + 1 + k + 64) / 8);
+    public byte[] doFinal() {
+        long t0 = DEBUG ? System.nanoTime() : 0L;
+        long bitLen = totalBytes * 8L;
+        int remainder = bufferLen;
 
-        byte[] padded;
-        if (msg.length >= totalBytes) {
-            padded = msg;
-        } else {
-            padded = new byte[totalBytes];
-            System.arraycopy(msg, 0, padded, 0, len);
-        }
-        padded[len] = (byte) 0x80;
-        for (int i = len + 1; i < totalBytes - 8; i++) padded[i] = 0;
+        // 最后一个（或两个）填充分组，最多分配 128 字节
+        byte[] finalBlock = new byte[remainder <= 55 ? 64 : 128];
+        System.arraycopy(buffer, 0, finalBlock, 0, remainder);
+        finalBlock[remainder] = (byte) 0x80;
         for (int i = 0; i < 8; i++) {
-            padded[totalBytes - 1 - i] = (byte) (bitLen >>> (i * 8));
+            finalBlock[finalBlock.length - 1 - i] = (byte) (bitLen >>> (i * 8));
         }
 
-        int n = totalBytes / 64;
-        System.arraycopy(IV, 0, stateA, 0, 8);
-        int[] inState = stateA;
-        int[] outState = stateB;
-
-        for (int i = 0; i < n; i++) {
-            CF(inState, padded, i * 64, outState);
+        long tFinal0 = DEBUG ? System.nanoTime() : 0L;
+        int finalBlocks = finalBlock.length >>> 6;
+        for (int i = 0; i < finalBlocks; i++) {
+            CF(inState, finalBlock, i << 6, outState, W, W1);
             int[] tmp = inState;
             inState = outState;
             outState = tmp;
         }
+        long tFinal1 = DEBUG ? System.nanoTime() : 0L;
 
         byte[] result = new byte[32];
-        for (int i = 0; i < 8; i++) {
-            intToBytesBE(inState[i], result, i * 4);
+        if (FastIntView.AVAILABLE) {
+            for (int i = 0; i < 8; i++) {
+                FastIntView.set(result, i * 4, inState[i]);
+            }
+        } else {
+            for (int i = 0; i < 8; i++) {
+                intToBytesBE(inState[i], result, i * 4);
+            }
         }
-        return result;
-    }
 
-    public void update(byte[] msg) {
-        ensureCapacity(msgLen + msg.length);
-        System.arraycopy(msg, 0, msgBuf, msgLen, msg.length);
-        msgLen += msg.length;
-    }
-
-    public void update(byte[] msg, int offset, int len) {
-        ensureCapacity(msgLen + len);
-        System.arraycopy(msg, offset, msgBuf, msgLen, len);
-        msgLen += len;
-    }
-
-    public byte[] doFinal() {
-        if (msgLen == 0) {
-            throw new RuntimeException("请添加要计算的值");
+        if (DEBUG) {
+            long total = System.nanoTime() - t0;
+            debugTotalNs.add(total);
+            debugFullBlockNs.add(total - (tFinal1 - tFinal0));
+            debugFinalBlockNs.add(tFinal1 - tFinal0);
+            debugCalls.increment();
         }
-        long bitLen = msgLen * 8L;
-        long k = 448 - ((bitLen + 1) % 512);
-        if (k < 0) k += 512;
-        int totalBytes = (int) ((bitLen + 1 + k + 64) / 8);
-        ensureCapacity(totalBytes);
-        byte[] result = computeHash(msgBuf, msgLen);
-        msgLen = 0;
+
+        resetState();
         return result;
     }
 
     public byte[] doFinal(byte[] msg) {
-        msgLen = 0;
-        return computeHash(msg, msg.length);
+        resetState();
+        update(msg);
+        return doFinal();
     }
 
     public void msgAllReset() {
-        msgLen = 0;
+        resetState();
+    }
+
+    /**
+     * 返回性能调试统计信息（仅在 -Dsm3.debug=true 时有意义）。
+     * 格式：calls=... total=...s fullBlocks=...s(...) finalBlocks=...s(...)
+     */
+    public static String getDebugSummary() {
+        long calls = debugCalls.sum();
+        if (calls == 0) return "[SM3 DEBUG] no data";
+        long total = debugTotalNs.sum();
+        long full = debugFullBlockNs.sum();
+        long fin = debugFinalBlockNs.sum();
+        return String.format("[SM3 DEBUG] calls=%d total=%.3fs fullBlocks=%.3fs(%.1f%%) finalBlocks=%.3fs(%.1f%%)",
+                calls, total / 1e9, full / 1e9, full * 100.0 / total,
+                fin / 1e9, fin * 100.0 / total);
     }
 }

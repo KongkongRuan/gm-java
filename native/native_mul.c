@@ -1225,3 +1225,4 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeCombFixedBaseMul(
     comb_fixed_base_mul((const uint32_t*)k,(uint32_t*)out,(uint32_t*)(out+8));
     (*env)->SetIntArrayRegion(env,outA,0,16,out);
 }
+
