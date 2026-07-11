@@ -12,7 +12,6 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 - 极老的 JDK 8 运行时可能在 `bcprov-jdk18on` 的 JCE Provider 验签阶段失败，典型报错为 `JCE cannot authenticate the provider BC`
 - 这类问题通常不是 `gm-java` 自身算法实现错误，而是旧 JDK 8 对 Provider 签名链的兼容性不足
 - 如果你的运行环境必须停留在旧 JDK 8，建议优先升级到更新的 8u 版本；若无法升级，再考虑回退相关 Bouncy Castle 版本并单独验证
-- `src/test/java/com/yxj/gm/BenchmarkComparison.java` 已对该场景增加明确提示，运行基准测试时会给出原因并跳过 Hutool 的 SM4 项
 ## 项目引入
 
  - pom引入（已上传中央仓库）
