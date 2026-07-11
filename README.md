@@ -1,5 +1,6 @@
 # GM-JAVA
-GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
+
+GM-JAVA 是一套用 JAVA 开发的支持国密算法的加解密工具包。
 
 ## 运行环境
 
@@ -12,9 +13,11 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 - 极老的 JDK 8 运行时可能在 `bcprov-jdk18on` 的 JCE Provider 验签阶段失败，典型报错为 `JCE cannot authenticate the provider BC`
 - 这类问题通常不是 `gm-java` 自身算法实现错误，而是旧 JDK 8 对 Provider 签名链的兼容性不足
 - 如果你的运行环境必须停留在旧 JDK 8，建议优先升级到更新的 8u 版本；若无法升级，再考虑回退相关 Bouncy Castle 版本并单独验证
+
 ## 项目引入
 
- - pom引入（已上传中央仓库）
+- pom 引入（已上传中央仓库）
+
 ```xml
 <dependency>
     <groupId>io.github.kongkongruan</groupId>
@@ -22,9 +25,13 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
     <version>3.2.2</version>
 </dependency>
 ```
- - 下载源码编译之后引入或者直接下载gm-java-3.2.2.jar引入
+
+- 下载源码编译之后引入或者直接下载 gm-java-3.2.2.jar 引入
+
 ### Netty TLS 功能（可选依赖）
+
 从 `3.2.2` 起，`gm-java` 核心算法模块不再强制依赖 `netty`。默认作为加密工具包引入时，Maven 不会传递 `netty-all`：
+
 ```xml
 <dependency>
     <groupId>io.github.kongkongruan</groupId>
@@ -32,7 +39,9 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
     <version>3.2.2</version>
 </dependency>
 ```
+
 如果需要使用 `NettyTlsClient` / `NettyTlsServer` 进行 TLS 握手密钥协商，请在自身项目的 `pom.xml` 中显式引入 `netty-all`：
+
 ```xml
 <dependency>
     <groupId>io.netty</groupId>
@@ -41,290 +50,290 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
 </dependency>
 ```
 
-### 3.2.2更新内容（性能优化）
-- **SM3 哈希性能优化**：将 `SM3Digest` 改为 streaming update，在 `update()` 阶段直接消化完整 64 字节分组，仅缓存不足 64 字节的尾部，消除了大数组拷贝与 `doFinal()` 前的扩容分配
-- **实测提升**：SM3 1MB 哈希，JDK25 从 3339ms 降至 2996ms（**-10.3%**），JDK8 从 3339ms 降至 3054ms（**-8.5%**）
-- **项目回归单版本 Java 8 构建**：移除此前无收益的 MRJAR 多版本结构、VarHandle、Vector API、Virtual Threads、JNI SM3 CF 等改动，降低维护复杂度
-- **Netty 改为可选依赖**：核心 ASN1 工具类不再引用 `io.netty.buffer.ByteBuf`，作为纯加密工具包引入时不再强制传递 `netty-all`；如需 TLS/Netty 密钥协商功能，请自行显式引入 `netty-all`
-- `.gitignore` 调整：`src/main/resources/native/` 下的原生库不再被忽略，确保 `nat256mul.dll` 等能被正确打包
-### 3.2.1更新内容
-- 新增 `SM3HMac` 直接调用 API，和现有 `SM2` / `SM3` / `SM4` 的使用方式保持一致
-- 新增 `XaProvider` 的 `HmacSM3` JCA `Mac` 注册，并提供 `SM3HMAC`、`HMACSM3`、`HMAC-SM3` 别名
-- 补齐 `SM4` 的 `CFB` / `OFB` 模式，并补充 `NoPadding` 适配
-- 补充 HMAC-SM3 与 SM4 新模式的 README 说明和单元测试
-### 3.1.0更新内容
-修复依赖中的bug并解决BC库依赖传递问题
-### 3.0.0更新内容
-使用JNI对SM2进行了专门优化(JNI加载失败会自动降级使用原生JAVA)，除了SM2验签gm-java慢 43.8%，其余的均超过BC库的最新版本的SM2P256V1曲线
-##### SM2 验签的 Shamir 双标量乘法需要 ~258 次倍点 + ~80 次加点，这是算法固有成本。SM2 曲线 a ≠ 0 且 p ≡ 2 (mod 3)，不支持 GLV 自同态分解（需要 a=0 或 p ≡ 1 mod 3）。BC 的 HotSpot C2 JIT 编译器对纯 Java long 算术优化极致，在此场景下接近 C 性能。进一步优化方向：x86-64 BMI2/ADX 汇编优化 Montgomery 乘法内循环。
-- 测试结果见
-#####
-v3.0性能对比.txt
-#####
-### 2.2.1更新内容
-#### SM3性能优化了20%
-
-### 2.2.0更新内容
-#### SM2底层重构
-#### 优化后的结果(BC（bcprov-jdk18on 1.76版本）)
-- 密钥生成比BC快 1.63x
-- 加密比BC快 2.24x
-- 解密比BC快 3.14x
-- 签名比BC快 2.80x
-- 验签比BC快 1.54x
-#### SM2 素数特化归约 + 更大预计算窗口
-#### 核心思路
-SM2 的素数 p = 2^256 - 2^224 - 2^96 + 2^64 - 1 是一个 Solinas 素数（广义 Mersenne 素数），其特殊结构允许用移位和加减法替代通用的除法取模。当前代码每次 a.multiply(b).mod(p) 会创建 2 个 BigInteger 临时对象并执行通用除法。一次标量乘法约有 1500 次这样的调用——这是最主要的性能瓶颈。
-
-数学原理
-
-由 p 的定义可得：2^256 ≡ 2^224 + 2^96 - 2^64 + 1 (mod p)
-因此 512 位乘积 T = T_high * 2^256 + T_low 可以归约为：
-T mod p ≡ T_low + T_high * (2^224 + 2^96 - 2^64 + 1) (mod p) 
-这只需要移位和加减法，完全消除了除法。
-
-- SM2P256V1Field — 利用 SM2 素数 p = 2^256 - 2^224 - 2^96 + 2^64 - 1 的特殊结构，用 int[8] 小端数组替代 BigInteger，模归约仅需移位+加减法
-- wNAF 窗口 w=7 — 预计算 32 个基点奇数倍点，将点加法从 ~37 次降至 ~32 次
-- 零 BigInteger 分配 — 域运算内部全部使用 int 数组和 long 累加器，消除约 1500 个/次标量乘法的 BigInteger 临时对象
-
-
-### 2.1.0更新内容
-使用opus全面优化了密钥生成以及加解密运算速度（虽然在AI时代可能不太用得上工具类了）
-- 1.SM4以及SM3性能与BC接近（SM4CTR使用了多线程加速，速度比BC（bcprov-jdk18on 1.76版本）快三倍）
-- 2.SM2略慢于BC，后续计划对 SM2 素数做特化模归约和以及增大更大的预计算窗口
 ## 主要功能
+
 ### 密码算法
 
- - 对称密码算法 SM4（ECB/CBC/CFB/OFB/CTR/GCM）
- - 非对称密码算法 SM2（加解密/签名验签）
- - Hash算法 SM3
- - 消息认证码 HMAC-SM3（直接调用 / JCA `Mac`）
- - 基于SM3实现的随机数生成器（多线程加速）
+- 对称密码算法 SM4（ECB/CBC/CFB/OFB/CTR/GCM）
+- 非对称密码算法 SM2（加解密/签名验签）
+- Hash 算法 SM3
+- 消息认证码 HMAC-SM3（直接调用 / JCA `Mac`）
+- 基于 SM3 实现的随机数生成器（多线程加速）
+
 ### 证书
- - 证书解析以及证书SHA1指纹计算
- - SM2证书生成
+
+- 证书解析以及证书 SHA1 指纹计算
+- SM2 证书生成
+
 ### 密钥协商
-- 模拟TLS握手协议，通信双方协商会话密钥
+
+- 模拟 TLS 握手协议，通信双方协商会话密钥
 
 ## 整体功能基准测试
-### test目录下com.yxj.gm包Benchmarking类
+
+### test 目录下 com.yxj.gm 包 Benchmarking 类
 
 ## 快速使用
-```java
-        String msg = "gm-java-1.0";
-```
-### SM2密钥对生成
-```java
-        KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
-```
-### SM2加解密
-```java 
-        SM2Cipher sm2Cipher = new SM2Cipher();
-        byte[] mi = sm2Cipher.SM2CipherEncrypt(msg.getBytes(), keyPair.getPublic().getEncoded());
-        byte[] ming = sm2Cipher.SM2CipherDecrypt(mi, keyPair.getPrivate().getEncoded());
-        System.out.println("SM2解密结果："+new String(ming));
-```
-### SM2签名验签
-```java
-        SM2Signature signature = new SM2Signature();
-        byte[] signature1 = signature.signature(msg.getBytes(), null, keyPair.getPrivate().getEncoded());
-        boolean b = signature.verify(msg.getBytes(), null, signature1, keyPair.getPublic().getEncoded());
-        System.out.println("SM2验签结果："+b);
-```
-### 制作SM2证书
-```java
-        //ca证书密钥
-        KeyPair caKeyPair = SM2KeyPairGenerate.generateSM2KeyPair();
-        //终端证书密钥
-        KeyPair equipKeyPair = SM2KeyPairGenerate.generateSM2KeyPair();
 
-        SM2CertGenerator sm2CertGenerator = new SM2CertGenerator();
-        String DN_CA = "CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US";
-        String DN_CHILD = "CN=DD,OU=DD,O=DD,L=Linton,ST=Utah,C=CN";
-        CertTest certTest = new CertTest();
-        byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded(),false,0);
-        try {
-            FileUtils.writeFile("D:/certtest/java-ca-3.cer",rootCert);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, caKeyPair.getPrivate().getEncoded(), equipKeyPair.getPublic().getEncoded(),false,0);
-        try {
-            FileUtils.writeFile("D:/certtest/java-ownerCert-3.cer",ownerCert);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        //使用HSM签名制作SM2证书
-        int hsmSigPriIndex=0;
-        rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded(),true,hsmSigPriIndex);
-```
-### SM3摘要计算
 ```java
-        SM3Digest sm3Digest = new SM3Digest();
-        sm3Digest.update(msg.getBytes());
-        byte[] md = sm3Digest.doFinal();
-        byte[] md2 = sm3Digest.doFinal(msg.getBytes());
-        sm3Digest.update("gm-java-".getBytes());
-        sm3Digest.update("1.0".getBytes());
-        byte[] md3 = sm3Digest.doFinal();
-        System.out.println(Hex.toHexString(md));
-        System.out.println(Hex.toHexString(md2));
-        System.out.println(Hex.toHexString(md3));
+String msg = "gm-java-1.0";
 ```
+
+### SM2 密钥对生成
+
+```java
+KeyPair keyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+```
+
+### SM2 加解密
+
+```java
+SM2Cipher sm2Cipher = new SM2Cipher();
+byte[] mi = sm2Cipher.SM2CipherEncrypt(msg.getBytes(), keyPair.getPublic().getEncoded());
+byte[] ming = sm2Cipher.SM2CipherDecrypt(mi, keyPair.getPrivate().getEncoded());
+System.out.println("SM2解密结果：" + new String(ming));
+```
+
+### SM2 签名验签
+
+```java
+SM2Signature signature = new SM2Signature();
+byte[] signature1 = signature.signature(msg.getBytes(), null, keyPair.getPrivate().getEncoded());
+boolean b = signature.verify(msg.getBytes(), null, signature1, keyPair.getPublic().getEncoded());
+System.out.println("SM2验签结果：" + b);
+```
+
+### 制作 SM2 证书
+
+```java
+// ca 证书密钥
+KeyPair caKeyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+// 终端证书密钥
+KeyPair equipKeyPair = SM2KeyPairGenerate.generateSM2KeyPair();
+
+SM2CertGenerator sm2CertGenerator = new SM2CertGenerator();
+String DN_CA = "CN=Digicert,OU=Digicert,O=Digicert,L=Linton,ST=Utah,C=US";
+String DN_CHILD = "CN=DD,OU=DD,O=DD,L=Linton,ST=Utah,C=CN";
+CertTest certTest = new CertTest();
+byte[] rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded(), false, 0);
+try {
+    FileUtils.writeFile("D:/certtest/java-ca-3.cer", rootCert);
+} catch (Exception e) {
+    throw new RuntimeException(e);
+}
+byte[] ownerCert = sm2CertGenerator.generatorCert(DN_CA, 365, DN_CHILD, new KeyUsage(KeyUsage.digitalSignature), false, caKeyPair.getPrivate().getEncoded(), equipKeyPair.getPublic().getEncoded(), false, 0);
+try {
+    FileUtils.writeFile("D:/certtest/java-ownerCert-3.cer", ownerCert);
+} catch (Exception e) {
+    throw new RuntimeException(e);
+}
+// 使用 HSM 签名制作 SM2 证书
+int hsmSigPriIndex = 0;
+rootCert = sm2CertGenerator.generatorCert(DN_CA, 365 * 10, DN_CA, new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyCertSign), true, caKeyPair.getPrivate().getEncoded(), caKeyPair.getPublic().getEncoded(), true, hsmSigPriIndex);
+```
+
+### SM3 摘要计算
+
+```java
+SM3Digest sm3Digest = new SM3Digest();
+sm3Digest.update(msg.getBytes());
+byte[] md = sm3Digest.doFinal();
+byte[] md2 = sm3Digest.doFinal(msg.getBytes());
+sm3Digest.update("gm-java-".getBytes());
+sm3Digest.update("1.0".getBytes());
+byte[] md3 = sm3Digest.doFinal();
+System.out.println(Hex.toHexString(md));
+System.out.println(Hex.toHexString(md2));
+System.out.println(Hex.toHexString(md3));
+```
+
 ### HMAC-SM3（直接调用）
+
 ```java
-        byte[] key = "1234567890abcdef".getBytes();
-        SM3HMac sm3HMac = new SM3HMac(key);
-        sm3HMac.update(msg.getBytes());
-        byte[] tag = sm3HMac.doFinal();
-        System.out.println(Hex.toHexString(tag));
+byte[] key = "1234567890abcdef".getBytes();
+SM3HMac sm3HMac = new SM3HMac(key);
+sm3HMac.update(msg.getBytes());
+byte[] tag = sm3HMac.doFinal();
+System.out.println(Hex.toHexString(tag));
 ```
+
 ### HMAC-SM3（JCA）
+
 ```java
-        Security.addProvider(new XaProvider());
-        Mac mac = Mac.getInstance("HmacSM3", "XaProvider");
-        SecretKeySpec keySpec = new SecretKeySpec("1234567890abcdef".getBytes(), "HmacSM3");
-        mac.init(keySpec);
-        mac.update(msg.getBytes());
-        byte[] tag = mac.doFinal();
-        System.out.println(Hex.toHexString(tag));
+Security.addProvider(new XaProvider());
+Mac mac = Mac.getInstance("HmacSM3", "XaProvider");
+SecretKeySpec keySpec = new SecretKeySpec("1234567890abcdef".getBytes(), "HmacSM3");
+mac.init(keySpec);
+mac.update(msg.getBytes());
+byte[] tag = mac.doFinal();
+System.out.println(Hex.toHexString(tag));
 ```
+
 如果源码目录下直接运行 JCA `Mac` 遇到 `JCE cannot authenticate the provider`，优先使用上面的直接调用方式；这是 JCE Provider 认证限制，不影响 `SM3HMac` 直接 API。
-### 随机数生成（通过SM3实现）
+
+### 随机数生成（通过 SM3 实现）
+
 ```java
-        byte[] random = Random.RandomBySM3(16);
-        System.out.println(Hex.toHexString(random));
-```
-### SM4加解密
-```java
-        SecureRandom secureRandom = new SecureRandom();
-        byte[] key = new byte[16];
-        byte[] iv = new byte[16];
-        secureRandom.nextBytes(key);
-        secureRandom.nextBytes(iv);
-        //ECB模式
-        SM4Cipher sm4CipherECB = new SM4Cipher(ModeEnum.ECB);
-        byte[] ecbmi = sm4CipherECB.cipherEncrypt(key, msg.getBytes(), null);
-        byte[] ecbming = sm4CipherECB.cipherDecrypt(key, ecbmi, iv);
-        System.out.println("ECB明文："+new String(ecbming));
-        //CBC模式
-        SM4Cipher sm4CipherCBC = new SM4Cipher(ModeEnum.CBC);
-        byte[] cbcmi = sm4CipherCBC.cipherEncrypt(key, msg.getBytes(), iv);
-        byte[] cbcming = sm4CipherCBC.cipherDecrypt(key, cbcmi, iv);
-        System.out.println("CBC明文："+new String(cbcming));
-        //CTR模式
-        SM4Cipher sm4CipherCTR = new SM4Cipher(ModeEnum.CTR);
-        byte[] ctrmi = sm4CipherCTR.cipherEncrypt(key, msg.getBytes(), iv);
-        byte[] ctrming = sm4CipherCTR.cipherDecrypt(key, ctrmi, iv);
-        System.out.println("CTR明文："+new String(ctrming));
-        //GCM模式
-        SM4Cipher sm4_gcm = new SM4Cipher();
-        AEADExecution aeadExecution = sm4_gcm.cipherEncryptGCM(key, msg, new byte[12], "aad".getBytes(), 16);
-        System.out.println("GCM密文："+Hex.toHexString(aeadExecution.getCipherText()));
-        System.out.println("GCMtag："+Hex.toHexString(aeadExecution.getTag()));
-        byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution.getTag());
-        System.out.println("GCM明文："+new String(ming_gcm));
+byte[] random = Random.RandomBySM3(16);
+System.out.println(Hex.toHexString(random));
 ```
 
-### 模拟TLS握手进行密钥协商（Netty）
-#### 服务端（默认使用4433端口）
+### SM4 加解密
+
 ```java
-        NettyTlsServer nettyTlsServer = new NettyTlsServer(4432);
-        new Thread(()->{
-            try {
-                nettyTlsServer.start();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }).start();
-        new Thread(()->{
-            while (true){
-                System.out.println("server sleep");
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-                if(nettyTlsServer.getRandom()!=null){
-                    System.out.println("netty server random："+Hex.toHexString(nettyTlsServer.getRandom()));
-                    break;
-                }
-            }
-            nettyTlsServer.shutdown();
-        }).start();
+SecureRandom secureRandom = new SecureRandom();
+byte[] key = new byte[16];
+byte[] iv = new byte[16];
+secureRandom.nextBytes(key);
+secureRandom.nextBytes(iv);
+// ECB 模式
+SM4Cipher sm4CipherECB = new SM4Cipher(ModeEnum.ECB);
+byte[] ecbmi = sm4CipherECB.cipherEncrypt(key, msg.getBytes(), null);
+byte[] ecbming = sm4CipherECB.cipherDecrypt(key, ecbmi, iv);
+System.out.println("ECB明文：" + new String(ecbming));
+// CBC 模式
+SM4Cipher sm4CipherCBC = new SM4Cipher(ModeEnum.CBC);
+byte[] cbcmi = sm4CipherCBC.cipherEncrypt(key, msg.getBytes(), iv);
+byte[] cbcming = sm4CipherCBC.cipherDecrypt(key, cbcmi, iv);
+System.out.println("CBC明文：" + new String(cbcming));
+// CTR 模式
+SM4Cipher sm4CipherCTR = new SM4Cipher(ModeEnum.CTR);
+byte[] ctrmi = sm4CipherCTR.cipherEncrypt(key, msg.getBytes(), iv);
+byte[] ctrming = sm4CipherCTR.cipherDecrypt(key, ctrmi, iv);
+System.out.println("CTR明文：" + new String(ctrming));
+// GCM 模式
+SM4Cipher sm4_gcm = new SM4Cipher();
+AEADExecution aeadExecution = sm4_gcm.cipherEncryptGCM(key, msg, new byte[12], "aad".getBytes(), 16);
+System.out.println("GCM密文：" + Hex.toHexString(aeadExecution.getCipherText()));
+System.out.println("GCMtag：" + Hex.toHexString(aeadExecution.getTag()));
+byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), new byte[12], "aad".getBytes(), aeadExecution.getTag());
+System.out.println("GCM明文：" + new String(ming_gcm));
 ```
+
+### 模拟 TLS 握手进行密钥协商（Netty）
+
+#### 服务端（默认使用 4433 端口）
+
+```java
+NettyTlsServer nettyTlsServer = new NettyTlsServer(4432);
+new Thread(() -> {
+    try {
+        nettyTlsServer.start();
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+}).start();
+new Thread(() -> {
+    while (true) {
+        System.out.println("server sleep");
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        if (nettyTlsServer.getRandom() != null) {
+            System.out.println("netty server random：" + Hex.toHexString(nettyTlsServer.getRandom()));
+            break;
+        }
+    }
+    nettyTlsServer.shutdown();
+}).start();
+```
+
 #### 客户端
-```java
-        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost", 4432);
-        new Thread(()->{
-            try {
-                nettyTlsClient.start();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }).start();
-        new Thread(()->{
-            while (true){
-                try {
-                    Thread.sleep(1000);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-                if(nettyTlsClient.getRandom()!=null){
-                    System.out.println("netty client random："+Hex.toHexString(nettyTlsClient.getRandom()));
-                    break;
-                }
-            }
-            nettyTlsClient.shutdown();
-            System.out.println(i.incrementAndGet() +"---------TLS握手测试通过（NETTY）---------");
 
-        }).start();
+```java
+NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost", 4432);
+new Thread(() -> {
+    try {
+        nettyTlsClient.start();
+    } catch (Exception e) {
+        throw new RuntimeException(e);
+    }
+}).start();
+new Thread(() -> {
+    while (true) {
+        try {
+            Thread.sleep(1000);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        if (nettyTlsClient.getRandom() != null) {
+            System.out.println("netty client random：" + Hex.toHexString(nettyTlsClient.getRandom()));
+            break;
+        }
+    }
+    nettyTlsClient.shutdown();
+    System.out.println(i.incrementAndGet() + "---------TLS握手测试通过（NETTY）---------");
+}).start();
 ```
 
 #### 服务端（使用私有服务端证书以及自定义端口）
+
 ```java
-NettyTlsServer nettyTlsServer = new NettyTlsServer(4432,cert,pri);
-```
-#### 客户端
-```java
-        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432);
-```
-#### 客户端（使用固定sessionId可以获取固定的key，在Server中缓存，存在被窃听风险,自行选择是否开启，默认关闭）
-```java
-        NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost",4432,true,Hex.decode("1234567812345678"));
+NettyTlsServer nettyTlsServer = new NettyTlsServer(4432, cert, pri);
 ```
 
-### 模拟TLS握手进行密钥协商（Socket）
-#### 服务端（默认使用4433端口）
-```java
-        TlsServer tlsServer = new TlsServer();
-        tlsServer.setDEBUG(true);
-        tlsServer.start();
-        System.out.println("握手完成！");
-        System.out.println("服务端随机数："+Hex.toHexString(tlsServer.getRandom()));
-```
 #### 客户端
+
 ```java
-        TlsClient tlsClient = new TlsClient("127.0.0.1");
-        tlsClient.setDEBUG(true);
-        tlsClient.start();
-        System.out.println("握手完成！");
-        System.out.println("客户端随机数："+Hex.toHexString(tlsClient.getRandom()));
+NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost", 4432);
+```
+
+#### 客户端（使用固定 sessionId 可以获取固定的 key，在 Server 中缓存，存在被窃听风险，自行选择是否开启，默认关闭）
+
+```java
+NettyTlsClient nettyTlsClient = new NettyTlsClient("localhost", 4432, true, Hex.decode("1234567812345678"));
+```
+
+### 模拟 TLS 握手进行密钥协商（Socket）
+
+#### 服务端（默认使用 4433 端口）
+
+```java
+TlsServer tlsServer = new TlsServer();
+tlsServer.setDEBUG(true);
+tlsServer.start();
+System.out.println("握手完成！");
+System.out.println("服务端随机数：" + Hex.toHexString(tlsServer.getRandom()));
+```
+
+#### 客户端
+
+```java
+TlsClient tlsClient = new TlsClient("127.0.0.1");
+tlsClient.setDEBUG(true);
+tlsClient.start();
+System.out.println("握手完成！");
+System.out.println("客户端随机数：" + Hex.toHexString(tlsClient.getRandom()));
 ```
 
 #### 服务端（使用私有服务端证书以及自定义端口）
+
 ```java
-        TlsServer tlsServer = new TlsServer(serverCert,serverCertPriKey,447);
-        tlsServer.setDEBUG(true);
-        tlsServer.start();
-        System.out.println("握手完成！");
-        System.out.println("服务端随机数："+Hex.toHexString(tlsServer.getRandom()));
+TlsServer tlsServer = new TlsServer(serverCert, serverCertPriKey, 447);
+tlsServer.setDEBUG(true);
+tlsServer.start();
+System.out.println("握手完成！");
+System.out.println("服务端随机数：" + Hex.toHexString(tlsServer.getRandom()));
 ```
+
 #### 客户端
+
 ```java
-        TlsClient tlsClient = new TlsClient("127.0.0.1",447);
-        tlsClient.setDEBUG(true);
-        tlsClient.start();
-        System.out.println("握手完成！");
-        System.out.println("客户端随机数："+Hex.toHexString(tlsClient.getRandom()));
+TlsClient tlsClient = new TlsClient("127.0.0.1", 447);
+tlsClient.setDEBUG(true);
+tlsClient.start();
+System.out.println("握手完成！");
+System.out.println("客户端随机数：" + Hex.toHexString(tlsClient.getRandom()));
 ```
+
+## 更新日志
+
+### 3.2.2 更新内容（性能优化）
+
+- **SM3 哈希性能优化**：将 `SM3Digest` 改为 streaming update，在 `update()` 阶段直接消化完整 64 字节分组，仅缓存不足 64 字节的尾部，消除了大数组拷贝与 `doFinal()` 前的扩容分配
+- **实测提升**：SM3 1MB 哈希，JDK25 从 3339ms 降至 2996ms（**-10.3%**），JDK8 从 3339ms 降至 3054ms（**-8.5%**）
+- **Netty 改为可选依赖**：核心 ASN1 工具类不再引用 `io.netty.buffer.ByteBuf`，作为纯加密工具包引入时不再强制传递 `netty-all`；如需 TLS/Netty 密钥协商功能，请自行显式引入 `netty-all`
+
+[查看完整更新日志](CHANGELOG.md)
