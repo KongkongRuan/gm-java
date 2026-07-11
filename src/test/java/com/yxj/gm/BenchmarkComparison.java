@@ -26,9 +26,15 @@ import org.bouncycastle.math.ec.*;
 import org.bouncycastle.math.ec.custom.gm.SM2P256V1Curve;
 import org.bouncycastle.crypto.engines.SM2Engine;
 
+import java.io.*;
 import java.math.BigInteger;
 import java.security.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 
 public class BenchmarkComparison {
     static final int MIN_RECOMMENDED_JAVA8_UPDATE = 161;
@@ -41,34 +47,230 @@ public class BenchmarkComparison {
     static final ECDomainParameters SM2_DOMAIN = new ECDomainParameters(
             SM2_PARAMS.getCurve(), SM2_PARAMS.getG(), SM2_PARAMS.getN(), SM2_PARAMS.getH());
 
+    private static final List<BenchmarkResult> RESULTS = new ArrayList<BenchmarkResult>();
+
     public static void main(String[] args) throws Exception {
         int sm2Warmup = 500, sm2Rounds = 200, sm2Sets = 5;
         int sm3Warmup = 500, sm3Rounds = 1000, sm3Sets = 5;
-        int sm4Warmup = 20, sm4Rounds = 5, sm4Sets = 5;
-        int sm4DataMB = 10;
+        int sm4Warmup = 50, sm4Rounds = 20, sm4Sets = 5;
+        int[] sm4DataMBs = {1, 10, 20};
 
-        System.out.println("════════════════════════════════════════════════════════");
-        System.out.println("  gm-java vs BouncyCastle vs Hutool 性能对比（优化版）");
-        System.out.println("════════════════════════════════════════════════════════");
-        System.out.printf("  Nat256  : %s%n", Nat256Native.isAvailable() ? "JNI 加速 (C)" : "Java 实现");
-        System.out.printf("  Java    : %s (%s)%n", System.getProperty("java.version"), System.getProperty("java.vm.name"));
-        System.out.printf("  OS      : %s %s%n", System.getProperty("os.name"), System.getProperty("os.arch"));
-        System.out.printf("  CPUs    : %d%n", Runtime.getRuntime().availableProcessors());
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter tsFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HHmmss");
+        String timestamp = now.format(tsFormatter);
+        String yyyymmdd = now.format(dateFormatter);
+        String hhmmss = now.format(timeFormatter);
+        int jdkMajor = javaMajorVersion();
+
+        String logFileName = String.format(Locale.US, "benchmark-comparison-%s-%s-JDK%d.log", yyyymmdd, hhmmss, jdkMajor);
+        File logFile = new File("reports", logFileName);
+        String summaryFileName = String.format(Locale.US, "summary-%s-%s.md", yyyymmdd, hhmmss);
+        File summaryFile = new File("reports", summaryFileName);
+
+        PrintStream originalOut = System.out;
+        PrintStream fileOut = null;
+        PrintStream tee = null;
+        try {
+            File parent = logFile.getParentFile();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
+            }
+            fileOut = new PrintStream(new FileOutputStream(logFile), true, "UTF-8");
+            tee = new PrintStream(new TeeOutputStream(originalOut, fileOut), true, "UTF-8");
+            System.setOut(tee);
+        } catch (Exception e) {
+            System.err.println("无法创建日志文件: " + e.getMessage());
+        }
+
+        try {
+            String gitCommit = gitCommitShort();
+            String pomVersion = readPomVersion();
+
+            printMetadataHeader(timestamp, gitCommit, pomVersion,
+                    sm2Warmup, sm2Rounds, sm2Sets,
+                    sm3Warmup, sm3Rounds, sm3Sets,
+                    sm4Warmup, sm4Rounds, sm4Sets, sm4DataMBs);
+
+            benchSM2KeyGen(sm2Warmup, sm2Rounds, sm2Sets);
+            benchSM2EncDec(sm2Warmup, sm2Rounds, sm2Sets);
+            benchSM2SignVerify(sm2Warmup, sm2Rounds, sm2Sets);
+            benchSM3(sm3Warmup, sm3Rounds, sm3Sets);
+            benchSM4(sm4Warmup, sm4Rounds, sm4Sets, sm4DataMBs);
+
+            System.out.println("\n═══════════════════════════════════════════════════════════════");
+            System.out.println("  全部测试完成");
+            System.out.println("═══════════════════════════════════════════════════════════════");
+
+            writeSummaryMarkdown(summaryFile, timestamp, gitCommit, pomVersion,
+                    sm2Warmup, sm2Rounds, sm2Sets,
+                    sm3Warmup, sm3Rounds, sm3Sets,
+                    sm4Warmup, sm4Rounds, sm4Sets, sm4DataMBs);
+
+            System.out.println("\n  报告已保存:");
+            System.out.println("    " + logFile.getPath());
+            System.out.println("    " + summaryFile.getPath());
+        } finally {
+            if (tee != null) {
+                tee.flush();
+            }
+            System.setOut(originalOut);
+            if (fileOut != null) {
+                fileOut.close();
+            }
+        }
+    }
+
+    static void printMetadataHeader(String timestamp, String gitCommit, String pomVersion,
+                                    int sm2Warmup, int sm2Rounds, int sm2Sets,
+                                    int sm3Warmup, int sm3Rounds, int sm3Sets,
+                                    int sm4Warmup, int sm4Rounds, int sm4Sets, int[] sm4DataMBs) {
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        System.out.println("  测试类型：BenchmarkComparison");
+        System.out.println("  测试时间：" + timestamp);
+        System.out.println("  Git Commit：" + gitCommit);
+        System.out.println("  版本：" + pomVersion);
+        System.out.println("  JDK：" + System.getProperty("java.version") + " (" + System.getProperty("java.vm.name") + ")");
+        System.out.println("  OS：" + System.getProperty("os.name") + " " + System.getProperty("os.arch"));
+        System.out.println("  CPUs：" + Runtime.getRuntime().availableProcessors());
+        System.out.println("  Nat256：" + (Nat256Native.isAvailable() ? "JNI" : "Java"));
+        System.out.println("  参数：SM2(warmup=" + sm2Warmup + ", rounds=" + sm2Rounds + ", sets=" + sm2Sets + "), " +
+                "SM3(warmup=" + sm3Warmup + ", rounds=" + sm3Rounds + ", sets=" + sm3Sets + "), " +
+                "SM4(warmup=" + sm4Warmup + ", rounds=" + sm4Rounds + ", sets=" + sm4Sets + ", dataMBs=" + Arrays.toString(sm4DataMBs) + ")");
         printLegacyJava8Hint();
-        System.out.printf("  SM2     : 预热 %d 次, 测量 %d 次 × %d 轮%n", sm2Warmup, sm2Rounds, sm2Sets);
-        System.out.printf("  SM3     : 预热 %d 次, 测量 %d 次 × %d 轮%n", sm3Warmup, sm3Rounds, sm3Sets);
-        System.out.printf("  SM4     : 预热 %d 次, 测量 %d 次 × %d 轮, 数据 %dMB%n", sm4Warmup, sm4Rounds, sm4Sets, sm4DataMB);
-        System.out.println("════════════════════════════════════════════════════════\n");
+        System.out.println("═══════════════════════════════════════════════════════════════\n");
+    }
 
-        benchSM2KeyGen(sm2Warmup, sm2Rounds, sm2Sets);
-        benchSM2EncDec(sm2Warmup, sm2Rounds, sm2Sets);
-        benchSM2SignVerify(sm2Warmup, sm2Rounds, sm2Sets);
-        benchSM3(sm3Warmup, sm3Rounds, sm3Sets);
-        benchSM4(sm4Warmup, sm4Rounds, sm4Sets, sm4DataMB);
+    static String gitCommitShort() {
+        try {
+            Process p = new ProcessBuilder("git", "rev-parse", "--short", "HEAD")
+                    .directory(new File("."))
+                    .redirectErrorStream(true)
+                    .start();
+            BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream(), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line);
+            }
+            int exit = p.waitFor();
+            String out = sb.toString().trim();
+            if (exit == 0 && !out.isEmpty()) {
+                return out;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return "unknown";
+    }
 
-        System.out.println("════════════════════════════════════════════════════════");
-        System.out.println("  全部测试完成");
-        System.out.println("════════════════════════════════════════════════════════");
+    static String readPomVersion() {
+        File pom = new File("pom.xml");
+        if (!pom.exists()) {
+            return "unknown";
+        }
+        BufferedReader br = null;
+        try {
+            br = new BufferedReader(new InputStreamReader(new FileInputStream(pom), "UTF-8"));
+            String line;
+            boolean foundArtifact = false;
+            while ((line = br.readLine()) != null) {
+                if (line.contains("<artifactId>gm-java</artifactId>")) {
+                    foundArtifact = true;
+                } else if (foundArtifact && line.contains("<version>")) {
+                    int start = line.indexOf("<version>") + "<version>".length();
+                    int end = line.indexOf("</version>");
+                    if (end > start) {
+                        return line.substring(start, end).trim();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // ignore
+        } finally {
+            if (br != null) {
+                try {
+                    br.close();
+                } catch (IOException e) {
+                    // ignore
+                }
+            }
+        }
+        return "unknown";
+    }
+
+    static void writeSummaryMarkdown(File summaryFile, String timestamp, String gitCommit, String pomVersion,
+                                     int sm2Warmup, int sm2Rounds, int sm2Sets,
+                                     int sm3Warmup, int sm3Rounds, int sm3Sets,
+                                     int sm4Warmup, int sm4Rounds, int sm4Sets, int[] sm4DataMBs) throws IOException {
+        StringBuilder md = new StringBuilder();
+        md.append("# gm-java 性能测试摘要\n\n");
+        md.append("## 测试元数据\n\n");
+        md.append("- **测试类型**：BenchmarkComparison\n");
+        md.append("- **测试时间**：").append(timestamp).append("\n");
+        md.append("- **Git Commit**：").append(gitCommit).append("\n");
+        md.append("- **版本**：").append(pomVersion).append("\n");
+        md.append("- **JDK**：").append(System.getProperty("java.version"))
+          .append(" (").append(System.getProperty("java.vm.name")).append(")\n");
+        md.append("- **OS**：").append(System.getProperty("os.name")).append(" ")
+          .append(System.getProperty("os.arch")).append("\n");
+        md.append("- **CPUs**：").append(Runtime.getRuntime().availableProcessors()).append("\n");
+        md.append("- **Nat256**：").append(Nat256Native.isAvailable() ? "JNI" : "Java").append("\n");
+        md.append("- **参数**：\n");
+        md.append("  - SM2: warmup=").append(sm2Warmup).append(", rounds=").append(sm2Rounds).append(", sets=").append(sm2Sets).append("\n");
+        md.append("  - SM3: warmup=").append(sm3Warmup).append(", rounds=").append(sm3Rounds).append(", sets=").append(sm3Sets).append("\n");
+        md.append("  - SM4: warmup=").append(sm4Warmup).append(", rounds=").append(sm4Rounds).append(", sets=").append(sm4Sets)
+          .append(", dataMBs=").append(Arrays.toString(sm4DataMBs)).append("\n");
+        md.append("\n");
+
+        md.append("## SM2 测试结果\n\n");
+        md.append("| 操作 | gm-java (ms) | BC (ms) | Hutool (ms) | 优胜者 |\n");
+        md.append("|------|-------------:|--------:|------------:|--------|\n");
+        for (BenchmarkResult r : RESULTS) {
+            if ("SM2".equals(r.category)) {
+                md.append(String.format(Locale.US, "| %s | %.2f | %.2f | %.2f | %s |%n",
+                        r.name, r.gm, r.bc, r.ht, r.winner));
+            }
+        }
+        md.append("\n");
+
+        md.append("## SM3 测试结果\n\n");
+        md.append("| 数据大小 | gm-java (ms) | BC (ms) | Hutool (ms) | 优胜者 |\n");
+        md.append("|----------|-------------:|--------:|------------:|--------|\n");
+        for (BenchmarkResult r : RESULTS) {
+            if ("SM3".equals(r.category)) {
+                md.append(String.format(Locale.US, "| %s | %.2f | %.2f | %.2f | %s |%n",
+                        r.name, r.gm, r.bc, r.ht, r.winner));
+            }
+        }
+        md.append("\n");
+
+        md.append("## SM4 测试结果\n\n");
+        md.append("| 模式+操作+大小 | gm-java (MB/s) | BC (MB/s) | Hutool (MB/s) | 优胜者 |\n");
+        md.append("|----------------|---------------:|----------:|---------------:|--------|\n");
+        for (BenchmarkResult r : RESULTS) {
+            if ("SM4".equals(r.category)) {
+                if (Double.isNaN(r.ht)) {
+                    md.append(String.format(Locale.US, "| %s | %.1f | %.1f | N/A | %s |%n",
+                            r.name, r.gm, r.bc, r.winner));
+                } else {
+                    md.append(String.format(Locale.US, "| %s | %.1f | %.1f | %.1f | %s |%n",
+                            r.name, r.gm, r.bc, r.ht, r.winner));
+                }
+            }
+        }
+        md.append("\n");
+
+        PrintWriter pw = null;
+        try {
+            pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(summaryFile), "UTF-8"));
+            pw.print(md.toString());
+        } finally {
+            if (pw != null) {
+                pw.close();
+            }
+        }
     }
 
     static void printLegacyJava8Hint() {
@@ -132,6 +334,28 @@ public class BenchmarkComparison {
 
         boolean isAvailable() {
             return unavailableReason == null;
+        }
+    }
+
+    static final class BenchmarkResult {
+        final String category;
+        final String name;
+        final double gm;
+        final double bc;
+        final double ht;
+        final String unit;
+        final String winner;
+        final String htUnavailableReason;
+
+        BenchmarkResult(String category, String name, double gm, double bc, double ht, String unit, String winner, String htUnavailableReason) {
+            this.category = category;
+            this.name = name;
+            this.gm = gm;
+            this.bc = bc;
+            this.ht = ht;
+            this.unit = unit;
+            this.winner = winner;
+            this.htUnavailableReason = htUnavailableReason;
         }
     }
 
@@ -202,7 +426,7 @@ public class BenchmarkComparison {
             for (int i = 0; i < rounds; i++) SmUtil.sm2();
             ht[s] = System.currentTimeMillis() - t0;
         }
-        printResult("SM2 密钥生成", rounds, gm, bc, ht, sets);
+        printResult("SM2", "SM2 密钥生成", rounds, gm, bc, ht, sets);
     }
 
     // ==================== SM2 加解密 ====================
@@ -267,8 +491,8 @@ public class BenchmarkComparison {
             for (int i = 0; i < rounds; i++) htSm2.decrypt(htEnc, KeyType.PrivateKey);
             htD[s] = System.currentTimeMillis() - t0;
         }
-        printResult("SM2 加密", rounds, gmE, bcE, htE, sets);
-        printResult("SM2 解密", rounds, gmD, bcD, htD, sets);
+        printResult("SM2", "SM2 加密", rounds, gmE, bcE, htE, sets);
+        printResult("SM2", "SM2 解密", rounds, gmD, bcD, htD, sets);
     }
 
     // ==================== SM2 签名/验签 ====================
@@ -333,87 +557,93 @@ public class BenchmarkComparison {
             for (int i = 0; i < rounds; i++) htSm2.verify(msg, htSig);
             htV[s] = System.currentTimeMillis() - t0;
         }
-        printResult("SM2 签名", rounds, gmS, bcS, htS, sets);
-        printResult("SM2 验签", rounds, gmV, bcV, htV, sets);
+        printResult("SM2", "SM2 签名", rounds, gmS, bcS, htS, sets);
+        printResult("SM2", "SM2 验签", rounds, gmV, bcV, htV, sets);
     }
 
     // ==================== SM3 ====================
     static void benchSM3(int warmup, int rounds, int sets) {
         System.out.println("\n╔══ SM3 哈希 ══╗");
+        byte[] data16B = new byte[16];
         byte[] data1K = new byte[1024];
+        byte[] data64K = new byte[64 * 1024];
         byte[] data1M = new byte[1024 * 1024];
-        new SecureRandom().nextBytes(data1K);
-        new SecureRandom().nextBytes(data1M);
+        SecureRandom random = new SecureRandom();
+        random.nextBytes(data16B);
+        random.nextBytes(data1K);
+        random.nextBytes(data64K);
+        random.nextBytes(data1M);
         org.bouncycastle.crypto.digests.SM3Digest bcDigest = new org.bouncycastle.crypto.digests.SM3Digest();
 
+        benchSM3Size("16B", data16B, warmup, rounds, sets, bcDigest);
+        benchSM3Size("1KB", data1K, warmup, rounds, sets, bcDigest);
+        benchSM3Size("64KB", data64K, warmup, rounds, sets, bcDigest);
+        benchSM3Size("1MB", data1M, warmup, rounds, sets, bcDigest);
+    }
+
+    static void benchSM3Size(String label, byte[] data, int warmup, int rounds, int sets,
+                             org.bouncycastle.crypto.digests.SM3Digest bcDigest) {
         long t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) { SM3Digest d = new SM3Digest(); d.update(data1K); d.doFinal(); }
-        System.out.printf("    预热 gm-1KB       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        for (int i = 0; i < warmup; i++) { SM3Digest d = new SM3Digest(); d.update(data); d.doFinal(); }
+        System.out.printf("    预热 gm-%s       %d 次 ... %d ms%n", label, warmup, System.currentTimeMillis() - t0);
         t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) { bcDigest.reset(); bcDigest.update(data1K, 0, data1K.length); byte[] o = new byte[32]; bcDigest.doFinal(o, 0); }
-        System.out.printf("    预热 BC-1KB       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        for (int i = 0; i < warmup; i++) { bcDigest.reset(); bcDigest.update(data, 0, data.length); byte[] o = new byte[32]; bcDigest.doFinal(o, 0); }
+        System.out.printf("    预热 BC-%s       %d 次 ... %d ms%n", label, warmup, System.currentTimeMillis() - t0);
         t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) cn.hutool.crypto.digest.SM3.create().digest(data1K);
-        System.out.printf("    预热 HT-1KB       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        for (int i = 0; i < warmup; i++) cn.hutool.crypto.digest.SM3.create().digest(data);
+        System.out.printf("    预热 HT-%s       %d 次 ... %d ms%n", label, warmup, System.currentTimeMillis() - t0);
 
-        double[] gm1 = new double[sets], bc1 = new double[sets], ht1 = new double[sets];
+        double[] gm = new double[sets], bc = new double[sets], ht = new double[sets];
         for (int s = 0; s < sets; s++) {
             t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) { SM3Digest d = new SM3Digest(); d.update(data1K); d.doFinal(); }
-            gm1[s] = System.currentTimeMillis() - t0;
+            for (int i = 0; i < rounds; i++) { SM3Digest d = new SM3Digest(); d.update(data); d.doFinal(); }
+            gm[s] = System.currentTimeMillis() - t0;
             t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) { bcDigest.reset(); bcDigest.update(data1K, 0, data1K.length); byte[] o = new byte[32]; bcDigest.doFinal(o, 0); }
-            bc1[s] = System.currentTimeMillis() - t0;
+            for (int i = 0; i < rounds; i++) { bcDigest.reset(); bcDigest.update(data, 0, data.length); byte[] o = new byte[32]; bcDigest.doFinal(o, 0); }
+            bc[s] = System.currentTimeMillis() - t0;
             t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) cn.hutool.crypto.digest.SM3.create().digest(data1K);
-            ht1[s] = System.currentTimeMillis() - t0;
+            for (int i = 0; i < rounds; i++) cn.hutool.crypto.digest.SM3.create().digest(data);
+            ht[s] = System.currentTimeMillis() - t0;
         }
-        printResult("SM3 (1KB)", rounds, gm1, bc1, ht1, sets);
-
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) { SM3Digest d = new SM3Digest(); d.update(data1M); d.doFinal(); }
-        System.out.printf("    预热 gm-1MB       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) { bcDigest.reset(); bcDigest.update(data1M, 0, data1M.length); byte[] o = new byte[32]; bcDigest.doFinal(o, 0); }
-        System.out.printf("    预热 BC-1MB       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) cn.hutool.crypto.digest.SM3.create().digest(data1M);
-        System.out.printf("    预热 HT-1MB       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-
-        double[] gm2 = new double[sets], bc2 = new double[sets], ht2 = new double[sets];
-        for (int s = 0; s < sets; s++) {
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) { SM3Digest d = new SM3Digest(); d.update(data1M); d.doFinal(); }
-            gm2[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) { bcDigest.reset(); bcDigest.update(data1M, 0, data1M.length); byte[] o = new byte[32]; bcDigest.doFinal(o, 0); }
-            bc2[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) cn.hutool.crypto.digest.SM3.create().digest(data1M);
-            ht2[s] = System.currentTimeMillis() - t0;
-        }
-        printResult("SM3 (1MB)", rounds, gm2, bc2, ht2, sets);
+        printResult("SM3", "SM3 (" + label + ")", rounds, gm, bc, ht, sets);
     }
 
     // ==================== SM4 ====================
+    static void benchSM4(int warmup, int rounds, int sets, int[] dataMBs) {
+        for (int dataMB : dataMBs) {
+            // 大数据量时减少预热和测量轮数，避免测试时间过长或 OOM
+            int actualWarmup = warmup;
+            int actualRounds = rounds;
+            if (dataMB >= 20) {
+                actualWarmup = Math.max(5, warmup / 5);
+                actualRounds = Math.max(5, rounds / 4);
+            } else if (dataMB >= 10) {
+                actualWarmup = Math.max(10, warmup / 2);
+                actualRounds = Math.max(10, rounds / 2);
+            }
+
+            System.out.println("\n╔══ SM4 对称加解密 (" + dataMB + "MB, warmup=" + actualWarmup + ", rounds=" + actualRounds + ") ══╗");
+            byte[] key = new byte[16];
+            byte[] iv = new byte[16];
+            new SecureRandom().nextBytes(key);
+            new SecureRandom().nextBytes(iv);
+            byte[] data = new byte[dataMB * 1024 * 1024];
+            new SecureRandom().nextBytes(data);
+
+            SM4Cipher gmSm4Ecb = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.ECB);
+            SM4Cipher gmSm4Cbc = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.CBC);
+            SM4Cipher gmSm4Ctr = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.CTR);
+
+            HutoolSm4Support hutoolSm4 = initHutoolSm4(key, iv);
+
+            benchSM4Mode("SM4-ECB", gmSm4Ecb, key, data, iv, hutoolSm4.ecb, actualWarmup, actualRounds, sets, dataMB, true, hutoolSm4.unavailableReason);
+            benchSM4Mode("SM4-CBC", gmSm4Cbc, key, data, iv, hutoolSm4.cbc, actualWarmup, actualRounds, sets, dataMB, true, hutoolSm4.unavailableReason);
+            benchSM4CTR(gmSm4Ctr, key, data, iv, hutoolSm4.ctr, actualWarmup, actualRounds, sets, dataMB, hutoolSm4.unavailableReason);
+        }
+    }
+
     static void benchSM4(int warmup, int rounds, int sets, int dataMB) {
-        System.out.println("\n╔══ SM4 对称加解密 (" + dataMB + "MB) ══╗");
-        byte[] key = new byte[16];
-        byte[] iv = new byte[16];
-        new SecureRandom().nextBytes(key);
-        new SecureRandom().nextBytes(iv);
-        byte[] data = new byte[dataMB * 1024 * 1024];
-        new SecureRandom().nextBytes(data);
-
-        SM4Cipher gmSm4Ecb = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.ECB);
-        SM4Cipher gmSm4Cbc = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.CBC);
-        SM4Cipher gmSm4Ctr = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.CTR);
-
-        HutoolSm4Support hutoolSm4 = initHutoolSm4(key, iv);
-
-        benchSM4Mode("SM4-ECB", gmSm4Ecb, key, data, iv, hutoolSm4.ecb, warmup, rounds, sets, dataMB, true, hutoolSm4.unavailableReason);
-        benchSM4Mode("SM4-CBC", gmSm4Cbc, key, data, iv, hutoolSm4.cbc, warmup, rounds, sets, dataMB, true, hutoolSm4.unavailableReason);
-        benchSM4CTR(gmSm4Ctr, key, data, iv, hutoolSm4.ctr, warmup, rounds, sets, dataMB, hutoolSm4.unavailableReason);
+        benchSM4(warmup, rounds, sets, new int[] { dataMB });
     }
 
     static void benchSM4Mode(String name, SM4Cipher gmSm4, byte[] key, byte[] data, byte[] iv,
@@ -454,7 +684,7 @@ public class BenchmarkComparison {
                 htE[s] = System.currentTimeMillis() - t0;
             }
         }
-        printResultMB(name + " 加密", rounds, gmE, bcE, htE, sets, dataMB, htUnavailableReason);
+        printResultMB("SM4", name + " 加密", rounds, gmE, bcE, htE, sets, dataMB, htUnavailableReason);
 
         if (testDecrypt) {
             double[] gmD = new double[sets], bcD = new double[sets], htD = new double[sets];
@@ -474,7 +704,7 @@ public class BenchmarkComparison {
                     htD[s] = System.currentTimeMillis() - t0;
                 }
             }
-            printResultMB(name + " 解密", rounds, gmD, bcD, htD, sets, dataMB, htUnavailableReason);
+            printResultMB("SM4", name + " 解密", rounds, gmD, bcD, htD, sets, dataMB, htUnavailableReason);
         }
     }
 
@@ -526,8 +756,8 @@ public class BenchmarkComparison {
                 htD[s] = System.currentTimeMillis() - t0;
             }
         }
-        printResultMB("SM4-CTR 加密 [gm多线程]", rounds, gmE, bcE, htE, sets, dataMB, htUnavailableReason);
-        printResultMB("SM4-CTR 解密 [gm多线程]", rounds, gmD, bcD, htD, sets, dataMB, htUnavailableReason);
+        printResultMB("SM4", "SM4-CTR 加密 [gm多线程]", rounds, gmE, bcE, htE, sets, dataMB, htUnavailableReason);
+        printResultMB("SM4", "SM4-CTR 解密 [gm多线程]", rounds, gmD, bcD, htD, sets, dataMB, htUnavailableReason);
     }
 
     // ==================== BC helpers ====================
@@ -593,7 +823,7 @@ public class BenchmarkComparison {
     }
 
     // ==================== 输出格式化 ====================
-    static void printResult(String name, int rounds, double[] gm, double[] bc, double[] ht, int sets) {
+    static void printResult(String category, String name, int rounds, double[] gm, double[] bc, double[] ht, int sets) {
         Arrays.sort(gm); Arrays.sort(bc); Arrays.sort(ht);
         double gmMed = gm[sets/2], bcMed = bc[sets/2], htMed = ht[sets/2];
         double gmAvg = avg(gm), bcAvg = avg(bc), htAvg = avg(ht);
@@ -608,8 +838,8 @@ public class BenchmarkComparison {
         System.out.printf("    Hutool    : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ avg/次 %.3f ms%n",
                 htMed, htAvg, htMin, htMax, htAvg/rounds);
 
+        String winner = computeWinner(gmMed, bcMed, htMed, true);
         double best = Math.min(gmMed, Math.min(bcMed, htMed));
-        String winner = gmMed == best ? "gm-java" : bcMed == best ? "BC" : "Hutool";
         double pctGm = gmMed == best ? 0 : (gmMed - best) / best * 100;
         double pctBc = bcMed == best ? 0 : (bcMed - best) / best * 100;
         double pctHt = htMed == best ? 0 : (htMed - best) / best * 100;
@@ -618,9 +848,11 @@ public class BenchmarkComparison {
         if (pctBc > 0) System.out.printf("  BC慢 %.1f%%", pctBc);
         if (pctHt > 0) System.out.printf("  Hutool慢 %.1f%%", pctHt);
         System.out.println();
+
+        RESULTS.add(new BenchmarkResult(category, name, gmMed, bcMed, htMed, "ms", winner, null));
     }
 
-    static void printResultMB(String name, int rounds, double[] gm, double[] bc, double[] ht, int sets, int dataMB,
+    static void printResultMB(String category, String name, int rounds, double[] gm, double[] bc, double[] ht, int sets, int dataMB,
                               String htUnavailableReason) {
         Arrays.sort(gm); Arrays.sort(bc); Arrays.sort(ht);
         double gmMed = gm[sets/2], bcMed = bc[sets/2], htMed = ht[sets/2];
@@ -643,8 +875,8 @@ public class BenchmarkComparison {
             System.out.printf("    Hutool    : %s%n", htUnavailableReason == null ? "N/A" : "N/A │ " + htUnavailableReason);
         }
 
+        String winner = computeWinner(gmMed, bcMed, htMed, htAvailable);
         double best = htAvailable ? Math.min(gmMed, Math.min(bcMed, htMed)) : Math.min(gmMed, bcMed);
-        String winner = gmMed == best ? "gm-java" : bcMed == best ? "BC" : "Hutool";
         double pctGm = gmMed == best ? 0 : (gmMed - best) / best * 100;
         double pctBc = bcMed == best ? 0 : (bcMed - best) / best * 100;
         double pctHt = htAvailable && htMed != best ? (htMed - best) / best * 100 : 0;
@@ -653,11 +885,54 @@ public class BenchmarkComparison {
         if (pctBc > 0) System.out.printf("  BC慢 %.1f%%", pctBc);
         if (pctHt > 0) System.out.printf("  Hutool慢 %.1f%%", pctHt);
         System.out.println();
+
+        RESULTS.add(new BenchmarkResult(category, name, gmMBs, bcMBs, htMBs, "MB/s", winner, htUnavailableReason));
+    }
+
+    static String computeWinner(double gmMed, double bcMed, double htMed, boolean htAvailable) {
+        double best = htAvailable ? Math.min(gmMed, Math.min(bcMed, htMed)) : Math.min(gmMed, bcMed);
+        if (gmMed == best) return "gm-java";
+        if (bcMed == best) return "BC";
+        return "Hutool";
     }
 
     static double avg(double[] a) {
         double s = 0;
         for (double v : a) s += v;
         return s / a.length;
+    }
+
+    static class TeeOutputStream extends OutputStream {
+        private final OutputStream out1;
+        private final OutputStream out2;
+
+        TeeOutputStream(OutputStream out1, OutputStream out2) {
+            this.out1 = out1;
+            this.out2 = out2;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            out1.write(b);
+            out2.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            out1.write(b, off, len);
+            out2.write(b, off, len);
+        }
+
+        @Override
+        public void flush() throws IOException {
+            out1.flush();
+            out2.flush();
+        }
+
+        @Override
+        public void close() throws IOException {
+            out2.close();
+            out1.flush();
+        }
     }
 }

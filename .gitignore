@@ -6,6 +6,7 @@ target/
 bin/
 out/
 .workbuddy/
+.tmp_research/
 
 # ignore these files
 .classpath
@@ -62,4 +63,9 @@ mvnw
 # Files or folders need to be retained
 # ...
 /src/test/
+
+# Keep benchmark reports (override global *.log)
+!reports/
+!reports/**/*.log
+!reports/**/*.md
 
