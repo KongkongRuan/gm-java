@@ -26,10 +26,29 @@ GM-JAVA是一套用JAVA开发的支持国密算法的加解密工具包。
  - 下载源码编译之后引入或者直接下载gm-java-3.2.1.jar引入
 > **注意**：当前仓库源码版本为 `3.2.2-SNAPSHOT`，对应下方“3.2.2 更新内容”。Maven 中央仓库最新 Release 为 `3.2.1`，如需使用已发布版本请引用 `3.2.1`；如需使用 3.2.2 新特性，请克隆源码后执行 `mvn clean install` 安装到本地仓库。
 
+### Netty TLS 功能（可选依赖）
+从 `3.2.2-SNAPSHOT` 起，`gm-java` 核心算法模块不再强制依赖 `netty`。默认作为加密工具包引入时，Maven 不会传递 `netty-all`：
+```xml
+<dependency>
+    <groupId>io.github.kongkongruan</groupId>
+    <artifactId>gm-java</artifactId>
+    <version>3.2.1</version>
+</dependency>
+```
+如果需要使用 `NettyTlsClient` / `NettyTlsServer` 进行 TLS 握手密钥协商，请在自身项目的 `pom.xml` 中显式引入 `netty-all`：
+```xml
+<dependency>
+    <groupId>io.netty</groupId>
+    <artifactId>netty-all</artifactId>
+    <version>5.0.0.Alpha2</version>
+</dependency>
+```
+
 ### 3.2.2更新内容（性能优化，SNAPSHOT 开发中）
 - **SM3 哈希性能优化**：将 `SM3Digest` 改为 streaming update，在 `update()` 阶段直接消化完整 64 字节分组，仅缓存不足 64 字节的尾部，消除了大数组拷贝与 `doFinal()` 前的扩容分配
 - **实测提升**：SM3 1MB 哈希，JDK25 从 3339ms 降至 2996ms（**-10.3%**），JDK8 从 3339ms 降至 3054ms（**-8.5%**）
 - **项目回归单版本 Java 8 构建**：移除此前无收益的 MRJAR 多版本结构、VarHandle、Vector API、Virtual Threads、JNI SM3 CF 等改动，降低维护复杂度
+- **Netty 改为可选依赖**：核心 ASN1 工具类不再引用 `io.netty.buffer.ByteBuf`，作为纯加密工具包引入时不再强制传递 `netty-all`；如需 TLS/Netty 密钥协商功能，请自行显式引入 `netty-all`
 - `.gitignore` 调整：`src/main/resources/native/` 下的原生库不再被忽略，确保 `nat256mul.dll` 等能被正确打包
 ### 3.2.1更新内容
 - 新增 `SM3HMac` 直接调用 API，和现有 `SM2` / `SM3` / `SM4` 的使用方式保持一致

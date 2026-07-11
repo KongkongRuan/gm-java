@@ -4,7 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM2.Signature.SM2Signature;
-import com.yxj.gm.asn1.ca.util.ASN1Util;
+import com.yxj.gm.tls.netty.handler.NettyASN1Util;
 import com.yxj.gm.provider.XaProvider;
 import com.yxj.gm.random.Random;
 import com.yxj.gm.tls.*;
@@ -109,7 +109,7 @@ public class NettyTlsServerHandler extends SimpleChannelInboundHandler<ByteBuf> 
     @Override
     protected void messageReceived(ChannelHandlerContext ctx, ByteBuf bf) throws Exception {
 //        byte[] bytes = ;
-         ASN1Util.GetContent(bf, dataRecive);
+         NettyASN1Util.GetContent(bf, dataRecive);
             TlsMessage tlsMessage  ;
          if(dataRecive.isComplete()){
              tlsMessage = JSON.parseObject(new String(dataRecive.getCurrentContent()), TlsMessage.class);

@@ -3,12 +3,9 @@ package com.yxj.gm.asn1.ca.util;
 import com.alibaba.fastjson2.JSON;
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Cipher;
 import com.yxj.gm.asn1.ca.sm2.ASN1SM2Signature;
-import com.yxj.gm.tls.netty.NettyConstant;
 import com.yxj.gm.tls.netty.TlsMessage;
-import com.yxj.gm.tls.netty.handler.DataRecive;
 import com.yxj.gm.util.DataConvertUtil;
 import com.yxj.gm.util.FileUtils;
-import io.netty.buffer.ByteBuf;
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -21,7 +18,7 @@ import java.security.PublicKey;
 
 public class ASN1Util {
 
-    private static final boolean DEBUG = NettyConstant.DEBUG;
+    private static final boolean DEBUG = false;
     public static byte[] GetContent(InputStream inputStream){
         try {
             int tag = inputStream.read();
@@ -48,80 +45,6 @@ public class ASN1Util {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-    }
-    public static void GetContent(ByteBuf byteBuf, DataRecive dataRecive){
-        /**
-         * 解决分包问题
-         */
-        if(!dataRecive.isComplete()){
-            if(DEBUG) System.out.println("分包 GetContent");
-                int totalLength = dataRecive.getTotalLength();
-                byte[] currentContent = dataRecive.getCurrentContent();
-                int remaining =totalLength-currentContent.length;
-                int contentLength = Math.min(remaining, 2048);
-                byte[] content = new byte[contentLength];
-                byteBuf.readBytes(content);
-//            System.err.println("分包 GetContent Data------------------");
-//            System.err.println(new String(content));
-                dataRecive.setCurrentContent(DataConvertUtil.byteArrAdd(currentContent,content));
-                dataRecive.setComplete(true);
-                return ;
-            }
-
-            int tag = byteBuf.readByte();
-            if(tag!=4){
-                 byte[] content = new byte[byteBuf.readableBytes()];
-                if(DEBUG) byteBuf.readBytes(content);
-                if(DEBUG) System.out.println("@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
-                if(DEBUG) System.out.println(new String(content));
-//                dataRecive.setUnpackingErrorData(content);
-//                dataRecive.setComplete(false);
-//                return;
-                throw new RuntimeException("输入的asn1编码有误,tag:"+tag);
-            }
-            int ltag = byteBuf.readByte();
-            byte[] bytes = DataConvertUtil.byteToBitArray((byte) ltag);
-            if(bytes[0]!=1){
-                byte[] bytes1 = new byte[ltag];
-                byteBuf.readBytes(bytes1);
-                if(DEBUG) System.err.println("bytes[0]!=1  小Data------------------");
-                if(DEBUG) System.err.println(new String(bytes1));
-                dataRecive.setCurrentContent(bytes1);
-            }else {
-                if(DEBUG) System.err.println("bytes[0]!=1  大Data------------------");
-                bytes[0]=0;
-                byte b = DataConvertUtil.BitArrayTobyte(bytes);
-                byte[] lenbytes = new byte[b];
-                byteBuf.readBytes(lenbytes);
-                long len = DataConvertUtil.byteArrayToUnsignedInt(lenbytes);
-
-                byte[] content = new byte[(int)len];
-                int remaining=byteBuf.writerIndex()-(b+2);
-                if(len>remaining){
-                    dataRecive.setTotalLength((int)len);
-                    content=new byte[remaining];
-                    byteBuf.readBytes(content);
-                    if(DEBUG) System.err.println("len>remaining  分包第一包------------------");
-                    if(DEBUG) System.err.println(new String(content));
-                    dataRecive.setCurrentContent(DataConvertUtil.byteArrAdd(dataRecive.getCurrentContent(),content));
-                    if(dataRecive.getCurrentContent().length==dataRecive.getTotalLength()){
-                        dataRecive.setComplete(true);
-                    }else {
-                        dataRecive.setComplete(false);
-                    }
-                    return;
-//                    System.out.println("inner--------------");
-//                    System.out.println(new String(content));
-                }
-
-                byteBuf.readBytes(content);
-                if(DEBUG) System.err.println("bytes[0]!=1  大Data------------------");
-                if(DEBUG) System.err.println(new String(content));
-                dataRecive.setCurrentContent(content);
-                dataRecive.setComplete(true);
-
-            }
-
     }
     private static final String clientHead = "gm-java-tls-client";
     public static byte[] ServerGetContent(InputStream inputStream){
