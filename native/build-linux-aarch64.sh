@@ -8,12 +8,18 @@ INC="$JAVA_HOME/include"
 INC_LINUX="$JAVA_HOME/include/linux"
 OUT="../src/main/resources/native/linux-aarch64/libnat256mul.so"
 
-# Prefer native gcc on ARM; for x86 host use aarch64-linux-gnu-gcc
-if command -v aarch64-linux-gnu-gcc &>/dev/null; then
-    CC=aarch64-linux-gnu-gcc
-elif uname -m | grep -q aarch64; then
+# Prefer native gcc on ARM; for x86 host use aarch64-linux-gnu-gcc (or versioned gcc-14 etc.)
+CC=""
+for TRY in aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc-14 aarch64-linux-gnu-gcc-13 aarch64-linux-gnu-gcc-12; do
+    if command -v "$TRY" &>/dev/null; then
+        CC="$TRY"
+        break
+    fi
+done
+if [ -z "$CC" ] && uname -m | grep -q aarch64; then
     CC=gcc
-else
+fi
+if [ -z "$CC" ]; then
     echo "Need aarch64-linux-gnu-gcc for cross-compile, or run on ARM64"
     exit 1
 fi

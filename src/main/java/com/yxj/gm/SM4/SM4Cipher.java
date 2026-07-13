@@ -26,14 +26,31 @@ public class SM4Cipher {
 
     private final int processorCount = 2 * Runtime.getRuntime().availableProcessors() + 1;
 
-    private static final ExecutorService THREAD_POOL = Executors.newFixedThreadPool(
-            Math.max(2, Runtime.getRuntime().availableProcessors()),
-            r -> {
-                Thread t = new Thread(r);
-                t.setDaemon(true);
-                return t;
-            }
-    );
+    /**
+     * 内部并行化总开关。
+     * 默认开启（大分组数时自动使用多线程）；业务层若希望自己管理线程池，
+     * 可添加 -Dgm.sm4.parallel=false 强制走单线程路径。
+     */
+    private static final boolean PARALLEL_ENABLED =
+            Boolean.parseBoolean(System.getProperty("gm.sm4.parallel", "true"));
+
+    /**
+     * 懒加载的线程池：仅在真正进入并行路径时才创建，避免禁用并行时仍占用线程资源。
+     */
+    private static final class LazyThreadPool {
+        static final ExecutorService INSTANCE = Executors.newFixedThreadPool(
+                Math.max(2, Runtime.getRuntime().availableProcessors()),
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setDaemon(true);
+                    return t;
+                }
+        );
+    }
+
+    private static ExecutorService getThreadPool() {
+        return LazyThreadPool.INSTANCE;
+    }
 
     private ModeEnum Mode = CTR;
     private byte[][] VBox = new byte[129][16];
@@ -341,7 +358,7 @@ public class SM4Cipher {
         Timing.acc(Timing.padNs, s);
         int blocks = padded.length / 16;
         byte[] result = new byte[padded.length];
-        if (blocks >= PARALLEL_THRESHOLD) {
+        if (PARALLEL_ENABLED && blocks >= PARALLEL_THRESHOLD) {
             parallelCore(padded, result, rk, true);
         } else {
             long c = Timing.t0();
@@ -367,7 +384,7 @@ public class SM4Cipher {
             long start = j * size;
             long end = (j == procs - 1) ? start + size + remainder : (j + 1) * size;
             long fs = start, fe = end;
-            THREAD_POOL.execute(() -> {
+            getThreadPool().execute(() -> {
                 if (encrypt) {
                     for (int i = (int) fs; i < fe; i++) {
                         cipherCoreOff(in, i * 16, out, i * 16, rk);
@@ -442,8 +459,21 @@ public class SM4Cipher {
         checkIvLength(iv);
         int totalBlocks = (m.length + 15) / 16;
         byte[] result = new byte[m.length];
-        int procs = Math.min(processorCount, totalBlocks);
+        if (!PARALLEL_ENABLED || totalBlocks < PARALLEL_THRESHOLD) {
+            // 单线程路径：避免线程调度与同步开销，也响应 -Dgm.sm4.parallel=false
+            byte[] counter = iv.clone();
+            byte[] cipherBuf = new byte[16];
+            for (int i = 0; i < totalBlocks; i++) {
+                cipherCoreOff(counter, 0, cipherBuf, 0, rk);
+                int off = i * 16;
+                int len = Math.min(16, m.length - off);
+                for (int b = 0; b < len; b++) result[off + b] = (byte) (m[off + b] ^ cipherBuf[b]);
+                incrementCounter(counter);
+            }
+            return result;
+        }
 
+        int procs = Math.min(processorCount, totalBlocks);
         long size = totalBlocks / procs;
         long remainder = totalBlocks % procs;
         CountDownLatch latch = new CountDownLatch(procs);
@@ -454,7 +484,7 @@ public class SM4Cipher {
             byte[] threadIv = (j == 0) ? iv.clone() : addToCounter(iv, j * size);
             long finalEnd = end;
             long finalStart = start;
-            THREAD_POOL.execute(() -> {
+            getThreadPool().execute(() -> {
                 byte[] curIv = threadIv;
                 byte[] cipherBuf = new byte[16];
                 for (int i = (int) finalStart; i < finalEnd; i++) {
@@ -528,7 +558,7 @@ public class SM4Cipher {
         Timing.calls.increment();
         int blocks = m.length / 16;
         byte[] result = new byte[m.length];
-        if (blocks >= PARALLEL_THRESHOLD) {
+        if (PARALLEL_ENABLED && blocks >= PARALLEL_THRESHOLD) {
             parallelCore(m, result, rk, false);
         } else {
             long c = Timing.t0();
@@ -551,7 +581,7 @@ public class SM4Cipher {
         Timing.calls.increment();
         int blocks = m.length / 16;
         byte[] result = new byte[m.length];
-        if (blocks >= PARALLEL_THRESHOLD) {
+        if (PARALLEL_ENABLED && blocks >= PARALLEL_THRESHOLD) {
             parallelCbcDecrypt(m, iv, result, rk);
         } else {
             long c = Timing.t0();
@@ -581,7 +611,7 @@ public class SM4Cipher {
             long start = j * size;
             long end = (j == procs - 1) ? start + size + remainder : (j + 1) * size;
             long fs = start, fe = end;
-            THREAD_POOL.execute(() -> {
+            getThreadPool().execute(() -> {
                 for (int i = (int) fs; i < fe; i++) {
                     int off = i * 16;
                     decryptCoreOff(m, off, result, off, rk);
@@ -608,7 +638,7 @@ public class SM4Cipher {
      */
     private void blockEncryptECBNoAlloc(byte[] data, int[] rk) {
         int blocks = data.length / 16;
-        if (blocks >= PARALLEL_THRESHOLD) {
+        if (PARALLEL_ENABLED && blocks >= PARALLEL_THRESHOLD) {
             parallelCore(data, data, rk, true);
         } else {
             for (int i = 0; i < blocks; i++) {
@@ -622,7 +652,7 @@ public class SM4Cipher {
      */
     private void blockDecryptECBNoAlloc(byte[] data, int[] rk) {
         int blocks = data.length / 16;
-        if (blocks >= PARALLEL_THRESHOLD) {
+        if (PARALLEL_ENABLED && blocks >= PARALLEL_THRESHOLD) {
             parallelCore(data, data, rk, false);
         } else {
             for (int i = 0; i < blocks; i++) {
@@ -828,6 +858,22 @@ public class SM4Cipher {
         byte[][] blockX = block(X);
         byte[][] YArray = new byte[(int) n][16];
 
+        if (!PARALLEL_ENABLED || blockX.length < PARALLEL_THRESHOLD) {
+            // 单线程路径，响应 -Dgm.sm4.parallel=false
+            byte[] curIv = ICB.clone();
+            for (int i = 0; i < blockX.length; i++) {
+                byte[] cipher = cipherCore(curIv, rk);
+                if (blockX[i].length != cipher.length) {
+                    byte[] tempCipher = new byte[blockX[i].length];
+                    System.arraycopy(cipher, 0, tempCipher, 0, blockX[i].length);
+                    cipher = tempCipher;
+                }
+                YArray[i] = xorBytes(blockX[i], cipher);
+                incrementCounter(curIv);
+            }
+            return DataConvertUtil.byteArrAdd(YArray);
+        }
+
         int procs = Math.min(processorCount, blockX.length);
         long size = blockX.length / procs;
         long remainder = blockX.length % procs;
@@ -839,7 +885,7 @@ public class SM4Cipher {
             byte[] threadIv = addToCounter(ICB, start);
             long finalEnd = end;
             long finalStart = start;
-            THREAD_POOL.execute(() -> {
+            getThreadPool().execute(() -> {
                 byte[] curIv = threadIv;
                 for (int i = (int) finalStart; i < finalEnd; i++) {
                     byte[] cipher = cipherCore(curIv, rk);

@@ -210,6 +210,11 @@ byte[] ming_gcm = sm4_gcm.cipherDecryptGCM(key, aeadExecution.getCipherText(), n
 System.out.println("GCM明文：" + new String(ming_gcm));
 ```
 
+#### 性能相关配置
+
+- **内部多线程**：ECB、CTR、CBC 解密、GCM-GCTR 等可并行模式在处理 **≥256 个分组（4 KB）** 的数据时会自动使用内部线程池加速；分组数较小时自动退化为单线程，避免线程调度开销。
+- **关闭内部并行**：业务层若希望自己管理线程池，或运行在线程敏感的容器/Serverless 环境，可添加 JVM 参数 `-Dgm.sm4.parallel=false`，强制所有模式走单线程路径；关闭后内部线程池不会被创建。
+
 ### 模拟 TLS 握手进行密钥协商（Netty）
 
 #### 服务端（默认使用 4433 端口）

@@ -1,0 +1,230 @@
+name: Build Native Libraries
+
+on:
+  # 手动触发：发布前由维护者手动执行，执行完后会自动提交产物
+  workflow_dispatch:
+  # native 目录或本工作流变更时自动触发（仅做构建验证，不提交产物）
+  push:
+    branches: [main, master]
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-build.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  # ==================== Windows x86_64 ====================
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up MinGW
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc
+            make
+
+      - name: Build nat256mul
+        shell: msys2 {0}
+        run: cd native && ./build.bat
+
+      - name: Build sm3native
+        shell: msys2 {0}
+        run: cd native && ./build-sm3.bat
+
+      - name: Build sm4gcm
+        shell: msys2 {0}
+        run: cd native && ./build-sm4gcm.bat
+
+      - name: Upload Windows native libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-win-x86_64
+          path: src/main/resources/native/win-x86_64/*
+          if-no-files-found: error
+
+  # ==================== Linux x86_64 ====================
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Build nat256mul
+        run: cd native && ./build-linux-x64.sh
+
+      - name: Build sm3native
+        run: cd native && ./build-sm3.sh
+
+      - name: Build sm4gcm
+        run: cd native && ./build-sm4gcm.sh
+
+      - name: Upload Linux x64 native libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-x86_64
+          path: src/main/resources/native/linux-x86_64/*
+          if-no-files-found: error
+
+  # ==================== macOS x86_64 / aarch64 ====================
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13      # Intel x86_64
+            arch: x86_64
+          - runner: macos-14      # Apple Silicon aarch64
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build nat256mul
+        run: cd native && ./build-all.sh
+
+      - name: Build sm3native
+        run: cd native && ./build-sm3.sh
+
+      - name: Build sm4gcm
+        run: cd native && ./build-sm4gcm.sh
+
+      - name: Upload macOS ${{ matrix.arch }} native libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-${{ matrix.arch }}
+          path: src/main/resources/native/macos-${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  # ==================== Linux 交叉编译（aarch64 / loongarch64 / mips64）====================
+  build-linux-cross:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            cross: aarch64-linux-gnu
+          - arch: loongarch64
+            cross: loongarch64-linux-gnu
+          - arch: mips64
+            cross: mips64el-linux-gnuabi64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install cross compiler
+        run: |
+          sudo apt-get update
+          # Ubuntu 24.04 才有带版本号的 LoongArch 交叉编译器；其余架构使用无版本元包
+          if [ "${{ matrix.arch }}" = "loongarch64" ]; then
+            sudo apt-get install -y gcc-14-loongarch64-linux-gnu
+          else
+            sudo apt-get install -y gcc-${{ matrix.cross }}
+          fi
+
+      - name: Build nat256mul
+        run: cd native && ./build-linux-${{ matrix.arch }}.sh
+
+      - name: Build sm3native
+        run: cd native && ./build-sm3-linux-cross.sh ${{ matrix.arch }} ${{ matrix.cross }}-
+
+      - name: Build sm4gcm
+        run: cd native && ./build-sm4gcm-linux-cross.sh ${{ matrix.arch }} ${{ matrix.cross }}-
+
+      - name: Upload Linux ${{ matrix.arch }} native libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-${{ matrix.arch }}
+          path: src/main/resources/native/linux-${{ matrix.arch }}/*
+          if-no-files-found: error
+
+  # ==================== 自动提交产物到仓库 ====================
+  commit-native:
+    needs: [build-windows, build-linux-x64, build-macos, build-linux-cross]
+    runs-on: ubuntu-latest
+    # 只在手动触发时提交产物；push/pr 时只做构建验证，不污染源码
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.ref }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: native-artifacts
+
+      - name: Copy artifacts to resources
+        run: |
+          set -e
+          # 建立目标目录
+          mkdir -p src/main/resources/native/win-x86_64
+          mkdir -p src/main/resources/native/linux-x86_64
+          mkdir -p src/main/resources/native/linux-aarch64
+          mkdir -p src/main/resources/native/linux-loongarch64
+          mkdir -p src/main/resources/native/linux-mips64
+          mkdir -p src/main/resources/native/macos-x86_64
+          mkdir -p src/main/resources/native/macos-aarch64
+
+          # Windows
+          cp -v native-artifacts/native-win-x86_64/* src/main/resources/native/win-x86_64/ || true
+
+          # Linux
+          cp -v native-artifacts/native-linux-x86_64/* src/main/resources/native/linux-x86_64/ || true
+          cp -v native-artifacts/native-linux-aarch64/* src/main/resources/native/linux-aarch64/ || true
+          cp -v native-artifacts/native-linux-loongarch64/* src/main/resources/native/linux-loongarch64/ || true
+          cp -v native-artifacts/native-linux-mips64/* src/main/resources/native/linux-mips64/ || true
+
+          # macOS
+          cp -v native-artifacts/native-macos-x86_64/* src/main/resources/native/macos-x86_64/ || true
+          cp -v native-artifacts/native-macos-aarch64/* src/main/resources/native/macos-aarch64/ || true
+
+      - name: Commit and push native libraries
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/main/resources/native
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: update native libraries [skip ci]"
+            git push
+            echo "Native libraries committed and pushed."
+          fi

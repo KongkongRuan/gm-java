@@ -1,5 +1,13 @@
 # 更新日志
 
+## 未发布
+
+- **SM4 内部并行化支持用户显式关闭**：新增 JVM 参数 `-Dgm.sm4.parallel=false`，关闭后 ECB/CTR/CBC 解密/GCM-GCTR 等可并行模式强制走单线程路径，内部线程池也不会被创建；适用于业务层自行管理线程池、容器或 Serverless 等线程敏感场景
+- **SM4 线程池改为懒加载**：禁用内部并行时不再预先创建固定线程池，减少资源占用
+- **README 补充 SM4 性能相关配置说明**：包括自动并行阈值、关闭并行参数
+- **新增 GitHub Actions 工作流**：`.github/workflows/native-build.yml`，手动触发后可在 Windows/Linux/macOS 上自动构建 native 库产物并提交回仓库
+- **补齐 native 构建脚本**：新增 `build-sm3.sh`、`build-sm4gcm.sh`（Linux/macOS 原生构建），以及 `build-sm3-linux-cross.sh`、`build-sm4gcm-linux-cross.sh`（aarch64/loongarch64/mips64 交叉编译）
+
 ## 3.2.2 更新内容（性能优化）
 
 - **SM3 哈希性能优化**：将 `SM3Digest` 改为 streaming update，在 `update()` 阶段直接消化完整 64 字节分组，仅缓存不足 64 字节的尾部，消除了大数组拷贝与 `doFinal()` 前的扩容分配
