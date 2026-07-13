@@ -22,6 +22,12 @@ jobs:
           token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
+      - name: Decode Maven Central credentials
+        run: |
+          # Sonatype Central token 格式：username:password
+          echo "MAVEN_CENTRAL_USERNAME=$(echo '${{ secrets.MAVEN_CENTRAL_TOKEN }}' | cut -d: -f1)" >> "$GITHUB_ENV"
+          echo "MAVEN_CENTRAL_PASSWORD=$(echo '${{ secrets.MAVEN_CENTRAL_TOKEN }}' | cut -d: -f2-)" >> "$GITHUB_ENV"
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
@@ -64,8 +70,8 @@ jobs:
       - name: Build and deploy to Maven Central
         run: mvn -P release clean deploy
         env:
-          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          MAVEN_CENTRAL_USERNAME: ${{ env.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ env.MAVEN_CENTRAL_PASSWORD }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
       - name: Commit version changes
