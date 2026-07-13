@@ -1,6 +1,8 @@
 #!/bin/bash
-# Build sm3native for the current Unix-like platform (Linux/macOS).
+# Build sm3native for Linux/macOS.
 # Usage: ./build-sm3.sh [JAVA_HOME]
+# To cross-compile for a different architecture (e.g. x86_64 on Apple Silicon):
+#   TARGET_ARCH=x86_64 ./build-sm3.sh
 
 set -e
 
@@ -8,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$SCRIPT_DIR/sm3_native.c"
 
 OS=$(uname -s)
-ARCH=$(uname -m)
+ARCH="${TARGET_ARCH:-$(uname -m)}"
 
 case "$OS" in
     Linux)  PLATFORM="linux" ;;
@@ -46,6 +48,11 @@ if [ "$ARCH" = "x86_64" ]; then
     EXTRA_FLAGS="-mavx2"
 else
     EXTRA_FLAGS=""
+fi
+
+# On macOS, explicitly target the requested architecture to allow cross-compilation.
+if [ "$PLATFORM" = "macos" ]; then
+    EXTRA_FLAGS="$EXTRA_FLAGS -arch $ARCH"
 fi
 
 echo "Building $OUT (platform=$PLATFORM, arch=$ARCH, javahome=$JAVA_HOME) ..."

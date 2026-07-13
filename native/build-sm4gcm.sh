@@ -1,6 +1,8 @@
 #!/bin/bash
-# Build sm4gcm for the current Unix-like platform (Linux/macOS).
+# Build sm4gcm for Linux/macOS.
 # Usage: ./build-sm4gcm.sh [JAVA_HOME]
+# To cross-compile for a different architecture (e.g. x86_64 on Apple Silicon):
+#   TARGET_ARCH=x86_64 ./build-sm4gcm.sh
 
 set -e
 
@@ -8,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$SCRIPT_DIR/native_sm4_gcm.c"
 
 OS=$(uname -s)
-ARCH=$(uname -m)
+ARCH="${TARGET_ARCH:-$(uname -m)}"
 
 case "$OS" in
     Linux)  PLATFORM="linux" ;;
@@ -46,6 +48,11 @@ if [ "$ARCH" = "x86_64" ]; then
     EXTRA_FLAGS="-march=x86-64 -mpclmul -msse2"
 else
     EXTRA_FLAGS=""
+fi
+
+# On macOS, explicitly target the requested architecture to allow cross-compilation.
+if [ "$PLATFORM" = "macos" ]; then
+    EXTRA_FLAGS="$EXTRA_FLAGS -arch $ARCH"
 fi
 
 echo "Building $OUT (platform=$PLATFORM, arch=$ARCH, javahome=$JAVA_HOME) ..."

@@ -88,17 +88,9 @@ jobs:
           path: src/main/resources/native/linux-x86_64/*
           if-no-files-found: error
 
-  # ==================== macOS x86_64 / aarch64 ====================
+  # ==================== macOS x86_64 / aarch64（在 Apple Silicon 上交叉编译 Intel 产物）====================
   build-macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-13      # Intel x86_64
-            arch: x86_64
-          - runner: macos-14      # Apple Silicon aarch64
-            arch: aarch64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -108,20 +100,36 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Build nat256mul
-        run: cd native && ./build-all.sh
+      - name: Build nat256mul (aarch64)
+        run: cd native && ./build-macos-aarch64.sh
 
-      - name: Build sm3native
+      - name: Build nat256mul (x86_64)
+        run: cd native && ./build-macos-x64.sh
+
+      - name: Build sm3native (aarch64)
         run: cd native && ./build-sm3.sh
 
-      - name: Build sm4gcm
+      - name: Build sm3native (x86_64)
+        run: cd native && TARGET_ARCH=x86_64 ./build-sm3.sh
+
+      - name: Build sm4gcm (aarch64)
         run: cd native && ./build-sm4gcm.sh
 
-      - name: Upload macOS ${{ matrix.arch }} native libs
+      - name: Build sm4gcm (x86_64)
+        run: cd native && TARGET_ARCH=x86_64 ./build-sm4gcm.sh
+
+      - name: Upload macOS aarch64 native libs
         uses: actions/upload-artifact@v4
         with:
-          name: native-macos-${{ matrix.arch }}
-          path: src/main/resources/native/macos-${{ matrix.arch }}/*
+          name: native-macos-aarch64
+          path: src/main/resources/native/macos-aarch64/*
+          if-no-files-found: error
+
+      - name: Upload macOS x86_64 native libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-x86_64
+          path: src/main/resources/native/macos-x86_64/*
           if-no-files-found: error
 
   # ==================== Linux 交叉编译（aarch64 / loongarch64 / mips64）====================
