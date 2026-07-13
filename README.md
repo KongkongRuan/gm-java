@@ -335,10 +335,4 @@ System.out.println("客户端随机数：" + Hex.toHexString(tlsClient.getRandom
 
 ## 更新日志
 
-### 3.2.2 更新内容（性能优化）
-
-- **SM3 哈希性能优化**：将 `SM3Digest` 改为 streaming update，在 `update()` 阶段直接消化完整 64 字节分组，仅缓存不足 64 字节的尾部，消除了大数组拷贝与 `doFinal()` 前的扩容分配
-- **实测提升**：SM3 1MB 哈希，JDK25 从 3339ms 降至 2996ms（**-10.3%**），JDK8 从 3339ms 降至 3054ms（**-8.5%**）
-- **Netty 改为可选依赖**：核心 ASN1 工具类不再引用 `io.netty.buffer.ByteBuf`，作为纯加密工具包引入时不再强制传递 `netty-all`；如需 TLS/Netty 密钥协商功能，请自行显式引入 `netty-all`
-
 [查看完整更新日志](CHANGELOG.md)
