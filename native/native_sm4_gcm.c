@@ -22,6 +22,7 @@
 #include <jni.h>
 #endif
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #if defined(__x86_64__) || defined(__i386__)
