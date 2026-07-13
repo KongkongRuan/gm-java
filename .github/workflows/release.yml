@@ -61,9 +61,19 @@ jobs:
           version = os.environ['RELEASE_VERSION']
           with open('CHANGELOG.md', encoding='utf-8') as f:
               text = f.read()
-          # 把 "## 未发布" 替换成 "## 未发布\n\n## {version} 更新内容"
-          new_header = f"## 未发布\n\n## {version} 更新内容"
-          text = re.sub(r'^## 未发布\s*$', new_header, text, count=1, flags=re.MULTILINE)
+          # 提取 "## 未发布" 到下一个 "##" 之间的内容
+          pattern = r'^## 未发布\s*\n(.*?)((?=^## )|\Z)'
+          m = re.search(pattern, text, re.DOTALL | re.MULTILINE)
+          if m:
+              unreleased = m.group(1).strip()
+              # 如果只有占位文本，则视为无实际内容
+              if unreleased == '暂无未发布内容':
+                  unreleased = ''
+              # 构建新版本区域，并在顶部保留空的 "## 未发布"
+              replacement = f'## 未发布\n\n暂无未发布内容\n\n## {version} 更新内容\n'
+              if unreleased:
+                  replacement += f'{unreleased}\n'
+              text = re.sub(pattern, replacement, text, count=1, flags=re.DOTALL | re.MULTILINE)
           with open('CHANGELOG.md', 'w', encoding='utf-8') as f:
               f.write(text)
           PY
