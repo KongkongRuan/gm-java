@@ -1,0 +1,4 @@
+# 强制 shell 脚本与工作流文件使用 LF 换行，避免 Windows 自动 CRLF 导致 Linux/macOS 运行失败
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
