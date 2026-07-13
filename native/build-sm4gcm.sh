@@ -19,10 +19,10 @@ case "$OS" in
 esac
 
 case "$ARCH" in
-    x86_64|amd64) ARCH="x86_64" ;;
-    aarch64|arm64) ARCH="aarch64" ;;
-    loongarch64) ARCH="loongarch64" ;;
-    mips64*) ARCH="mips64" ;;
+    x86_64|amd64) ARCH="x86_64"; CLANG_ARCH="x86_64" ;;
+    aarch64|arm64) ARCH="aarch64"; CLANG_ARCH="arm64" ;;
+    loongarch64) ARCH="loongarch64"; CLANG_ARCH="loongarch64" ;;
+    mips64*) ARCH="mips64"; CLANG_ARCH="mips64" ;;
     *) echo "Unsupported arch: $ARCH"; exit 1 ;;
 esac
 
@@ -52,7 +52,7 @@ fi
 
 # On macOS, explicitly target the requested architecture to allow cross-compilation.
 if [ "$PLATFORM" = "macos" ]; then
-    EXTRA_FLAGS="$EXTRA_FLAGS -arch $ARCH"
+    EXTRA_FLAGS="$EXTRA_FLAGS -arch $CLANG_ARCH"
 fi
 
 echo "Building $OUT (platform=$PLATFORM, arch=$ARCH, javahome=$JAVA_HOME) ..."
