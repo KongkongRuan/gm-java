@@ -1,0 +1,103 @@
+name: Release to Maven Central
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 3.2.3)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # 使用 RELEASE_TOKEN 可以绕过 main 分支保护；未配置时回退到 GITHUB_TOKEN
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+          server-id: release
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: GPG_PASSPHRASE
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update version in pom.xml
+        run: mvn -q versions:set -DnewVersion=${{ inputs.version }}
+
+      - name: Update version in README.md
+        run: |
+          sed -i "s/<version>[0-9]\+\.[0-9]\+\.[0-9]\+</<version>${{ inputs.version }}</g" README.md
+
+      - name: Update CHANGELOG.md
+        run: |
+          python3 <<'PY'
+          import re, sys
+          version = sys.argv[1]
+          with open('CHANGELOG.md', encoding='utf-8') as f:
+              text = f.read()
+          # 把 "## 未发布" 替换成 "## 未发布\n\n## {version} 更新内容"
+          new_header = f"## 未发布\n\n## {version} 更新内容"
+          text = re.sub(r'^## 未发布\s*$', new_header, text, count=1, flags=re.MULTILINE)
+          with open('CHANGELOG.md', 'w', encoding='utf-8') as f:
+              f.write(text)
+          PY
+          ${{ inputs.version }}
+
+      - name: Build and deploy to Maven Central
+        run: mvn -P release clean deploy
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Commit version changes
+        run: |
+          git add pom.xml README.md CHANGELOG.md
+          git commit -m "release: v${{ inputs.version }}"
+
+      - name: Create Git tag
+        run: git tag v${{ inputs.version }}
+
+      - name: Push changes and tag
+        run: git push origin main --tags
+
+      - name: Extract release notes
+        run: |
+          python3 <<'PY'
+          import re, sys
+          version = sys.argv[1]
+          with open('CHANGELOG.md', encoding='utf-8') as f:
+              text = f.read()
+          pattern = rf'^## {re.escape(version)} 更新内容\s*\n(.*?)(?=^## |\Z)'
+          m = re.search(pattern, text, re.DOTALL | re.MULTILINE)
+          notes = m.group(1).strip() if m else f'Release v{version}'
+          with open('release-notes.md', 'w', encoding='utf-8') as f:
+              f.write(notes)
+          PY
+          ${{ inputs.version }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ inputs.version }}" \
+            --title "v${{ inputs.version }}" \
+            --notes-file release-notes.md
