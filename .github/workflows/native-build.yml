@@ -245,6 +245,5 @@ jobs:
           gh pr create \
             --base "${{ github.ref_name }}" \
             --head "$BRANCH" \
-            --title "chore: update native libraries" \
-            --body "由 \\"Build Native Libraries\\" 工作流自动生成的 native 库更新。"
+            --fill
           echo "Pull request created: $BRANCH -> ${{ github.ref_name }}"
