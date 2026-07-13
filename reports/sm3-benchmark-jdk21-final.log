@@ -1,0 +1,46 @@
+============================================================
+SM3 Focused Micro-Benchmark
+JDK: 21.0.6 Java HotSpot(TM) 64-Bit Server VM
+Warmup=500 Iterations=1000 Rounds=5
+============================================================
+
+--- Baseline (gm-java SM3Digest) ---
+gm-java      1MB  median= 2922800 ns/op  throughput= 342.14 MB/s
+gm-java      64KB  median=  183200 ns/op  throughput= 341.16 MB/s
+gm-java      1KB  median=    3500 ns/op  throughput= 279.02 MB/s
+
+--- BouncyCastle SM3 ---
+BC           1MB  median= 3152900 ns/op  throughput= 317.17 MB/s
+BC           64KB  median=  194100 ns/op  throughput= 322.00 MB/s
+BC           1KB  median=    3100 ns/op  throughput= 315.02 MB/s
+
+--- Hutool SM3 ---
+Hutool       1MB  median= 3163300 ns/op  throughput= 316.13 MB/s
+Hutool       64KB  median=  197700 ns/op  throughput= 316.14 MB/s
+Hutool       1KB  median=    3400 ns/op  throughput= 287.22 MB/s
+
+--- gm-java Unrolled (2x) ---
+Unrolled2x   1MB  median= 3010200 ns/op  throughput= 332.20 MB/s
+Unrolled2x   64KB  median=  180000 ns/op  throughput= 347.22 MB/s
+Unrolled2x   1KB  median=    3200 ns/op  throughput= 305.18 MB/s
+
+--- gm-java Unrolled (4x) ---
+Unrolled4x   1MB  median= 3097800 ns/op  throughput= 322.81 MB/s
+Unrolled4x   64KB  median=  190550 ns/op  throughput= 328.00 MB/s
+Unrolled4x   1KB  median=    3300 ns/op  throughput= 295.93 MB/s
+
+--- gm-java DirectBuffer input ---
+DirectInput  1MB  median= 2939800 ns/op  throughput= 340.16 MB/s
+DirectInput  64KB  median=  184600 ns/op  throughput= 338.57 MB/s
+DirectInput  1KB  median=    3100 ns/op  throughput= 315.02 MB/s
+
+--- Native AVX2 single-message CF ---
+NativeAVX2   1MB  median= 4421150 ns/op  throughput= 226.19 MB/s
+NativeAVX2   64KB  median=  274050 ns/op  throughput= 228.06 MB/s
+NativeAVX2   1KB  median=    4800 ns/op  throughput= 203.45 MB/s
+
+--- Batch SM3 (parallel messages) ---
+Batch size=4  sequential=3.050 us  parallel=4.525 us  speedup=0.67x
+Batch size=8  sequential=3.062 us  parallel=0.825 us  speedup=3.71x
+Batch size=16  sequential=3.062 us  parallel=0.831 us  speedup=3.68x
+Batch size=64  sequential=2.934 us  parallel=0.834 us  speedup=3.52x

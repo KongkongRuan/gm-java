@@ -11,6 +11,7 @@ import org.bouncycastle.util.encoders.Hex;
 import java.math.BigInteger;
 import java.security.*;
 import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * SM2 椭圆曲线工具类
@@ -45,13 +46,29 @@ public class SM2Util {
     private static final BigInteger FOUR = BigInteger.valueOf(4);
     private static final BigInteger EIGHT = BigInteger.valueOf(8);
 
-    private static final int WNAF_WIDTH = 7;
+    private static final int WNAF_WIDTH = 8;
     private static final int PRECOMP_SIZE = 1 << (WNAF_WIDTH - 2);
 
-    private static final int FIELD_WNAF_WIDTH = 6;
+    private static final int FIELD_WNAF_WIDTH = 7;
     private static final int FIELD_PRECOMP_SIZE = 1 << (FIELD_WNAF_WIDTH - 2);
 
     private static volatile int[][][] basePointTableF;
+
+    private static final ConcurrentHashMap<PKey, int[][][]> pTableCache = new ConcurrentHashMap<>();
+
+    private static final class PKey {
+        final BigInteger px, py;
+        PKey(BigInteger px, BigInteger py) { this.px = px; this.py = py; }
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof PKey)) return false;
+            PKey other = (PKey) o;
+            return px.equals(other.px) && py.equals(other.py);
+        }
+        public int hashCode() {
+            return px.hashCode() * 31 + py.hashCode();
+        }
+    }
 
     private static final ThreadLocal<SecureRandom> SECURE_RANDOM = ThreadLocal.withInitial(SecureRandom::new);
 
@@ -391,9 +408,14 @@ public class SM2Util {
         int[][][] gTable = getBasePointTableF();
         int[] wNafS = toWNAF(sVal, WNAF_WIDTH);
 
-        int[] Px = SM2P256V1Field.fromBigInteger(px);
-        int[] Py = SM2P256V1Field.fromBigInteger(py);
-        int[][][] pTable = buildPointTableF(Px, Py, FIELD_PRECOMP_SIZE, scratch, ext);
+        PKey key = new PKey(px, py);
+        int[][][] pTable = pTableCache.get(key);
+        if (pTable == null) {
+            int[] Px = SM2P256V1Field.fromBigInteger(px);
+            int[] Py = SM2P256V1Field.fromBigInteger(py);
+            pTable = buildPointTableF(Px, Py, FIELD_PRECOMP_SIZE, scratch, ext);
+            pTableCache.put(key, pTable);
+        }
         int[] wNafT = toWNAF(t, FIELD_WNAF_WIDTH);
 
         int maxLen = Math.max(wNafS.length, wNafT.length);

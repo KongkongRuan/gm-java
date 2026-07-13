@@ -61,6 +61,27 @@ public class Nat256Native {
     /** 验签核心：e[32] + r[32] + s[32] + pubXY[64] → true/false */
     public static native boolean nativeVerifyCore(byte[] e32, byte[] r32, byte[] s32, byte[] pubXY64);
 
+    /** int[8] 验签核心（避免 BigInteger 与 byte[] 转换）。 */
+    public static native boolean nativeVerifyCoreInt(int[] e, int[] r, int[] s, int[] px, int[] py);
+
+    /** 纯 JNI 开销探针，空操作。 */
+    public static native void nativeNoop();
+
+    /** 全 native 验签：SM3(Za||msg) + Shamir + compare，一次 JNI 调用完成。 */
+    public static native boolean nativeVerifyFull(byte[] za32, byte[] msg, int msgLen,
+                                                   byte[] r32, byte[] s32, byte[] pubXY64);
+
+    /** 批量 native 验签：n 个签名一次 JNI 往返。 */
+    public static native void nativeVerifyBatch(byte[] zaFlat, byte[] msgFlat, int[] msgLens,
+                                                 byte[] rsFlat, byte[] pubFlat,
+                                                 int n, boolean[] out);
+
+    /** Standalone SM3 digest helper (for testing). */
+    public static native void nativeSm3(byte[] in, int inLen, byte[] out32);
+
+    /** SM3 compression function (single 64-byte block), C/AVX2 implementation. */
+    public static native void nativeSm3CfAvx2(int[] V, byte[] block, int[] out);
+
     public static boolean isAvailable() {
         return available;
     }

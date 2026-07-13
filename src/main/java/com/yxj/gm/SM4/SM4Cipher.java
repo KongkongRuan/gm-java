@@ -5,7 +5,7 @@ import com.yxj.gm.constant.SM4Constant;
 import com.yxj.gm.enums.ModeEnum;
 import com.yxj.gm.enums.PaddingEnum;
 import com.yxj.gm.util.DataConvertUtil;
-import org.bouncycastle.crypto.modes.gcm.Tables4kGCMMultiplier;
+import com.yxj.gm.util.JNI.SM4GCMNative;
 import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigInteger;
@@ -248,6 +248,49 @@ public class SM4Cipher {
         return result;
     }
 
+    /**
+     * 无分配 in-place 加密。输入数组 data 直接被密文覆盖。
+     * 仅支持 NoPadding 且长度为 16 的倍数。
+     * 适用场景：高频、大内存、已预先知道数据长度的调用方，可消除 padding()/result[] 的分配与拷贝。
+     */
+    public byte[] cipherEncryptNoAlloc(byte[] key, byte[] data, byte[] iv) {
+        if (iv == null && Mode != ModeEnum.ECB) iv = "1234567812345678".getBytes();
+        if (Padding != PaddingEnum.NoPadding) {
+            throw new RuntimeException("cipherEncryptNoAlloc 只支持 NoPadding 模式");
+        }
+        if (data.length % 16 != 0) {
+            throw new RuntimeException("NoPadding 模式下输入长度必须是16的倍数");
+        }
+        int[] rk = extKeyInt(key);
+        switch (Mode) {
+            case ECB: blockEncryptECBNoAlloc(data, rk); break;
+            case CBC: blockEncryptCBCNoAlloc(data, iv, rk); break;
+            default: throw new RuntimeException("当前模式不支持 in-place 加密：" + Mode);
+        }
+        return data;
+    }
+
+    /**
+     * 无分配 in-place 解密。输入数组 data 直接被明文覆盖。
+     * 仅支持 NoPadding 且长度为 16 的倍数。
+     */
+    public byte[] cipherDecryptNoAlloc(byte[] key, byte[] data, byte[] iv) {
+        if (iv == null && Mode != ModeEnum.ECB) iv = "1234567812345678".getBytes();
+        if (Padding != PaddingEnum.NoPadding) {
+            throw new RuntimeException("cipherDecryptNoAlloc 只支持 NoPadding 模式");
+        }
+        if (data.length % 16 != 0) {
+            throw new RuntimeException("NoPadding 模式下输入长度必须是16的倍数");
+        }
+        int[] rk = extKeyInt(key);
+        switch (Mode) {
+            case ECB: blockDecryptECBNoAlloc(data, rk); break;
+            // CBC 解密 in-place 必须串行从后向前，会丢失现有并行优势，实测比分配 result[] 更慢，故不提供。
+            default: throw new RuntimeException("当前模式不支持 in-place 解密：" + Mode);
+        }
+        return data;
+    }
+
     // ==================== 向后兼容的 byte[][] 版本 ====================
 
     public byte[] blockEncryptECB(byte[] m, byte[][] rks) {
@@ -347,24 +390,49 @@ public class SM4Cipher {
 
     /**
      * CBC 加密：第 i 个密文分组依赖 C(i-1)，是链式串行，无法简单并行化（保留串行）。
-     * 这里仅补充相位计时以便定位。
+     * 优化点：NoPadding 且长度对齐时复用输入数组；CBC 异或与 SM4 轮函数在 int 寄存器内融合，
+     * 避免中间字节缓冲的反复读写。
      */
     private byte[] blockEncryptCBCInt(byte[] m, byte[] iv, int[] rk) {
         Timing.calls.increment();
         long s = Timing.t0();
-        byte[] padded = padding(m);
+        // NoPadding 且长度合法时直接复用输入数组，避免 10MB 级的 Arrays.copyOf
+        byte[] padded = (Padding == PaddingEnum.NoPadding && m.length % 16 == 0) ? m : padding(m);
         Timing.acc(Timing.padNs, s);
         int blocks = padded.length / 16;
         byte[] result = new byte[padded.length];
         // 空输入（NoPadding + 0 字节）没有数据块，直接返回空结果，避免对空数组做首块异或越界
         if (blocks > 0) {
-            for (int j = 0; j < 16; j++) padded[j] ^= iv[j];
-            cipherCoreOff(padded, 0, result, 0, rk);
+            long c = Timing.t0();
+            // --- opt: fused int-level XOR + inline SM4 core ---
+            int x0 = bytesToIntBE(padded, 0) ^ bytesToIntBE(iv, 0);
+            int x1 = bytesToIntBE(padded, 4) ^ bytesToIntBE(iv, 4);
+            int x2 = bytesToIntBE(padded, 8) ^ bytesToIntBE(iv, 8);
+            int x3 = bytesToIntBE(padded, 12) ^ bytesToIntBE(iv, 12);
+            for (int r = 0; r < 32; r++) {
+                int tmp = x0 ^ tInt(x1 ^ x2 ^ x3 ^ rk[r]);
+                x0 = x1; x1 = x2; x2 = x3; x3 = tmp;
+            }
+            intToBytesBE(x3, result, 0);
+            intToBytesBE(x2, result, 4);
+            intToBytesBE(x1, result, 8);
+            intToBytesBE(x0, result, 12);
             for (int i = 1; i < blocks; i++) {
                 int off = i * 16;
-                for (int j = 0; j < 16; j++) padded[off + j] ^= result[off - 16 + j];
-                cipherCoreOff(padded, off, result, off, rk);
+                x0 = bytesToIntBE(padded, off) ^ bytesToIntBE(result, off - 16);
+                x1 = bytesToIntBE(padded, off + 4) ^ bytesToIntBE(result, off - 12);
+                x2 = bytesToIntBE(padded, off + 8) ^ bytesToIntBE(result, off - 8);
+                x3 = bytesToIntBE(padded, off + 12) ^ bytesToIntBE(result, off - 4);
+                for (int r = 0; r < 32; r++) {
+                    int tmp = x0 ^ tInt(x1 ^ x2 ^ x3 ^ rk[r]);
+                    x0 = x1; x1 = x2; x2 = x3; x3 = tmp;
+                }
+                intToBytesBE(x3, result, off);
+                intToBytesBE(x2, result, off + 4);
+                intToBytesBE(x1, result, off + 8);
+                intToBytesBE(x0, result, off + 12);
             }
+            Timing.acc(Timing.coreNs, c);
         }
         return result;
     }
@@ -532,6 +600,72 @@ public class SM4Cipher {
         Timing.acc(Timing.coreNs, s);
     }
 
+    // ==================== in-place / no-alloc 版本 ====================
+
+    /**
+     * ECB 加密 in-place。data 既是输入也是输出，避免 result[] 分配。
+     * 大分组数时仍走并行，线程范围互不重叠，in==out 安全（仅块边界有轻微 false sharing）。
+     */
+    private void blockEncryptECBNoAlloc(byte[] data, int[] rk) {
+        int blocks = data.length / 16;
+        if (blocks >= PARALLEL_THRESHOLD) {
+            parallelCore(data, data, rk, true);
+        } else {
+            for (int i = 0; i < blocks; i++) {
+                cipherCoreOff(data, i * 16, data, i * 16, rk);
+            }
+        }
+    }
+
+    /**
+     * ECB 解密 in-place。
+     */
+    private void blockDecryptECBNoAlloc(byte[] data, int[] rk) {
+        int blocks = data.length / 16;
+        if (blocks >= PARALLEL_THRESHOLD) {
+            parallelCore(data, data, rk, false);
+        } else {
+            for (int i = 0; i < blocks; i++) {
+                decryptCoreOff(data, i * 16, data, i * 16, rk);
+            }
+        }
+    }
+
+    /**
+     * CBC 加密 in-place。第 i 块密文写入 data[i*16..]，并与下一块明文异或。
+     */
+    private void blockEncryptCBCNoAlloc(byte[] data, byte[] iv, int[] rk) {
+        int blocks = data.length / 16;
+        if (blocks == 0) return;
+        int x0 = bytesToIntBE(data, 0) ^ bytesToIntBE(iv, 0);
+        int x1 = bytesToIntBE(data, 4) ^ bytesToIntBE(iv, 4);
+        int x2 = bytesToIntBE(data, 8) ^ bytesToIntBE(iv, 8);
+        int x3 = bytesToIntBE(data, 12) ^ bytesToIntBE(iv, 12);
+        for (int r = 0; r < 32; r++) {
+            int tmp = x0 ^ tInt(x1 ^ x2 ^ x3 ^ rk[r]);
+            x0 = x1; x1 = x2; x2 = x3; x3 = tmp;
+        }
+        intToBytesBE(x3, data, 0);
+        intToBytesBE(x2, data, 4);
+        intToBytesBE(x1, data, 8);
+        intToBytesBE(x0, data, 12);
+        for (int i = 1; i < blocks; i++) {
+            int off = i * 16;
+            x0 = bytesToIntBE(data, off) ^ bytesToIntBE(data, off - 16);
+            x1 = bytesToIntBE(data, off + 4) ^ bytesToIntBE(data, off - 12);
+            x2 = bytesToIntBE(data, off + 8) ^ bytesToIntBE(data, off - 8);
+            x3 = bytesToIntBE(data, off + 12) ^ bytesToIntBE(data, off - 4);
+            for (int r = 0; r < 32; r++) {
+                int tmp = x0 ^ tInt(x1 ^ x2 ^ x3 ^ rk[r]);
+                x0 = x1; x1 = x2; x2 = x3; x3 = tmp;
+            }
+            intToBytesBE(x3, data, off);
+            intToBytesBE(x2, data, off + 4);
+            intToBytesBE(x1, data, off + 8);
+            intToBytesBE(x0, data, off + 12);
+        }
+    }
+
     // ==================== 内部工具方法 ====================
 
     private static byte[] xorBytes(byte[] a, byte[] b) {
@@ -670,6 +804,23 @@ public class SM4Cipher {
         return Y0;
     }
 
+    /**
+     * GHASH via native CLMUL/PCLMULQDQ when available.
+     * Falls back to the Java table implementation otherwise.
+     */
+    private byte[] GHASHFast(byte[] X, byte[] H) {
+        if (SM4GCMNative.isAvailable()) {
+            try {
+                byte[] out = new byte[16];
+                SM4GCMNative.ghash(X, H, out);
+                return out;
+            } catch (Throwable t) {
+                SM4GCMNative.markUnavailable();
+            }
+        }
+        return GHASH(X, H);
+    }
+
     private byte[] GCTR(byte[] ICB, byte[] X, int[] rk) {
         if (X == null) return null;
         long n = X.length / 16;
@@ -745,7 +896,7 @@ public class SM4Cipher {
             lenBytes[5] = (byte) (ivLen >>> 16);
             lenBytes[6] = (byte) (ivLen >>> 8);
             lenBytes[7] = (byte) ivLen;
-            J0 = GHASH(DataConvertUtil.byteArrAdd(iv, new byte[(int) s + 8], lenBytes), H);
+            J0 = GHASHFast(DataConvertUtil.byteArrAdd(iv, new byte[(int) s + 8], lenBytes), H);
         }
 
         l = System.currentTimeMillis();
@@ -776,7 +927,7 @@ public class SM4Cipher {
         cLenBytes[6] = (byte) (cBitLen >>> 8);
         cLenBytes[7] = (byte) cBitLen;
 
-        byte[] S = GHASH(DataConvertUtil.byteArrAdd(aad, v, C, u, aadLenBytes, cLenBytes), H);
+        byte[] S = GHASHFast(DataConvertUtil.byteArrAdd(aad, v, C, u, aadLenBytes, cLenBytes), H);
 
         if (TIME) {
             System.out.println("GHASH S:" + (System.currentTimeMillis() - l));
@@ -813,7 +964,7 @@ public class SM4Cipher {
             lenBytes[5] = (byte) (ivLen >>> 16);
             lenBytes[6] = (byte) (ivLen >>> 8);
             lenBytes[7] = (byte) ivLen;
-            J0 = GHASH(DataConvertUtil.byteArrAdd(iv, new byte[(int) s + 8], lenBytes), H);
+            J0 = GHASHFast(DataConvertUtil.byteArrAdd(iv, new byte[(int) s + 8], lenBytes), H);
         }
 
         byte[] incJ0 = addToCounter(J0, 1);
@@ -838,7 +989,7 @@ public class SM4Cipher {
         cLenBytes[6] = (byte) (cBitLen >>> 8);
         cLenBytes[7] = (byte) cBitLen;
 
-        byte[] S = GHASH(DataConvertUtil.byteArrAdd(aad, v, mi, u, aadLenBytes, cLenBytes), H);
+        byte[] S = GHASHFast(DataConvertUtil.byteArrAdd(aad, v, mi, u, aadLenBytes, cLenBytes), H);
         byte[] T = new byte[tag.length];
         System.arraycopy(GCTR(J0, S, rk), 0, T, 0, tag.length);
         if (!Arrays.equals(T, tag)) {

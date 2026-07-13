@@ -164,4 +164,93 @@ public class SM2Signature {
         if (DEBUG) System.err.printf("[SM2 VERIFY] %.2f ms%n", (System.nanoTime() - t) / 1e6);
         return ok;
     }
+
+    /**
+     * 验签 int[] 版本：把 byte[] 公钥/签名直接转成 int[8]，跳过 BigInteger。
+     * 用于 A/B 测试 int[] 边界是否比 byte[] 更快。
+     */
+    public boolean verifyInt(byte[] msg, byte[] id, byte[] signature, byte[] pubKey) {
+        if (!Nat256Native.isAvailable()) {
+            return verify(msg, id, signature, pubKey);
+        }
+        byte[] Za = SM2Util.initZa(id, pubKey);
+        SM3Digest sm3Digest = new SM3Digest();
+        sm3Digest.update(Za);
+        sm3Digest.update(msg);
+        byte[] e = sm3Digest.doFinal();
+        byte[] r = new byte[32];
+        byte[] s = new byte[32];
+        System.arraycopy(signature, 0, r, 0, 32);
+        System.arraycopy(signature, 32, s, 0, 32);
+        return Nat256Native.nativeVerifyCoreInt(
+                beBytesToLeInt8(e, 0),
+                beBytesToLeInt8(r, 0),
+                beBytesToLeInt8(s, 0),
+                beBytesToLeInt8(pubKey, 0),
+                beBytesToLeInt8(pubKey, 32));
+    }
+
+    /**
+     * 全 native 验签：Java 只算 Za，C 端完成 SM3(Za||msg) + Shamir + compare。
+     */
+    public boolean verifyFull(byte[] msg, byte[] id, byte[] signature, byte[] pubKey) {
+        if (!Nat256Native.isAvailable()) {
+            return verify(msg, id, signature, pubKey);
+        }
+        byte[] Za = SM2Util.initZa(id, pubKey);
+        byte[] r = new byte[32];
+        byte[] s = new byte[32];
+        System.arraycopy(signature, 0, r, 0, 32);
+        System.arraycopy(signature, 32, s, 0, 32);
+        return Nat256Native.nativeVerifyFull(Za, msg, msg.length, r, s, pubKey);
+    }
+
+    /**
+     * 批量验签：n 个签名一次 JNI 往返，减少边界切换和线程本地缓存抖动。
+     */
+    public boolean[] verifyBatch(byte[][] msgs, byte[][] sigs, byte[][] pubKeys, byte[] id) {
+        int n = msgs.length;
+        if (!Nat256Native.isAvailable()) {
+            boolean[] out = new boolean[n];
+            for (int i = 0; i < n; i++) {
+                out[i] = verify(msgs[i], id, sigs[i], pubKeys[i]);
+            }
+            return out;
+        }
+        byte[][] zas = new byte[n][];
+        int totalMsgLen = 0;
+        for (int i = 0; i < n; i++) {
+            zas[i] = SM2Util.initZa(id, pubKeys[i]);
+            totalMsgLen += msgs[i].length;
+        }
+        byte[] zaFlat = new byte[n * 32];
+        byte[] msgFlat = new byte[totalMsgLen];
+        int[] msgLens = new int[n];
+        byte[] rsFlat = new byte[n * 64];
+        byte[] pubFlat = new byte[n * 64];
+        boolean[] out = new boolean[n];
+        int msgOff = 0;
+        for (int i = 0; i < n; i++) {
+            System.arraycopy(zas[i], 0, zaFlat, i * 32, 32);
+            System.arraycopy(msgs[i], 0, msgFlat, msgOff, msgs[i].length);
+            msgLens[i] = msgs[i].length;
+            msgOff += msgs[i].length;
+            System.arraycopy(sigs[i], 0, rsFlat, i * 64, 64);
+            System.arraycopy(pubKeys[i], 0, pubFlat, i * 64, 64);
+        }
+        Nat256Native.nativeVerifyBatch(zaFlat, msgFlat, msgLens, rsFlat, pubFlat, n, out);
+        return out;
+    }
+
+    private static int[] beBytesToLeInt8(byte[] b, int off) {
+        int[] r = new int[8];
+        for (int i = 0; i < 8; i++) {
+            int j = off + 28 - 4 * i;
+            r[i] = ((b[j] & 0xFF) << 24) |
+                   ((b[j + 1] & 0xFF) << 16) |
+                   ((b[j + 2] & 0xFF) << 8) |
+                   (b[j + 3] & 0xFF);
+        }
+        return r;
+    }
 }

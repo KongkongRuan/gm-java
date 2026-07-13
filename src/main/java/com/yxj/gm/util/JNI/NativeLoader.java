@@ -11,6 +11,10 @@ import java.nio.file.StandardCopyOption;
 public class NativeLoader {
 
     static void load() {
+        loadLibrary("nat256mul");
+    }
+
+    static void loadLibrary(String baseName) {
         String os = System.getProperty("os.name").toLowerCase();
         String arch = System.getProperty("os.arch").toLowerCase();
 
@@ -33,11 +37,11 @@ public class NativeLoader {
 
         String libName;
         if (platform.equals("win"))
-            libName = "nat256mul.dll";
+            libName = baseName + ".dll";
         else if (platform.equals("macos"))
-            libName = "libnat256mul.dylib";
+            libName = "lib" + baseName + ".dylib";
         else
-            libName = "libnat256mul.so";
+            libName = "lib" + baseName + ".so";
 
         String path = "/native/" + platform + "-" + arch + "/" + libName;
         InputStream in = NativeLoader.class.getResourceAsStream(path);
@@ -46,7 +50,7 @@ public class NativeLoader {
             throw new RuntimeException("native lib not found: " + path);
 
         try {
-            Path temp = Files.createTempFile("nat256", libName);
+            Path temp = Files.createTempFile(baseName, libName);
             Files.copy(in, temp, StandardCopyOption.REPLACE_EXISTING);
             System.load(temp.toAbsolutePath().toString());
         } catch (Exception e) {

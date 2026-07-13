@@ -1,0 +1,258 @@
+═══════════════════════════════════════════════════════════════
+  测试类型：BenchmarkComparison
+  测试时间：2026-07-13 02:18:27
+  Git Commit：e36d15d
+  版本：3.2.2
+  JDK：1.8.0_102 (Java HotSpot(TM) 64-Bit Server VM)
+  OS：Windows 10 amd64
+  CPUs：20
+  Nat256：JNI
+  参数：SM2(warmup=500, rounds=200, sets=5), SM3(warmup=500, rounds=1000, sets=5), SM4(warmup=50, rounds=20, sets=5, dataMBs=[1, 10, 20])
+  提示    : 检测到较老的 JDK 8u102，Hutool SM4 在当前 BC Provider 下可能因 JAR 验签失败而不可用。
+           如出现 'JCE cannot authenticate the provider BC'，程序会给出明确提示并跳过 Hutool SM4。
+           建议升级到更新的 JDK 8，或直接使用 JDK 11+/21。
+═══════════════════════════════════════════════════════════════
+
+╔══ SM2 密钥对生成 ══╗
+    预热 gm-java      500 次 ... 13 ms
+    预热 BC           500 次 ... 37 ms
+    预热 Hutool       500 次 ... 75 ms
+
+  SM2 密钥生成             │ 200 次/轮
+    gm-java   : 中位      3.0 ms │ 均值      3.2 │ 最小      3.0 │ 最大      4.0 │ avg/次 0.016 ms
+    BC        : 中位      9.0 ms │ 均值      9.0 │ 最小      8.0 │ 最大     10.0 │ avg/次 0.045 ms
+    Hutool    : 中位     13.0 ms │ 均值     15.0 │ 最小     11.0 │ 最大     25.0 │ avg/次 0.075 ms
+    >>> gm-java 最快  BC慢 200.0%  Hutool慢 333.3%
+
+╔══ SM2 加解密 ══╗
+    预热 gm-enc       500 次 ... 46 ms
+    预热 gm-dec       500 次 ... 32 ms
+    预热 BC-enc       500 次 ... 91 ms
+    预热 BC-dec       500 次 ... 58 ms
+    预热 HT-enc       500 次 ... 73 ms
+    预热 HT-dec       500 次 ... 50 ms
+
+  SM2 加密               │ 200 次/轮
+    gm-java   : 中位     15.0 ms │ 均值     15.4 │ 最小     15.0 │ 最大     16.0 │ avg/次 0.077 ms
+    BC        : 中位     29.0 ms │ 均值     31.4 │ 最小     28.0 │ 最大     41.0 │ avg/次 0.157 ms
+    Hutool    : 中位     30.0 ms │ 均值     31.0 │ 最小     27.0 │ 最大     38.0 │ avg/次 0.155 ms
+    >>> gm-java 最快  BC慢 93.3%  Hutool慢 100.0%
+
+  SM2 解密               │ 200 次/轮
+    gm-java   : 中位     12.0 ms │ 均值     11.8 │ 最小     11.0 │ 最大     12.0 │ avg/次 0.059 ms
+    BC        : 中位     20.0 ms │ 均值     21.8 │ 最小     19.0 │ 最大     29.0 │ avg/次 0.109 ms
+    Hutool    : 中位     19.0 ms │ 均值     19.4 │ 最小     18.0 │ 最大     21.0 │ avg/次 0.097 ms
+    >>> gm-java 最快  BC慢 66.7%  Hutool慢 58.3%
+
+╔══ SM2 签名/验签 ══╗
+    预热 gm-sign      500 次 ... 9 ms
+    预热 gm-vrfy      500 次 ... 30 ms
+    预热 BC-sign      500 次 ... 46 ms
+    预热 BC-vrfy      500 次 ... 31 ms
+    预热 HT-sign      500 次 ... 44 ms
+    预热 HT-vrfy      500 次 ... 36 ms
+
+  SM2 签名               │ 200 次/轮
+    gm-java   : 中位      3.0 ms │ 均值      3.2 │ 最小      3.0 │ 最大      4.0 │ avg/次 0.016 ms
+    BC        : 中位     18.0 ms │ 均值     19.2 │ 最小     18.0 │ 最大     23.0 │ avg/次 0.096 ms
+    Hutool    : 中位     18.0 ms │ 均值     17.4 │ 最小     16.0 │ 最大     18.0 │ avg/次 0.087 ms
+    >>> gm-java 最快  BC慢 500.0%  Hutool慢 500.0%
+
+  SM2 验签               │ 200 次/轮
+    gm-java   : 中位     11.0 ms │ 均值     11.0 │ 最小     11.0 │ 最大     11.0 │ avg/次 0.055 ms
+    BC        : 中位     10.0 ms │ 均值     10.4 │ 最小     10.0 │ 最大     11.0 │ avg/次 0.052 ms
+    Hutool    : 中位     11.0 ms │ 均值     10.8 │ 最小     10.0 │ 最大     11.0 │ avg/次 0.054 ms
+    >>> BC 最快  gm-java慢 10.0%  Hutool慢 10.0%
+
+╔══ SM3 哈希 ══╗
+    预热 gm-16B       500 次 ... 0 ms
+    预热 BC-16B       500 次 ... 1 ms
+    预热 HT-16B       500 次 ... 5 ms
+
+  SM3 (16B)            │ 1000 次/轮
+    gm-java   : 中位      0.0 ms │ 均值      0.4 │ 最小      0.0 │ 最大      1.0 │ avg/次 0.000 ms
+    BC        : 中位      0.0 ms │ 均值      0.4 │ 最小      0.0 │ 最大      1.0 │ avg/次 0.000 ms
+    Hutool    : 中位      0.0 ms │ 均值      0.4 │ 最小      0.0 │ 最大      1.0 │ avg/次 0.000 ms
+    >>> gm-java 最快
+    预热 gm-1KB       500 次 ... 2 ms
+    预热 BC-1KB       500 次 ... 1 ms
+    预热 HT-1KB       500 次 ... 2 ms
+
+  SM3 (1KB)            │ 1000 次/轮
+    gm-java   : 中位      3.0 ms │ 均值      3.2 │ 最小      3.0 │ 最大      4.0 │ avg/次 0.003 ms
+    BC        : 中位      3.0 ms │ 均值      3.0 │ 最小      3.0 │ 最大      3.0 │ avg/次 0.003 ms
+    Hutool    : 中位      3.0 ms │ 均值      3.4 │ 最小      3.0 │ 最大      4.0 │ avg/次 0.003 ms
+    >>> gm-java 最快
+    预热 gm-64KB       500 次 ... 91 ms
+    预热 BC-64KB       500 次 ... 92 ms
+    预热 HT-64KB       500 次 ... 93 ms
+
+  SM3 (64KB)           │ 1000 次/轮
+    gm-java   : 中位    177.0 ms │ 均值    178.0 │ 最小    174.0 │ 最大    182.0 │ avg/次 0.178 ms
+    BC        : 中位    182.0 ms │ 均值    182.6 │ 最小    178.0 │ 最大    190.0 │ avg/次 0.183 ms
+    Hutool    : 中位    183.0 ms │ 均值    183.4 │ 最小    181.0 │ 最大    187.0 │ avg/次 0.183 ms
+    >>> gm-java 最快  BC慢 2.8%  Hutool慢 3.4%
+    预热 gm-1MB       500 次 ... 1411 ms
+    预热 BC-1MB       500 次 ... 1443 ms
+    预热 HT-1MB       500 次 ... 1456 ms
+
+  SM3 (1MB)            │ 1000 次/轮
+    gm-java   : 中位   2823.0 ms │ 均值   2818.8 │ 最小   2799.0 │ 最大   2839.0 │ avg/次 2.819 ms
+    BC        : 中位   2893.0 ms │ 均值   2892.2 │ 最小   2877.0 │ 最大   2900.0 │ avg/次 2.892 ms
+    Hutool    : 中位   2898.0 ms │ 均值   2895.8 │ 最小   2867.0 │ 最大   2920.0 │ avg/次 2.896 ms
+    >>> gm-java 最快  BC慢 2.5%  Hutool慢 2.7%
+
+╔══ SM4 对称加解密 (1MB, warmup=50, rounds=20) ══╗
+    [提示] Hutool SM4 已跳过。
+           当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    预热 gm-ECB       50 次 ... 81 ms
+    预热 BC-ECB       50 次 ... 396 ms
+    跳过 HT-ECB       当前 JDK/Provider 组合不兼容
+
+  SM4-ECB 加密                     │ 20 × 1MB
+    gm-java   : 中位     17.0 ms │ 均值     19.0 │ 最小     16.0 │ 最大     25.0 │ 1176.5 MB/s
+    BC        : 中位    159.0 ms │ 均值    160.0 │ 最小    158.0 │ 最大    163.0 │ 125.8 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 835.3%
+
+  SM4-ECB 解密                     │ 20 × 1MB
+    gm-java   : 中位     18.0 ms │ 均值     27.6 │ 最小     18.0 │ 最大     65.0 │ 1111.1 MB/s
+    BC        : 中位    161.0 ms │ 均值    160.4 │ 最小    159.0 │ 最大    161.0 │ 124.2 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 794.4%
+    预热 gm-CBC       50 次 ... 289 ms
+    预热 BC-CBC       50 次 ... 394 ms
+    跳过 HT-CBC       当前 JDK/Provider 组合不兼容
+
+  SM4-CBC 加密                     │ 20 × 1MB
+    gm-java   : 中位    111.0 ms │ 均值    111.8 │ 最小    110.0 │ 最大    115.0 │ 180.2 MB/s
+    BC        : 中位    157.0 ms │ 均值    158.6 │ 最小    157.0 │ 最大    163.0 │ 127.4 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 41.4%
+
+  SM4-CBC 解密                     │ 20 × 1MB
+    gm-java   : 中位     19.0 ms │ 均值     27.6 │ 最小     16.0 │ 最大     62.0 │ 1052.6 MB/s
+    BC        : 中位    158.0 ms │ 均值    158.2 │ 最小    157.0 │ 最大    159.0 │ 126.6 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 731.6%
+    预热 gm-CTR       50 次 ... 65 ms
+    预热 BC-CTR       50 次 ... 399 ms
+    跳过 HT-CTR       当前 JDK/Provider 组合不兼容
+
+  SM4-CTR 加密 [gm多线程]             │ 20 × 1MB
+    gm-java   : 中位     16.0 ms │ 均值     15.8 │ 最小     14.0 │ 最大     18.0 │ 1250.0 MB/s
+    BC        : 中位    157.0 ms │ 均值    157.0 │ 最小    156.0 │ 最大    159.0 │ 127.4 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 881.3%
+
+  SM4-CTR 解密 [gm多线程]             │ 20 × 1MB
+    gm-java   : 中位     15.0 ms │ 均值     14.8 │ 最小     13.0 │ 最大     17.0 │ 1333.3 MB/s
+    BC        : 中位    323.0 ms │ 均值    322.8 │ 最小    319.0 │ 最大    327.0 │ 61.9 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 2053.3%
+
+╔══ SM4 对称加解密 (10MB, warmup=25, rounds=10) ══╗
+    [提示] Hutool SM4 已跳过。
+           当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    预热 gm-ECB       25 次 ... 188 ms
+    预热 BC-ECB       25 次 ... 1984 ms
+    跳过 HT-ECB       当前 JDK/Provider 组合不兼容
+
+  SM4-ECB 加密                     │ 10 × 10MB
+    gm-java   : 中位     77.0 ms │ 均值     78.0 │ 最小     73.0 │ 最大     88.0 │ 1298.7 MB/s
+    BC        : 中位    790.0 ms │ 均值    797.2 │ 最小    785.0 │ 最大    822.0 │ 126.6 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 926.0%
+
+  SM4-ECB 解密                     │ 10 × 10MB
+    gm-java   : 中位     75.0 ms │ 均值     80.8 │ 最小     68.0 │ 最大    114.0 │ 1333.3 MB/s
+    BC        : 中位    793.0 ms │ 均值    796.0 │ 最小    778.0 │ 最大    813.0 │ 126.1 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 957.3%
+    预热 gm-CBC       25 次 ... 1398 ms
+    预热 BC-CBC       25 次 ... 1965 ms
+    跳过 HT-CBC       当前 JDK/Provider 组合不兼容
+
+  SM4-CBC 加密                     │ 10 × 10MB
+    gm-java   : 中位    565.0 ms │ 均值    565.6 │ 最小    557.0 │ 最大    579.0 │ 177.0 MB/s
+    BC        : 中位    795.0 ms │ 均值    796.0 │ 最小    783.0 │ 最大    814.0 │ 125.8 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 40.7%
+
+  SM4-CBC 解密                     │ 10 × 10MB
+    gm-java   : 中位     74.0 ms │ 均值     79.6 │ 最小     73.0 │ 最大     91.0 │ 1351.4 MB/s
+    BC        : 中位    788.0 ms │ 均值    789.6 │ 最小    786.0 │ 最大    795.0 │ 126.9 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 964.9%
+    预热 gm-CTR       25 次 ... 143 ms
+    预热 BC-CTR       25 次 ... 1971 ms
+    跳过 HT-CTR       当前 JDK/Provider 组合不兼容
+
+  SM4-CTR 加密 [gm多线程]             │ 10 × 10MB
+    gm-java   : 中位     61.0 ms │ 均值     60.6 │ 最小     58.0 │ 最大     63.0 │ 1639.3 MB/s
+    BC        : 中位    791.0 ms │ 均值    793.8 │ 最小    786.0 │ 最大    809.0 │ 126.4 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 1196.7%
+
+  SM4-CTR 解密 [gm多线程]             │ 10 × 10MB
+    gm-java   : 中位     61.0 ms │ 均值     60.8 │ 最小     60.0 │ 最大     62.0 │ 1639.3 MB/s
+    BC        : 中位   1592.0 ms │ 均值   1593.0 │ 最小   1591.0 │ 最大   1595.0 │ 62.8 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 2509.8%
+
+╔══ SM4 对称加解密 (20MB, warmup=10, rounds=5) ══╗
+    [提示] Hutool SM4 已跳过。
+           当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    预热 gm-ECB       10 次 ... 137 ms
+    预热 BC-ECB       10 次 ... 1615 ms
+    跳过 HT-ECB       当前 JDK/Provider 组合不兼容
+
+  SM4-ECB 加密                     │ 5 × 20MB
+    gm-java   : 中位     71.0 ms │ 均值     81.2 │ 最小     64.0 │ 最大    123.0 │ 1408.5 MB/s
+    BC        : 中位    827.0 ms │ 均值    827.2 │ 最小    810.0 │ 最大    842.0 │ 120.9 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 1064.8%
+
+  SM4-ECB 解密                     │ 5 × 20MB
+    gm-java   : 中位     70.0 ms │ 均值     73.8 │ 最小     62.0 │ 最大     89.0 │ 1428.6 MB/s
+    BC        : 中位    807.0 ms │ 均值    807.0 │ 最小    806.0 │ 最大    808.0 │ 123.9 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 1052.9%
+    预热 gm-CBC       10 次 ... 1163 ms
+    预热 BC-CBC       10 次 ... 1613 ms
+    跳过 HT-CBC       当前 JDK/Provider 组合不兼容
+
+  SM4-CBC 加密                     │ 5 × 20MB
+    gm-java   : 中位    581.0 ms │ 均值    584.4 │ 最小    574.0 │ 最大    598.0 │ 172.1 MB/s
+    BC        : 中位    805.0 ms │ 均值    804.4 │ 最小    802.0 │ 最大    806.0 │ 124.2 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 38.6%
+
+  SM4-CBC 解密                     │ 5 × 20MB
+    gm-java   : 中位     69.0 ms │ 均值     71.0 │ 最小     62.0 │ 最大     87.0 │ 1449.3 MB/s
+    BC        : 中位    806.0 ms │ 均值    805.8 │ 最小    802.0 │ 最大    808.0 │ 124.1 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 1068.1%
+    预热 gm-CTR       10 次 ... 99 ms
+    预热 BC-CTR       10 次 ... 1611 ms
+    跳过 HT-CTR       当前 JDK/Provider 组合不兼容
+
+  SM4-CTR 加密 [gm多线程]             │ 5 × 20MB
+    gm-java   : 中位     52.0 ms │ 均值     53.6 │ 最小     51.0 │ 最大     61.0 │ 1923.1 MB/s
+    BC        : 中位    804.0 ms │ 均值    804.8 │ 最小    802.0 │ 最大    810.0 │ 124.4 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 1446.2%
+
+  SM4-CTR 解密 [gm多线程]             │ 5 × 20MB
+    gm-java   : 中位     52.0 ms │ 均值     52.0 │ 最小     51.0 │ 最大     53.0 │ 1923.1 MB/s
+    BC        : 中位   1628.0 ms │ 均值   1631.2 │ 最小   1620.0 │ 最大   1644.0 │ 61.4 MB/s
+    Hutool    : N/A │ 当前 Java 运行时为 1.8.0_102，无法验证 BC Provider 的 JCE 签名链。通常是 JDK 8 版本过低导致。 建议升级到更新的 JDK 8 或 JDK 11+/21；若必须停留在旧 JDK 8，请回退 Bouncy Castle 版本。 原始原因: file:/D:/java/安装包/repository/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar is not signed by a trusted signer.
+    >>> gm-java 最快  BC慢 3030.8%
+
+═══════════════════════════════════════════════════════════════
+  全部测试完成
+═══════════════════════════════════════════════════════════════
+
+  报告已保存:
+    reports\benchmark-comparison-20260713-021827-JDK8.log
+    reports\summary-20260713-021827.md

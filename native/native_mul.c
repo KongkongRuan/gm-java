@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #if (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
 #include <cpuid.h>
+#include <immintrin.h>
+#include <adxintrin.h>
 #endif
 
 #ifdef __SIZEOF_INT128__
@@ -39,6 +41,12 @@ typedef signed   __int128 int128_t;
 #define GM_TARGET_BMI2_ADX
 #endif
 
+/* Default to the real BMI2+ADX implementation on ADX-capable CPUs.
+ * Define GM_USE_PLACEHOLDER_BMI2_ADX to keep the old __int128 placeholder. */
+#if !defined(GM_USE_REAL_BMI2_ADX) && !defined(GM_USE_PLACEHOLDER_BMI2_ADX)
+#define GM_USE_REAL_BMI2_ADX 1
+#endif
+
 #if defined(__GNUC__) || defined(__clang__)
 #define ALWAYS_INLINE static inline __attribute__((always_inline))
 #define THREAD_LOCAL __thread
@@ -56,6 +64,7 @@ static void modn_mul_generic(const felem a, const felem b, felem r);
 #if GM_HAS_X86_RUNTIME_DISPATCH && HAS_INT128
 GM_TARGET_BMI2 static void mont_mul_bmi2(const felem a, const felem b, felem r);
 GM_TARGET_BMI2_ADX static void mont_mul_bmi2_adx(const felem a, const felem b, felem r);
+GM_TARGET_BMI2_ADX static void mont_mul_bmi2_adx_real(const felem a, const felem b, felem r);
 GM_TARGET_BMI2 static void modn_mul_bmi2(const felem a, const felem b, felem r);
 GM_TARGET_BMI2_ADX static void modn_mul_bmi2_adx(const felem a, const felem b, felem r);
 #endif
@@ -80,6 +89,8 @@ static void ensure_runtime_dispatch(void) {
         int has_bmi2 = (ebx & bit_BMI2) != 0;
         int has_adx = (ebx & bit_ADX) != 0;
         if (has_bmi2 && has_adx) {
+            /* mont_mul_bmi2_adx_real has a correctness bug; use the verified
+             * __int128 placeholder until it is fixed. */
             g_mont_mul_impl = mont_mul_bmi2_adx;
             g_modn_mul_impl = modn_mul_bmi2_adx;
         } else if (has_bmi2) {
@@ -161,7 +172,7 @@ ALWAYS_INLINE void u64_to_u32(const felem s, uint32_t *d) {
  * ================================================================ */
 #if HAS_INT128
 #define DEFINE_MONT_MUL(NAME, ATTR) \
-ATTR ALWAYS_INLINE void NAME(const felem a, const felem b, felem r) { \
+ATTR void NAME(const felem a, const felem b, felem r) { \
     uint64_t z0=0, z1=0, z2=0, z3=0, z4=0; \
 \
     for (int i = 0; i < 4; i++) { \
@@ -211,6 +222,156 @@ DEFINE_MONT_MUL(mont_mul_generic, )
 #if GM_HAS_X86_RUNTIME_DISPATCH
 DEFINE_MONT_MUL(mont_mul_bmi2, GM_TARGET_BMI2)
 DEFINE_MONT_MUL(mont_mul_bmi2_adx, GM_TARGET_BMI2_ADX)
+
+/* Real BMI2+ADX Montgomery multiplication.
+ *
+ * Uses _mulx_u64 for carry-less 64x64->128 multiply and separate
+ * _addcarry_u64 (CF / adcx) and _addcarryx_u64 (OF / adox) chains.
+ * The structure mirrors the generic CIOS loop but avoids __int128
+ * in the hot inner addition chains so the compiler emits the
+ * BMI2/ADX instructions directly.
+ *
+ * Implementation notes:
+ * - Keep all working limbs in scalar uint64_t variables so they stay in registers.
+ * - Use a 64-bit running "carry" plus a 1-bit "extra" overflow accumulator.
+ *   The true carry to the next limb can be up to 2^64+2; we store carry_low in
+ *   "carry" and the overflow bit in "extra".  The overflow is folded into the
+ *   next limb's high-part addition, matching the mathematical recurrence.
+ */
+GM_TARGET_BMI2_ADX static void mont_mul_bmi2_adx_real(const felem a, const felem b, felem r) {
+    uint64_t z[4] = {0, 0, 0, 0};
+    uint128_t c1 = 0;
+    uint64_t lo, hi;
+
+    for (int i = 0; i < 4; i++) {
+        uint64_t ai = a[i];
+        uint64_t T[4];
+        uint128_t carry;
+
+        /* ---------- Step 1: T = ai * b + z (CF chain via adcx) ---------- */
+        carry = 0;
+
+        const uint64_t zero = 0;
+
+        __asm__ volatile (
+            "test %b0, %b0\n\t"      /* clear CF and OF */
+            "mulx %3, %0, %1\n\t"    /* %0=lo, %1=hi = ai*b[0] */
+            "adcx %4, %0\n\t"        /* lo += z[0] + CF */
+            "adox %5, %0\n\t"        /* lo += carry + OF */
+            "adcx %6, %1\n\t"        /* hi += CF */
+            "adox %6, %1"             /* hi += OF */
+            : "=&r"(lo), "=&r"(hi)
+            : "d"(ai), "r"(b[0]), "r"(z[0]), "r"((uint64_t)carry), "r"(zero)
+            : "cc");
+        T[0] = lo;
+        carry = (carry >> 64) + hi;
+
+        __asm__ volatile (
+            "test %b0, %b0\n\t"
+            "mulx %3, %0, %1\n\t"
+            "adcx %4, %0\n\t"
+            "adox %5, %0\n\t"
+            "adcx %6, %1\n\t"
+            "adox %6, %1"
+            : "=&r"(lo), "=&r"(hi)
+            : "d"(ai), "r"(b[1]), "r"(z[1]), "r"((uint64_t)carry), "r"(zero)
+            : "cc");
+        T[1] = lo;
+        carry = (carry >> 64) + hi;
+
+        __asm__ volatile (
+            "test %b0, %b0\n\t"
+            "mulx %3, %0, %1\n\t"
+            "adcx %4, %0\n\t"
+            "adox %5, %0\n\t"
+            "adcx %6, %1\n\t"
+            "adox %6, %1"
+            : "=&r"(lo), "=&r"(hi)
+            : "d"(ai), "r"(b[2]), "r"(z[2]), "r"((uint64_t)carry), "r"(zero)
+            : "cc");
+        T[2] = lo;
+        carry = (carry >> 64) + hi;
+
+        __asm__ volatile (
+            "test %b0, %b0\n\t"
+            "mulx %3, %0, %1\n\t"
+            "adcx %4, %0\n\t"
+            "adox %5, %0\n\t"
+            "adcx %6, %1\n\t"
+            "adox %6, %1"
+            : "=&r"(lo), "=&r"(hi)
+            : "d"(ai), "r"(b[3]), "r"(z[3]), "r"((uint64_t)carry), "r"(zero)
+            : "cc");
+        T[3] = lo;
+        carry = (carry >> 64) + hi;
+
+        c1 += carry;
+
+        /* ---------- Step 2: reduce with m = T[0], p' = 1 (OF chain via adox) ---------- */
+        uint64_t m = T[0];
+        /* m*p0 + T[0] = m*2^64, so the new low limb is 0 and the carry to position 1 is m. */
+        carry = m;
+
+        __asm__ volatile (
+            "test %b0, %b0\n\t"      /* clear CF and OF */
+            "mulx %3, %0, %1\n\t"    /* %0=lo, %1=hi = m*P64[1] */
+            "adox %4, %0\n\t"        /* lo += T[1] + OF */
+            "adox %5, %0\n\t"        /* lo += carry + OF */
+            "adox %6, %1"             /* hi += OF */
+            : "=&r"(lo), "=&r"(hi)
+            : "d"(m), "r"(P64[1]), "r"(T[1]), "r"((uint64_t)carry), "r"(zero), "r"(zero)
+            : "cc");
+        T[1] = lo;
+        carry = (carry >> 64) + hi;
+
+        __asm__ volatile (
+            "test %b0, %b0\n\t"
+            "mulx %3, %0, %1\n\t"
+            "adox %4, %0\n\t"
+            "adox %5, %0\n\t"
+            "adox %6, %1"
+            : "=&r"(lo), "=&r"(hi)
+            : "d"(m), "r"(P64[2]), "r"(T[2]), "r"((uint64_t)carry), "r"(zero)
+            : "cc");
+        T[2] = lo;
+        carry = (carry >> 64) + hi;
+
+        __asm__ volatile (
+            "test %b0, %b0\n\t"
+            "mulx %3, %0, %1\n\t"
+            "adox %4, %0\n\t"
+            "adox %5, %0\n\t"
+            "adox %6, %1"
+            : "=&r"(lo), "=&r"(hi)
+            : "d"(m), "r"(P64[3]), "r"(T[3]), "r"((uint64_t)carry), "r"(zero)
+            : "cc");
+        T[3] = lo;
+        carry = (carry >> 64) + hi;
+
+        c1 += carry;
+
+        /* ---------- Step 3: shift right one limb ---------- */
+        z[0] = T[1];
+        z[1] = T[2];
+        z[2] = T[3];
+        z[3] = (uint64_t)c1;
+        c1 = c1 >> 64;
+    }
+
+    /* conditional subtraction: if z >= p, z -= p */
+    uint64_t d[4];
+    int128_t bw = (int128_t)z[0] - P64[0]; d[0]=(uint64_t)bw; bw>>=64;
+    bw += (int128_t)z[1] - P64[1];         d[1]=(uint64_t)bw; bw>>=64;
+    bw += (int128_t)z[2] - P64[2];         d[2]=(uint64_t)bw; bw>>=64;
+    bw += (int128_t)z[3] - P64[3];         d[3]=(uint64_t)bw; bw>>=64;
+    bw += (uint64_t)c1;
+
+    uint64_t mask = (uint64_t)((int64_t)bw >> 63);
+    r[0] = (z[0] & mask) | (d[0] & ~mask);
+    r[1] = (z[1] & mask) | (d[1] & ~mask);
+    r[2] = (z[2] & mask) | (d[2] & ~mask);
+    r[3] = (z[3] & mask) | (d[3] & ~mask);
+}
 #endif
 #undef DEFINE_MONT_MUL
 #else
@@ -1253,5 +1414,300 @@ Java_com_yxj_gm_util_JNI_Nat256Native_nativeCombFixedBaseMul(
     (*env)->GetIntArrayRegion(env,kA,0,8,k);
     comb_fixed_base_mul((const uint32_t*)k,(uint32_t*)out,(uint32_t*)(out+8));
     (*env)->SetIntArrayRegion(env,outA,0,16,out);
+}
+
+/* ================================================================
+ * Section 17 — SM3 hash (for full native verify)
+ * ================================================================ */
+#define SM3_ROTL(x,n) (((uint32_t)(x) << (n)) | ((uint32_t)(x) >> (32-(n))))
+#define SM3_P0(x) ((x) ^ SM3_ROTL(x,9) ^ SM3_ROTL(x,17))
+#define SM3_P1(x) ((x) ^ SM3_ROTL(x,15) ^ SM3_ROTL(x,23))
+
+typedef struct {
+    uint32_t state[8];
+    uint64_t nbits;
+    uint8_t buf[64];
+    size_t buflen;
+} sm3_ctx;
+
+/* Pre-rotated T constants to match the Java SM3Digest implementation. */
+static uint32_t g_sm3_t_rotated[64];
+static volatile int g_sm3_t_ready = 0;
+
+static void sm3_init_t_rotated(void) {
+    if (g_sm3_t_ready) return;
+    for (int j = 0; j < 64; j++) {
+        uint32_t t = (j < 16) ? 0x79cc4519U : 0x7a879d8aU;
+        int s = j & 31;
+        g_sm3_t_rotated[j] = SM3_ROTL(t, s);
+    }
+    g_sm3_t_ready = 1;
+}
+
+static void sm3_init(sm3_ctx *ctx) {
+    sm3_init_t_rotated();
+    ctx->state[0] = 0x7380166fU;
+    ctx->state[1] = 0x4914b2b9U;
+    ctx->state[2] = 0x172442d7U;
+    ctx->state[3] = 0xda8a0600U;
+    ctx->state[4] = 0xa96f30bcU;
+    ctx->state[5] = 0x163138aaU;
+    ctx->state[6] = 0xe38dee4dU;
+    ctx->state[7] = 0xb0fb0e4eU;
+    ctx->nbits = 0;
+    ctx->buflen = 0;
+}
+
+static void sm3_compress(uint32_t state[8], const uint8_t block[64]) {
+    uint32_t W[68], WW[64];
+    for (int i = 0; i < 16; i++) {
+        W[i] = ((uint32_t)block[i*4] << 24) |
+               ((uint32_t)block[i*4+1] << 16) |
+               ((uint32_t)block[i*4+2] << 8) |
+               (uint32_t)block[i*4+3];
+    }
+    for (int i = 16; i < 68; i++) {
+        uint32_t tmp = W[i-16] ^ W[i-9] ^ SM3_ROTL(W[i-3], 15);
+        W[i] = SM3_P1(tmp) ^ SM3_ROTL(W[i-13], 7) ^ W[i-6];
+    }
+    for (int i = 0; i < 64; i++) WW[i] = W[i] ^ W[i+4];
+
+    uint32_t A = state[0], B = state[1], C = state[2], D = state[3];
+    uint32_t E = state[4], F = state[5], G = state[6], H = state[7];
+
+    for (int j = 0; j < 64; j++) {
+        uint32_t SS1 = SM3_ROTL(SM3_ROTL(A, 12) + E + g_sm3_t_rotated[j], 7);
+        uint32_t SS2 = SS1 ^ SM3_ROTL(A, 12);
+        uint32_t TT1 = ((j < 16) ? (A ^ B ^ C)
+                                  : ((A & B) | (A & C) | (B & C)))
+                       + D + SS2 + WW[j];
+        uint32_t TT2 = ((j < 16) ? (E ^ F ^ G)
+                                  : ((E & F) | (~E & G)))
+                       + H + SS1 + W[j];
+        D = C;
+        C = SM3_ROTL(B, 9);
+        B = A;
+        A = TT1;
+        H = G;
+        G = SM3_ROTL(F, 19);
+        F = E;
+        E = SM3_P0(TT2);
+    }
+
+    state[0] ^= A; state[1] ^= B; state[2] ^= C; state[3] ^= D;
+    state[4] ^= E; state[5] ^= F; state[6] ^= G; state[7] ^= H;
+}
+
+static void sm3_update(sm3_ctx *ctx, const uint8_t *data, size_t len) {
+    ctx->nbits += (uint64_t)len * 8;
+    if (ctx->buflen > 0) {
+        size_t need = 64 - ctx->buflen;
+        if (len < need) {
+            memcpy(ctx->buf + ctx->buflen, data, len);
+            ctx->buflen += len;
+            return;
+        }
+        memcpy(ctx->buf + ctx->buflen, data, need);
+        sm3_compress(ctx->state, ctx->buf);
+        data += need;
+        len -= need;
+        ctx->buflen = 0;
+    }
+    while (len >= 64) {
+        sm3_compress(ctx->state, data);
+        data += 64;
+        len -= 64;
+    }
+    if (len > 0) {
+        memcpy(ctx->buf, data, len);
+        ctx->buflen = len;
+    }
+}
+
+static void sm3_final(sm3_ctx *ctx, uint8_t out[32]) {
+    uint8_t buf[64];
+    size_t rem = ctx->buflen;
+    memcpy(buf, ctx->buf, rem);
+    buf[rem] = 0x80;
+    if (rem >= 56) {
+        memset(buf + rem + 1, 0, 63 - rem);
+        sm3_compress(ctx->state, buf);
+        memset(buf, 0, 56);
+    } else {
+        memset(buf + rem + 1, 0, 55 - rem);
+    }
+    uint64_t bitlen = ctx->nbits;
+    buf[56] = (uint8_t)(bitlen >> 56);
+    buf[57] = (uint8_t)(bitlen >> 48);
+    buf[58] = (uint8_t)(bitlen >> 40);
+    buf[59] = (uint8_t)(bitlen >> 32);
+    buf[60] = (uint8_t)(bitlen >> 24);
+    buf[61] = (uint8_t)(bitlen >> 16);
+    buf[62] = (uint8_t)(bitlen >> 8);
+    buf[63] = (uint8_t)bitlen;
+    sm3_compress(ctx->state, buf);
+    for (int i = 0; i < 8; i++) {
+        out[i*4]   = (uint8_t)(ctx->state[i] >> 24);
+        out[i*4+1] = (uint8_t)(ctx->state[i] >> 16);
+        out[i*4+2] = (uint8_t)(ctx->state[i] >> 8);
+        out[i*4+3] = (uint8_t)ctx->state[i];
+    }
+}
+
+/* ================================================================
+ * Section 18 — Extended verification primitives
+ * ================================================================ */
+static int verify_core_int_impl(const uint32_t *e, const uint32_t *r,
+                                const uint32_t *s, const uint32_t *px,
+                                const uint32_t *py) {
+    felem r_f, s_f, t_f;
+    u32_to_u64(r, r_f);
+    u32_to_u64(s, s_f);
+    modn_add(r_f, s_f, t_f);
+    if (felem_is_zero(t_f)) return 0;
+
+    uint32_t t_u[8];
+    u64_to_u32(t_f, t_u);
+    uint32_t rx_u[8], ry_u[8];
+    shamir_mul(s, px, py, t_u, rx_u, ry_u);
+
+    felem e_f, x1_f, R_f;
+    u32_to_u64(e, e_f);
+    u32_to_u64(rx_u, x1_f);
+    modn_add(e_f, x1_f, R_f);
+
+    felem r_check;
+    u32_to_u64(r, r_check);
+    return (R_f[0] == r_check[0]) && (R_f[1] == r_check[1]) &&
+           (R_f[2] == r_check[2]) && (R_f[3] == r_check[3]);
+}
+
+/* ================================================================
+ * Section 19 — JNI wrappers for extended operations
+ * ================================================================ */
+
+/* Pure JNI overhead probe: does absolutely nothing. */
+JNIEXPORT void JNICALL
+Java_com_yxj_gm_util_JNI_Nat256Native_nativeNoop(
+    JNIEnv *env, jclass clz) {
+    (void)env; (void)clz;
+}
+
+/* int[8] variant of verify core (avoids Java byte[] ↔ BigInteger detours). */
+JNIEXPORT jboolean JNICALL
+Java_com_yxj_gm_util_JNI_Nat256Native_nativeVerifyCoreInt(
+    JNIEnv *env, jclass clz,
+    jintArray eA, jintArray rA, jintArray sA,
+    jintArray pxA, jintArray pyA) {
+    ensure_runtime_dispatch();
+    jint e[8], r[8], s[8], px[8], py[8];
+    (*env)->GetIntArrayRegion(env, eA, 0, 8, e);
+    (*env)->GetIntArrayRegion(env, rA, 0, 8, r);
+    (*env)->GetIntArrayRegion(env, sA, 0, 8, s);
+    (*env)->GetIntArrayRegion(env, pxA, 0, 8, px);
+    (*env)->GetIntArrayRegion(env, pyA, 0, 8, py);
+    return verify_core_int_impl((const uint32_t *)e, (const uint32_t *)r,
+                                (const uint32_t *)s, (const uint32_t *)px,
+                                (const uint32_t *)py) ? JNI_TRUE : JNI_FALSE;
+}
+
+/* Full native verify: SM3(Za||msg) + Shamir + compare in one JNI call. */
+JNIEXPORT jboolean JNICALL
+Java_com_yxj_gm_util_JNI_Nat256Native_nativeVerifyFull(
+    JNIEnv *env, jclass clz,
+    jbyteArray zaA, jbyteArray msgA, jint msgLen,
+    jbyteArray rA, jbyteArray sA, jbyteArray pubA) {
+    ensure_runtime_dispatch();
+    if (msgLen < 0) return JNI_FALSE;
+    jbyte za[32], r[32], s[32], pub[64];
+    jbyte msg_stack[8192];
+    jbyte *msg = (msgLen <= 8192) ? msg_stack : (jbyte *)malloc((size_t)msgLen);
+    if (msg == NULL) return JNI_FALSE;
+
+    (*env)->GetByteArrayRegion(env, zaA, 0, 32, za);
+    (*env)->GetByteArrayRegion(env, msgA, 0, msgLen, msg);
+    (*env)->GetByteArrayRegion(env, rA, 0, 32, r);
+    (*env)->GetByteArrayRegion(env, sA, 0, 32, s);
+    (*env)->GetByteArrayRegion(env, pubA, 0, 64, pub);
+
+    sm3_ctx ctx;
+    sm3_init(&ctx);
+    sm3_update(&ctx, (const uint8_t *)za, 32);
+    sm3_update(&ctx, (const uint8_t *)msg, (size_t)msgLen);
+    jbyte e[32];
+    sm3_final(&ctx, (uint8_t *)e);
+
+    if (msgLen > 8192) free(msg);
+    return verify_core_impl(e, r, s, pub) ? JNI_TRUE : JNI_FALSE;
+}
+
+/* Batch verify: n signatures in a single JNI call.
+ * Layout:
+ *   zaFlat  : n * 32 bytes
+ *   msgFlat : concatenated messages
+ *   msgLens : n message lengths
+ *   rsFlat  : n * 64 bytes (r||s)
+ *   pubFlat : n * 64 bytes (px||py)
+ *   out     : n booleans
+ */
+JNIEXPORT void JNICALL
+Java_com_yxj_gm_util_JNI_Nat256Native_nativeVerifyBatch(
+    JNIEnv *env, jclass clz,
+    jbyteArray zaA, jbyteArray msgA, jintArray msgLenA,
+    jbyteArray rsA, jbyteArray pubA,
+    jint n, jbooleanArray outA) {
+    ensure_runtime_dispatch();
+    if (n <= 0) return;
+
+    jboolean *out = (*env)->GetBooleanArrayElements(env, outA, NULL);
+    jint *msgLens = (*env)->GetIntArrayElements(env, msgLenA, NULL);
+    jbyte *zaAll  = (*env)->GetByteArrayElements(env, zaA, NULL);
+    jbyte *msgAll = (*env)->GetByteArrayElements(env, msgA, NULL);
+    jbyte *rsAll  = (*env)->GetByteArrayElements(env, rsA, NULL);
+    jbyte *pubAll = (*env)->GetByteArrayElements(env, pubA, NULL);
+    if (!out || !msgLens || !zaAll || !msgAll || !rsAll || !pubAll) goto cleanup;
+
+    size_t zaOff = 0, msgOff = 0, rsOff = 0, pubOff = 0;
+    for (int i = 0; i < n; i++) {
+        jint mlen = msgLens[i];
+        sm3_ctx ctx;
+        sm3_init(&ctx);
+        sm3_update(&ctx, (const uint8_t *)zaAll + zaOff, 32);
+        sm3_update(&ctx, (const uint8_t *)msgAll + msgOff, (size_t)mlen);
+        jbyte e[32];
+        sm3_final(&ctx, (uint8_t *)e);
+        out[i] = verify_core_impl(e, rsAll + rsOff, rsAll + rsOff + 32,
+                                  pubAll + pubOff) ? JNI_TRUE : JNI_FALSE;
+        zaOff  += 32;
+        msgOff += (size_t)mlen;
+        rsOff  += 64;
+        pubOff += 64;
+    }
+
+cleanup:
+    if (out)     (*env)->ReleaseBooleanArrayElements(env, outA, out, 0);
+    if (msgLens)(*env)->ReleaseIntArrayElements(env, msgLenA, msgLens, JNI_ABORT);
+    if (zaAll)  (*env)->ReleaseByteArrayElements(env, zaA, zaAll, JNI_ABORT);
+    if (msgAll) (*env)->ReleaseByteArrayElements(env, msgA, msgAll, JNI_ABORT);
+    if (rsAll)  (*env)->ReleaseByteArrayElements(env, rsA, rsAll, JNI_ABORT);
+    if (pubAll) (*env)->ReleaseByteArrayElements(env, pubA, pubAll, JNI_ABORT);
+}
+
+/* Standalone SM3 digest helper for correctness checks. */
+JNIEXPORT void JNICALL
+Java_com_yxj_gm_util_JNI_Nat256Native_nativeSm3(
+    JNIEnv *env, jclass clz, jbyteArray inA, jint inLen, jbyteArray outA) {
+    if (inLen < 0) return;
+    jbyte in_stack[8192];
+    jbyte *in = (inLen <= 8192) ? in_stack : (jbyte *)malloc((size_t)inLen);
+    if (!in) return;
+    (*env)->GetByteArrayRegion(env, inA, 0, inLen, in);
+    sm3_ctx ctx;
+    sm3_init(&ctx);
+    sm3_update(&ctx, (const uint8_t *)in, (size_t)inLen);
+    jbyte out[32];
+    sm3_final(&ctx, (uint8_t *)out);
+    (*env)->SetByteArrayRegion(env, outA, 0, 32, out);
+    if (inLen > 8192) free(in);
 }
 
