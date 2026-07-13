@@ -53,10 +53,12 @@ jobs:
           sed -i "s/<version>[0-9]\+\.[0-9]\+\.[0-9]\+</<version>${{ inputs.version }}</g" README.md
 
       - name: Update CHANGELOG.md
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           python3 <<'PY'
-          import re, sys
-          version = sys.argv[1]
+          import re, os
+          version = os.environ['RELEASE_VERSION']
           with open('CHANGELOG.md', encoding='utf-8') as f:
               text = f.read()
           # 把 "## 未发布" 替换成 "## 未发布\n\n## {version} 更新内容"
@@ -65,7 +67,6 @@ jobs:
           with open('CHANGELOG.md', 'w', encoding='utf-8') as f:
               f.write(text)
           PY
-          ${{ inputs.version }}
 
       - name: Build and deploy to Maven Central
         run: mvn -P release clean deploy
@@ -86,10 +87,12 @@ jobs:
         run: git push origin main --tags
 
       - name: Extract release notes
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
           python3 <<'PY'
-          import re, sys
-          version = sys.argv[1]
+          import re, os
+          version = os.environ['RELEASE_VERSION']
           with open('CHANGELOG.md', encoding='utf-8') as f:
               text = f.read()
           pattern = rf'^## {re.escape(version)} 更新内容\s*\n(.*?)(?=^## |\Z)'
@@ -98,7 +101,6 @@ jobs:
           with open('release-notes.md', 'w', encoding='utf-8') as f:
               f.write(notes)
           PY
-          ${{ inputs.version }}
 
       - name: Create GitHub Release
         env:
