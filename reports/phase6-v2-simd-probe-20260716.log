@@ -1,0 +1,3 @@
+A dependent scalar mont_mul: 19.63 ns/op
+B 4-way interleaved scalar:  12.81 ns/msg (65.2% of A)
+C vpmuludq ymm:              0.164 ns/instr (4 lane-products each)

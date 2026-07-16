@@ -1,0 +1,37 @@
+# Phase 3（shamir 级单次分派）A/B 实测 — 2026-07-16
+# 机器: Intel Core Ultra 7 265K, gcc 14.2 MinGW, -O3 -march=x86-64 -mtune=generic -funroll-loops
+# 指标: verify projective us/op（native_mul_test 同二进制基准，每轮 2000 次）
+# 方法: 10 轮交错 A/B，抗频率漂移
+
+## 实验 1：完全内联上限（phase3_ceiling_test.exe，全 TU -mbmi2 -madx + GM_DIRECT_* 直调）
+# leaf 是 ALWAYS_INLINE → 域运算全部内联进点运算（mulx 指令点 94 → 492）
+# 列: normal | ceiling
+45.40 46.24
+45.34 47.25
+45.64 47.77
+44.55 47.51
+46.21 48.69
+45.38 48.12
+44.38 47.92
+45.74 46.74
+45.55 46.72
+46.23 46.57
+# 中位数: normal 45.48, ceiling 47.38 → ceiling 慢 4.2%（代码膨胀负面效应）
+
+## 实验 2：纯分派开销（phase3_direct_test.exe，noinline 包装器直调 leaf，不内联）
+# 列: normal | direct-noinline
+46.51 46.55
+45.19 50.70
+46.08 46.69
+45.91 46.87
+47.27 46.78
+46.15 45.45
+46.46 45.58
+46.34 45.18
+45.73 47.47
+45.71 47.13
+# 中位数: normal 46.12, direct 46.74 → 差 +1.3%（含 50.70 离群；剔除后均值差 <1%，噪声内）
+
+## 结论
+# 纯间接调用开销 <1%（测不出），完全内联变体反而慢 4.2%。
+# shamir 级单次分派不可能达到 ≥3% 门槛 → Phase 3 关闭，不再做。

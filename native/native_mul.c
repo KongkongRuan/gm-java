@@ -66,11 +66,21 @@ static felem_mul_impl g_modn_mul_impl = modn_mul_generic;
 static volatile int g_runtime_dispatch_ready = 0;
 
 static inline void mont_mul(const felem a, const felem b, felem r) {
+#ifdef GM_DIRECT_MONT_MUL
+    /* Phase 3 measurement hook: bypass runtime dispatch so the named leaf
+     * can be inlined when the whole TU is built with matching ISA flags. */
+    GM_DIRECT_MONT_MUL(a, b, r);
+#else
     g_mont_mul_impl(a, b, r);
+#endif
 }
 
 static inline void modn_mul(const felem a, const felem b, felem r) {
+#ifdef GM_DIRECT_MODN_MUL
+    GM_DIRECT_MODN_MUL(a, b, r);
+#else
     g_modn_mul_impl(a, b, r);
+#endif
 }
 
 static void ensure_runtime_dispatch(void) {

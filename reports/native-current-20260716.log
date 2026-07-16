@@ -1,0 +1,11 @@
+Building native Montgomery differential test ...
+PASS: wNAF reconstruction (12 edge + 10000 random scalars, w=7/6)
+PASS: Montgomery differential (1000100 cases plus alias checks)
+PASS: Shamir differential (128 generated public keys, generic/bmi2/bmi2_adx)
+PASS: verify e2e differential (100000 valid + 100000 tampered, accepted=100000 rejected=100000)
+PASS: verify synthetic (1000000 constructed cases incl. x0+n branch, plus 8 edge groups)
+BENCH: generic 17.68 ns/op, bmi2 17.39 ns/op, bmi2_adx 17.77 ns/op
+BENCH: Shamir 49.69 us/op
+BENCH: felem_inv 4382.88 ns/op, jac_to_affine 4411.38 ns/op
+BENCH: verify projective 44.54 us/op, affine-oracle 50.18 us/op (saved 5.64 us, 11.2%)
+BENCH: first-call=72.16 us, key cache warm=51.04 us, forced-miss=58.42 us, rotate-2=58.75 us, rotate-10=63.88 us, rotate-50=62.80 us, rotate-100=63.65 us

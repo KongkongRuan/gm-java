@@ -204,7 +204,47 @@ Java 端到端（`reports/phase1-v2-sm2-20260716-115310.log` vs 基线）：
 - **结论：Phase 1 通过验收，实现保留。** 与 BC 的验签中位数差距从约 20% 收窄到约 4.5%。
 - 后续：Phase 2 按修正 #4 重新评估（先做 portable generic 专用平方验证收益上限，再决定 BMI2）；Phase 3 维持不做，除非先有 shamir 级单次分派变体的测量证据。
 
+### Phase 2：generic 专用平方试点（已完成，结论：放弃）
+
+按修正 #4 先做 portable generic 路径验证收益上限。
+
+实现：SOS 结构专用平方 `mont_sqr_generic`（交叉项 6 个乘积 → t[0..7] 翻倍 → 对角线 4 个乘积 → 与 `DEFINE_MONT_MUL` 相同的 SM2 特形 Montgomery 归约），经新增 `g_mont_sqr_impl` 指针分派；bmi2/bmi2_adx 路径暂以 sqr-via-mul 包装器接分派。实验代码已回退，完整改动存档于 `reports/sm2-phase2-mont-sqr-experiment.patch`（289 行，含测试）。
+
+正确性（通过）：100 万随机 + 7 边界（0、1、p-1、2^255、0xAA/0x55 交替、全 1）与 `mont_mul_generic(a,a)` 差分一致，别名用例通过。
+
+性能（`reports/phase2-v2-native-20260716-sqr.log`，两轮一致）：
+
+| 指标 | 专用平方 | sqr-via-mul | 变化 |
+|---|---:|---:|---:|
+| 单次平方（500 万轮） | 30.74 ns | 18.19 ns | **-69%（回退）** |
+| generic 验签端到端 | 55.78 us | 47.43 us | **-17.6%（回退）** |
+
+分析：SOS 的 t[8] 中间数组在本编译器（gcc 14.2 MinGW, -O3）下无法全部驻留寄存器，溢出到栈的 load/store 加上 t 翻倍环节的 128 位移位进位链，吃掉了 16→10 个乘积的理论收益；CIOS 乘法本身已相当紧凑（本机 generic/bmi2/bmi2_adx 单乘均在 17–18 ns）。verify 阶段计时存在约 ±8–10% 漂移（同轮 bmi2_adx 复测 54–56 us vs generic 47–48 us），故结论锚定 500 万轮微基准——单次平方慢 69%，端到端不可能为正。
+
+决策：generic 试点实测为负（远低于 ≥4% 门槛），按修正 #4 **BMI2 专用平方不再进行，Phase 2 整体放弃**。`native/native_mul.c`、`native/native_mul_test.c` 已回退至 Phase 1 提交状态（回退后测试复跑通过）。
+
+### Phase 3：shamir 级单次分派试点（已完成，结论：关闭）
+
+按修正 #5 实测低成本变体。方法：`native_mul.c` 加编译期钩子 `GM_DIRECT_MONT_MUL`/`GM_DIRECT_MODN_MUL`（`#ifdef` 保护，默认关闭，对正常构建零影响），构造两个对照二进制，10 轮交错 A/B 抗频率漂移（数据：`reports/phase3-v2-dispatch-20260716.log`）：
+
+| 实验 | 配置 | verify projective 中位数 | 相对 normal |
+|---|---|---:|---:|
+| 1 完全内联上限 | 全 TU `-mbmi2 -madx` + 直调 leaf（ALWAYS_INLINE 强制内联，mulx 指令点 94→492） | 47.38 us | **慢 4.2%** |
+| 2 纯分派开销 | noinline 包装器直调 leaf（只去间接调用，不内联） | 46.74 us | +1.3%，剔除离群后 <1%，**噪声内** |
+
+结论：纯间接调用开销测不出（<1%），而完全内联因代码膨胀反而慢 4.2%。shamir 级单次分派不可能达到 ≥3% 门槛，**Phase 3 关闭，不再做**。实验源码留存：`native/phase3_ceiling_test.c`、`native/phase3_direct_test.c`。
+
+### Phase 6：SIMD 多消息可行性验证（已完成，结论：维持押后）
+
+- **CPU 能力**：本机 Core Ultra 7 265K（Arrow Lake）有 AVX2/BMI2/ADX，**无 AVX-512/IFMA**——8 通道 52 位 limb（vpmadd52）这一唯一有明确 2–4× 收益的 SIMD 形态在本机不可用，只剩 AVX2（vpmuludq 32×32→64）路线。
+- **机器探针**（`native/phase6_simd_probe.c`，数据：`reports/phase6-v2-simd-probe-20260716.log`）：
+  - A 依赖链标量 mont_mul：**19.6 ns/op**（延迟受限）；
+  - B 4 路独立标量交错：**12.8 ns/msg**（A 的 65%）——OOO 重叠四条进位链只拿到约 1.5× 吞吐，批量场景的大部分空间连"无新域代码的交错标量"都吃不透；
+  - C vpmuludq 吞吐：**0.164 ns/instr**。
+- **估算**：AVX2 4 路域乘需 64 个 vpmuludq + 约 150–250 个进位修正向量 op，理论上界约为 B 的 2–3×（仅 raw field-mul）；验签中域乘占比约 60–70%，Amdahl 后批量端到端吞吐约 1.5–2×，且只适用于批量场景。
+- **与目标核对**：项目目标是单签**延迟**追平 BC，SIMD 只提吞吐不降延迟；JNI 侧无批量验签 API。结论：**维持押后**。若未来确需吞吐，第一步应是无 SIMD 的交错标量批量（零新域运算代码，约 1.5×），而非直接上 AVX2。
+
 ### 遗留事项
 
 - ~~本机有两个 IDE 调试 JVM 持有 `target/classes` 旧 DLL 的文件锁~~（已解决 2026-07-16）：实际为 07-14 残留的两个 JShell 执行进程（PID 28652/27892），经用户确认后结束；`mvn test` 资源拷贝与测试已恢复正常，`target/classes` 中的 DLL 已更新为新构建（205892 字节），CorrectnessTest 15 项、Nat256NativeTest 18 项全部通过。
-- `native/README.md` 中的微基准数字（52.1/61.1/78.3 us）与本轮存档值有出入，下一轮native变更时一并刷新。
+- ~~`native/README.md` 中的微基准数字（52.1/61.1/78.3 us）与本轮存档值有出入~~（已解决 2026-07-16）：已刷新为 `reports/native-current-20260716.log` 的复测值（51.0/58.4/72.2 us）。

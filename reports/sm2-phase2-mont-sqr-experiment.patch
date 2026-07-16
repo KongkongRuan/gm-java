@@ -1,0 +1,289 @@
+diff --git a/native/native_mul.c b/native/native_mul.c
+index e0111ab..eedc759 100644
+--- a/native/native_mul.c
++++ b/native/native_mul.c
+@@ -52,17 +52,22 @@ typedef signed   __int128 int128_t;
+ typedef uint64_t felem[4];
+ typedef uint64_t felem_wide[8]; /* 512-bit */
+ typedef void (*felem_mul_impl)(const felem a, const felem b, felem r);
++typedef void (*felem_sqr_impl)(const felem a, felem r);
+ 
+ static void mont_mul_generic(const felem a, const felem b, felem r);
+ static void modn_mul_generic(const felem a, const felem b, felem r);
++static void mont_sqr_generic(const felem a, felem r);
+ #if GM_HAS_X86_RUNTIME_DISPATCH && HAS_INT128
+ GM_TARGET_BMI2 static void mont_mul_bmi2(const felem a, const felem b, felem r);
+ GM_TARGET_BMI2_ADX static void mont_mul_bmi2_adx(const felem a, const felem b, felem r);
+ GM_TARGET_BMI2 static void modn_mul_bmi2(const felem a, const felem b, felem r);
+ GM_TARGET_BMI2_ADX static void modn_mul_bmi2_adx(const felem a, const felem b, felem r);
++GM_TARGET_BMI2 static void mont_sqr_bmi2(const felem a, felem r);
++GM_TARGET_BMI2_ADX static void mont_sqr_bmi2_adx(const felem a, felem r);
+ #endif
+ static felem_mul_impl g_mont_mul_impl = mont_mul_generic;
+ static felem_mul_impl g_modn_mul_impl = modn_mul_generic;
++static felem_sqr_impl g_mont_sqr_impl = mont_sqr_generic;
+ static volatile int g_runtime_dispatch_ready = 0;
+ 
+ static inline void mont_mul(const felem a, const felem b, felem r) {
+@@ -84,9 +89,11 @@ static void ensure_runtime_dispatch(void) {
+         if (has_bmi2 && has_adx) {
+             g_mont_mul_impl = mont_mul_bmi2_adx;
+             g_modn_mul_impl = modn_mul_bmi2_adx;
++            g_mont_sqr_impl = mont_sqr_bmi2_adx;
+         } else if (has_bmi2) {
+             g_mont_mul_impl = mont_mul_bmi2;
+             g_modn_mul_impl = modn_mul_bmi2;
++            g_mont_sqr_impl = mont_sqr_bmi2;
+         }
+     }
+ #endif
+@@ -215,8 +222,84 @@ DEFINE_MONT_MUL(mont_mul_bmi2, GM_TARGET_BMI2)
+ DEFINE_MONT_MUL(mont_mul_bmi2_adx, GM_TARGET_BMI2_ADX)
+ #endif
+ #undef DEFINE_MONT_MUL
++
++#if GM_HAS_X86_RUNTIME_DISPATCH
++GM_TARGET_BMI2 static void mont_sqr_bmi2(const felem a, felem r) { mont_mul_bmi2(a, a, r); }
++GM_TARGET_BMI2_ADX static void mont_sqr_bmi2_adx(const felem a, felem r) { mont_mul_bmi2_adx(a, a, r); }
++#endif
++
++/* Dedicated Montgomery square (SOS): exploits the a*a symmetry (10 unique
++ * 64x64 products instead of 16), then applies the same SM2-prime special-
++ * form Montgomery reduction as DEFINE_MONT_MUL. Alias-safe with the input. */
++static void mont_sqr_generic(const felem a, felem r) {
++    /* 1) cross terms sum_{i<j} a_i*a_j, each added once */
++    uint64_t t[8] = {0, 0, 0, 0, 0, 0, 0, 0};
++    for (int i = 0; i < 3; i++) {
++        uint128_t c = 0;
++        for (int j = i + 1; j < 4; j++) {
++            int k = i + j;
++            c += (uint128_t)a[i] * a[j] + t[k];
++            t[k] = (uint64_t)c;
++            c >>= 64;
++        }
++        for (int k = i + 4; c && k < 8; k++) {
++            c += t[k]; t[k] = (uint64_t)c; c >>= 64;
++        }
++    }
++    /* 2) t = 2 * cross  (2*cross = a^2 - diag < 2^512, so no bit 512) */
++    uint64_t cry = 0;
++    for (int k = 0; k < 8; k++) {
++        uint64_t nc = t[k] >> 63;
++        t[k] = (t[k] << 1) | cry;
++        cry = nc;
++    }
++    /* 3) add the diagonal squares a_i^2: t = a^2 < p^2 */
++    for (int i = 0; i < 4; i++) {
++        uint128_t c = (uint128_t)a[i] * a[i] + t[2*i];
++        t[2*i] = (uint64_t)c; c >>= 64;
++        for (int k = 2*i + 1; c && k < 8; k++) {
++            c += t[k]; t[k] = (uint64_t)c; c >>= 64;
++        }
++    }
++
++    /* 4) Montgomery reduction, m = z[0] (p' = 1), SM2 special form:
++     * p0=p2=2^64-1, p1=2^64-2^32, p3=2^64-2^32-1 -- no multiplies. */
++    uint64_t z0=t[0], z1=t[1], z2=t[2], z3=t[3],
++            z4=t[4], z5=t[5], z6=t[6], z7=t[7];
++    for (int i = 0; i < 4; i++) {
++        uint64_t m = z0;
++        uint128_t carry = m; /* m*p0 + z0 = m*2^64, high word = m */
++        carry += (uint128_t)z1 + (((uint128_t)m << 64) - ((uint128_t)m << 32));
++        z1 = (uint64_t)carry; carry >>= 64;
++        carry += (uint128_t)z2 + (((uint128_t)m << 64) - (uint128_t)m);
++        z2 = (uint64_t)carry; carry >>= 64;
++        carry += (uint128_t)z3 + (((uint128_t)m << 64) - ((uint128_t)m << 32) - (uint128_t)m);
++        z3 = (uint64_t)carry; carry >>= 64;
++        uint128_t c1 = (uint64_t)carry;
++        c1 += z4; z4 = (uint64_t)c1; c1 >>= 64;
++        c1 += z5; z5 = (uint64_t)c1; c1 >>= 64;
++        c1 += z6; z6 = (uint64_t)c1; c1 >>= 64;
++        c1 += z7; z7 = (uint64_t)c1;
++        /* shift right by 1 limb */
++        z0=z1; z1=z2; z2=z3; z3=z4; z4=z5; z5=z6; z6=z7; z7=0;
++    }
++
++    /* conditional subtraction: if z >= p, z -= p */
++    uint64_t d[4];
++    int128_t bw = (int128_t)z0 - P64[0]; d[0]=(uint64_t)bw; bw>>=64;
++    bw += (int128_t)z1 - P64[1];         d[1]=(uint64_t)bw; bw>>=64;
++    bw += (int128_t)z2 - P64[2];         d[2]=(uint64_t)bw; bw>>=64;
++    bw += (int128_t)z3 - P64[3];         d[3]=(uint64_t)bw; bw>>=64;
++    bw += z4;
++    uint64_t mask = (uint64_t)((int64_t)bw >> 63);
++    r[0] = (z0 & mask) | (d[0] & ~mask);
++    r[1] = (z1 & mask) | (d[1] & ~mask);
++    r[2] = (z2 & mask) | (d[2] & ~mask);
++    r[3] = (z3 & mask) | (d[3] & ~mask);
++}
+ #else
+ /* Fallback: split to 32-bit */
++static void mont_sqr_generic(const felem a, felem r) { mont_mul_generic(a, a, r); }
+ static void mont_mul_generic(const felem a, const felem b, felem r) {
+     /* convert to uint32_t, schoolbook mul, Solinas reduce */
+     uint32_t a32[8], b32[8], r32[8];
+@@ -282,7 +365,7 @@ static void mont_mul_generic(const felem a, const felem b, felem r) {
+ #endif
+ 
+ ALWAYS_INLINE void mont_sqr(const felem a, felem r) {
+-    mont_mul(a, a, r);
++    g_mont_sqr_impl(a, r);
+ }
+ 
+ /* convert normal → Montgomery: mont(a) = a * R mod p = mont_mul(a, R^2 mod p) */
+diff --git a/native/native_mul_test.c b/native/native_mul_test.c
+index 9ed7c2e..c6ad33a 100644
+--- a/native/native_mul_test.c
++++ b/native/native_mul_test.c
+@@ -143,6 +143,60 @@ static int test_montgomery(uint64_t random_cases) {
+     return 1;
+ }
+ 
++/* Phase 2 A/B helper: squaring expressed through the generic multiplier. */
++static void sqr_via_mul_generic(const felem a, felem r) {
++    mont_mul_generic(a, a, r);
++}
++
++static int check_sqr(const felem a, uint64_t index) {
++    felem expected, actual, alias;
++    mont_mul_generic(a, a, expected);
++    mont_sqr_generic(a, actual);
++    if (memcmp(expected, actual, sizeof(felem)) != 0) {
++        printf("FAIL: mont_sqr_generic mismatch at case %" PRIu64 "\n", index);
++        print_felem("a", a);
++        print_felem("mul(a,a)", expected);
++        print_felem("sqr(a)", actual);
++        return 0;
++    }
++    felem_copy(alias, a);
++    mont_sqr_generic(alias, alias);
++    if (memcmp(expected, alias, sizeof(felem)) != 0) {
++        printf("FAIL: mont_sqr_generic output aliases input at case %" PRIu64
++               "\n", index);
++        return 0;
++    }
++    return 1;
++}
++
++static int test_montgomery_sqr(uint64_t random_cases) {
++    const felem edge[] = {
++        {0, 0, 0, 0},
++        {1, 0, 0, 0},
++        {UINT64_C(0xfffffffffffffffe), UINT64_C(0xffffffff00000000),
++         UINT64_MAX, UINT64_C(0xfffffffeffffffff)},
++        {0, 0, 0, UINT64_C(0x8000000000000000)},
++        {UINT64_C(0xaaaaaaaaaaaaaaaa), UINT64_C(0x5555555555555555),
++         UINT64_C(0xaaaaaaaaaaaaaaaa), UINT64_C(0x5555555555555555)},
++        {UINT64_C(0x5555555555555555), UINT64_C(0xaaaaaaaaaaaaaaaa),
++         UINT64_C(0x5555555555555555), UINT64_C(0xaaaaaaaaaaaaaaaa)},
++        {UINT64_MAX, UINT64_MAX, UINT64_MAX, UINT64_MAX}
++    };
++    uint64_t index = 0;
++    for (size_t i = 0; i < sizeof(edge) / sizeof(edge[0]); ++i) {
++        if (!check_sqr(edge[i], index++)) return 0;
++    }
++
++    for (uint64_t i = 0; i < random_cases; ++i) {
++        felem a;
++        random_felem(a);
++        if (!check_sqr(a, index++)) return 0;
++    }
++    printf("PASS: Montgomery sqr differential (%" PRIu64
++           " cases plus alias checks)\n", index);
++    return 1;
++}
++
+ static void random_u32(uint32_t out[8]) {
+     for (int i = 0; i < 8; i += 2) {
+         uint64_t value = next_random();
+@@ -645,6 +699,22 @@ static double benchmark_mont(felem_mul_impl impl, uint64_t rounds) {
+     return elapsed;
+ }
+ 
++static double benchmark_sqr(felem_sqr_impl impl, uint64_t rounds) {
++    felem a = {
++        UINT64_C(0x0123456789abcdef), UINT64_C(0xfedcba9876543210),
++        UINT64_C(0x0f1e2d3c4b5a6978), UINT64_C(0x6a09e667f3bcc908)
++    };
++    felem r;
++    double start = now_seconds();
++    for (uint64_t i = 0; i < rounds; ++i) {
++        impl(a, r);
++        felem_copy(a, r);
++    }
++    double elapsed = now_seconds() - start;
++    benchmark_sink ^= a[0];
++    return elapsed;
++}
++
+ static void run_benchmark(uint64_t rounds) {
+     benchmark_mont(mont_mul_generic, rounds / 20 + 1);
+     benchmark_mont(mont_mul_bmi2, rounds / 20 + 1);
+@@ -657,6 +727,16 @@ static void run_benchmark(uint64_t rounds) {
+            generic * 1e9 / (double)rounds,
+            bmi2 * 1e9 / (double)rounds,
+            adx * 1e9 / (double)rounds);
++
++    benchmark_sqr(sqr_via_mul_generic, rounds / 20 + 1);
++    benchmark_sqr(mont_sqr_generic, rounds / 20 + 1);
++    double mul_as_sqr = benchmark_sqr(sqr_via_mul_generic, rounds);
++    double sqr = benchmark_sqr(mont_sqr_generic, rounds);
++    printf("BENCH: sqr generic %.2f ns/op, mul-as-sqr %.2f ns/op"
++           " (saved %.1f%%)\n",
++           sqr * 1e9 / (double)rounds,
++           mul_as_sqr * 1e9 / (double)rounds,
++           (mul_as_sqr - sqr) * 100.0 / mul_as_sqr);
+ }
+ 
+ static double benchmark_shamir_path(uint64_t rounds,
+@@ -742,6 +822,42 @@ static void run_verify_benchmark(uint64_t rounds) {
+            " (saved %.2f us, %.1f%%)\n",
+            new_us, old_us, old_us - new_us,
+            (old_us - new_us) * 100.0 / old_us);
++
++    /* Phase 2 generic-path A/B: dedicated mont_sqr_generic vs squaring via
++     * mont_mul_generic. This estimates the portable gain ceiling before any
++     * BMI2-specific squarer is attempted. */
++    g_mont_mul_impl = mont_mul_generic;
++    g_modn_mul_impl = modn_mul_generic;
++
++    g_mont_sqr_impl = mont_sqr_generic;
++    reset_point_caches();
++    verify_core_impl(e, rs, rs + 32, pub);
++    double s3 = now_seconds();
++    for (uint64_t i = 0; i < rounds; ++i)
++        sink ^= verify_core_impl(e, rs, rs + 32, pub);
++    double t3 = now_seconds() - s3;
++
++    g_mont_sqr_impl = sqr_via_mul_generic;
++    reset_point_caches();
++    verify_core_impl(e, rs, rs + 32, pub);
++    double s4 = now_seconds();
++    for (uint64_t i = 0; i < rounds; ++i)
++        sink ^= verify_core_impl(e, rs, rs + 32, pub);
++    double t4 = now_seconds() - s4;
++    benchmark_sink ^= (uint64_t)sink;
++
++    /* Restore the dispatched defaults this benchmark set at entry. */
++    g_mont_mul_impl = mont_mul_bmi2_adx;
++    g_modn_mul_impl = modn_mul_bmi2_adx;
++    g_mont_sqr_impl = mont_sqr_bmi2_adx;
++    reset_point_caches();
++
++    double sqr_us = t3 * 1e6 / (double)rounds;
++    double mulsqr_us = t4 * 1e6 / (double)rounds;
++    printf("BENCH: verify generic dedicated-sqr %.2f us/op,"
++           " sqr-via-mul %.2f us/op (saved %.2f us, %.1f%%)\n",
++           sqr_us, mulsqr_us, mulsqr_us - sqr_us,
++           (mulsqr_us - sqr_us) * 100.0 / mulsqr_us);
+ }
+ 
+ static double benchmark_key_pattern(const uint32_t *s,
+@@ -848,6 +964,7 @@ int main(int argc, char **argv) {
+         return 0;
+     }
+     if (!test_montgomery(random_cases)) return 1;
++    if (!test_montgomery_sqr(random_cases)) return 1;
+     if (!test_shamir(128)) return 1;
+     if (!test_verify_jac_e2e(verify_cases)) return 1;
+     if (!test_verify_jac_synthetic(random_cases)) return 1;
