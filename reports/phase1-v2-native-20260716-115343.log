@@ -1,0 +1,12 @@
+# phase1-v2 native tests+micro | 2026-07-16 11:53:43 | gcc 14.2.0 | Phase 1 projective verify
+Building native Montgomery differential test ...
+PASS: wNAF reconstruction (12 edge + 10000 random scalars, w=7/6)
+PASS: Montgomery differential (1000100 cases plus alias checks)
+PASS: Shamir differential (128 generated public keys, generic/bmi2/bmi2_adx)
+PASS: verify e2e differential (100000 valid + 100000 tampered, accepted=100000 rejected=100000)
+PASS: verify synthetic (1000000 constructed cases incl. x0+n branch, plus 8 edge groups)
+BENCH: generic 17.93 ns/op, bmi2 18.47 ns/op, bmi2_adx 18.77 ns/op
+BENCH: Shamir 51.21 us/op
+BENCH: felem_inv 4357.25 ns/op, jac_to_affine 4387.55 ns/op
+BENCH: verify projective 45.51 us/op, affine-oracle 49.72 us/op (saved 4.21 us, 8.5%)
+BENCH: first-call=71.67 us, key cache warm=50.44 us, forced-miss=57.80 us, rotate-2=57.46 us, rotate-10=61.38 us, rotate-50=64.84 us, rotate-100=65.42 us

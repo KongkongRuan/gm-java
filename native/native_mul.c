@@ -506,9 +506,15 @@ static int wnaf_encode(const uint32_t *k, int w, int *wnaf, int max_len) {
             int64_t val = (int64_t)(uint64_t)d[0] - digit;
             d[0] = (uint32_t)val;
             int64_t carry = val >> 32;
-            for (int j = 1; carry && j < dLen; j++) {
+            int j = 1;
+            for (; carry && j < dLen; j++) {
                 carry += (uint64_t)d[j]; d[j] = (uint32_t)carry; carry >>= 32;
             }
+            /* A surviving carry means d[1..dLen-1] were all 0xFFFFFFFF.
+             * d has 9 slots and d[8] starts at 0, so dLen <= 8 here and
+             * the carry (always 1) fits: dropping it corrupts the encoding
+             * for scalars with long runs of 1-bits (e.g. n-1, 2^256-1). */
+            if (carry && dLen < 9) d[dLen++] = (uint32_t)carry;
         } else wnaf[len] = 0;
         for (int j = 0; j < dLen-1; j++) d[j] = (d[j] >> 1) | (d[j+1] << 31);
         if (dLen > 0) { d[dLen-1] >>= 1; if (d[dLen-1]==0) dLen--; }
@@ -639,8 +645,10 @@ static void field_point_mul(const uint32_t *px32, const uint32_t *py32,
     mont_to_u32(rxm, rx); mont_to_u32(rym, ry);
 }
 
-static void shamir_mul(const uint32_t *s, const uint32_t *px32, const uint32_t *py32,
-                        const uint32_t *t, uint32_t *rx, uint32_t *ry) {
+/* Shamir main loop returning Jacobian (Montgomery) coordinates, skipping
+ * the final affine conversion so verify can compare in projective form. */
+static void shamir_mul_jac(const uint32_t *s, const uint32_t *px32, const uint32_t *py32,
+                           const uint32_t *t, felem AX, felem AY, felem AZ) {
     ensure_base_table();
     int cache_hit = g_pcache.valid &&
                     memcmp(g_pcache.px, px32, 32) == 0 &&
@@ -657,8 +665,11 @@ static void shamir_mul(const uint32_t *s, const uint32_t *px32, const uint32_t *
     int lenS = wnaf_encode(s, WNAF_BASE_W, wS, 258);
     int lenT = wnaf_encode(t, WNAF_VERIFY_W, wT, 258);
     int maxLen = lenS > lenT ? lenS : lenT;
-    if (maxLen == 0) { memset(rx,0,32); memset(ry,0,32); return; }
-    felem AX={0},AY={0},AZ={0}, BX,BY,BZ, tmpY;
+    AX[0]=AX[1]=AX[2]=AX[3]=0;
+    AY[0]=AY[1]=AY[2]=AY[3]=0;
+    AZ[0]=AZ[1]=AZ[2]=AZ[3]=0;
+    if (maxLen == 0) return;
+    felem BX,BY,BZ, tmpY;
     for (int i = maxLen-1; i >= 0; i--) {
         jac_double(AX,AY,AZ, BX,BY,BZ);
         felem_copy(AX,BX); felem_copy(AY,BY); felem_copy(AZ,BZ);
@@ -678,7 +689,12 @@ static void shamir_mul(const uint32_t *s, const uint32_t *px32, const uint32_t *
             felem_copy(AX,BX); felem_copy(AY,BY); felem_copy(AZ,BZ);
         }
     }
-    felem rxm, rym;
+}
+
+static void shamir_mul(const uint32_t *s, const uint32_t *px32, const uint32_t *py32,
+                        const uint32_t *t, uint32_t *rx, uint32_t *ry) {
+    felem AX, AY, AZ, rxm, rym;
+    shamir_mul_jac(s, px32, py32, t, AX, AY, AZ);
     jac_to_affine(AX,AY,AZ, rxm, rym);
     mont_to_u32(rxm, rx); mont_to_u32(rym, ry);
 }
@@ -1178,6 +1194,47 @@ static int sign_core_impl(const jbyte *e32, const jbyte *d32,
     return 1;
 }
 
+/* SM2 verify comparison in Jacobian projective form: accepts iff the
+ * affine x of (X,Y,Z) (Montgomery, mod p) satisfies (e + x) mod n == r,
+ * without a modular inverse. e may be any 256-bit value; r must be in
+ * [0, n). Since n < p < 2n, x mod n == x0 has at most two candidates in
+ * [0, p): x0 and x0 + n (only when x0 + n < p). Z == 0 keeps the legacy
+ * behavior of jac_to_affine, which maps the point at infinity to x1 = 0. */
+static int verify_jac_x(const felem X, const felem Z,
+                        const felem e_f, const felem r_f) {
+    static const felem zero = {0, 0, 0, 0};
+    if (felem_is_zero(Z)) {
+        felem R;
+        modn_add(e_f, zero, R);
+        return R[0]==r_f[0] && R[1]==r_f[1] && R[2]==r_f[2] && R[3]==r_f[3];
+    }
+    felem e_red, x0, x0m, Z2, lhs;
+    modn_add(e_f, zero, e_red);   /* e < 2^256 < 2n: one conditional subtract */
+    modn_sub(r_f, e_red, x0);     /* x0 = (r - e) mod n, operands < n */
+    to_mont(x0, x0m);             /* x0 < n < p: already a valid field element */
+    mont_sqr(Z, Z2);
+    mont_mul(x0m, Z2, lhs);
+    if (lhs[0]==X[0] && lhs[1]==X[1] && lhs[2]==X[2] && lhs[3]==X[3]) return 1;
+    /* Second candidate x0 + n, valid only when x0 + n < p. 257-bit safe. */
+    uint64_t carry = 0;
+    felem xp;
+    for (int i = 0; i < 4; i++) {
+        uint64_t s = x0[i] + N_ORD[i] + carry;
+        carry = (s < x0[i]) || (carry && s == x0[i]);
+        xp[i] = s;
+    }
+    if (carry) return 0;
+    int lt = 0;
+    for (int i = 3; i >= 0; i--) {
+        if (xp[i] != P64[i]) { lt = xp[i] < P64[i]; break; }
+    }
+    if (!lt) return 0;
+    felem xpm;
+    to_mont(xp, xpm);
+    mont_mul(xpm, Z2, lhs);
+    return lhs[0]==X[0] && lhs[1]==X[1] && lhs[2]==X[2] && lhs[3]==X[3];
+}
+
 /* Verification core: e[32], r[32], s[32], pubXY[64] → 0/1 */
 static int verify_core_impl(const jbyte *e32, const jbyte *r32,
                              const jbyte *s32, const jbyte *pubXY64) {
@@ -1191,16 +1248,12 @@ static int verify_core_impl(const jbyte *e32, const jbyte *r32,
     if (felem_is_zero(t_f)) return 0;
 
     uint32_t t_u[8]; u64_to_u32(t_f, t_u);
-    uint32_t rx_u[8], ry_u[8];
-    shamir_mul(s_u, px_u, py_u, t_u, rx_u, ry_u);
+    felem AX, AY, AZ;
+    shamir_mul_jac(s_u, px_u, py_u, t_u, AX, AY, AZ);
 
-    felem e_f, x1_f, R_f;
-    u32_to_u64(e_u, e_f); u32_to_u64(rx_u, x1_f);
-    modn_add(e_f, x1_f, R_f);
-
-    felem r_check; u32_to_u64(r_u, r_check);
-    return (R_f[0]==r_check[0]) && (R_f[1]==r_check[1]) &&
-           (R_f[2]==r_check[2]) && (R_f[3]==r_check[3]);
+    felem e_f, r_check;
+    u32_to_u64(e_u, e_f); u32_to_u64(r_u, r_check);
+    return verify_jac_x(AX, AZ, e_f, r_check);
 }
 
 /* ================================================================
@@ -1408,18 +1461,13 @@ static int verify_core_int_impl(const uint32_t *e, const uint32_t *r,
 
     uint32_t t_u[8];
     u64_to_u32(t_f, t_u);
-    uint32_t rx_u[8], ry_u[8];
-    shamir_mul(s, px, py, t_u, rx_u, ry_u);
+    felem AX, AY, AZ;
+    shamir_mul_jac(s, px, py, t_u, AX, AY, AZ);
 
-    felem e_f, x1_f, R_f;
+    felem e_f, r_check;
     u32_to_u64(e, e_f);
-    u32_to_u64(rx_u, x1_f);
-    modn_add(e_f, x1_f, R_f);
-
-    felem r_check;
     u32_to_u64(r, r_check);
-    return (R_f[0] == r_check[0]) && (R_f[1] == r_check[1]) &&
-           (R_f[2] == r_check[2]) && (R_f[3] == r_check[3]);
+    return verify_jac_x(AX, AZ, e_f, r_check);
 }
 
 /* ================================================================

@@ -1,0 +1,26 @@
+# phase1-v2 SM2 sign/verify focused | 2026-07-16 11:53:10 | JDK 25.0.3 | Phase 1 projective verify (new DLL 205892 bytes)
+
+╔══ SM2 签名/验签 ══╗
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by com.yxj.gm.util.JNI.NativeLoader in an unnamed module (file:/D:/java/project/github/gm-java/target/classes/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+    预热 gm-sign      5000 次 ... 89.298 ms
+    预热 gm-vrfy      5000 次 ... 237.718 ms
+    预热 BC-sign      5000 次 ... 264.859 ms
+    预热 BC-vrfy      5000 次 ... 268.190 ms
+    预热 HT-sign      5000 次 ... 449.434 ms
+    预热 HT-vrfy      5000 次 ... 280.151 ms
+
+  SM2 签名               │ 5000 次/轮
+    gm-java   : 中位     74.3 ms │ 均值     74.8 │ 最小     73.4 │ 最大     78.1 │ avg/次 0.014970 ms
+    BC(reuse) : 中位    210.1 ms │ 均值    209.3 │ 最小    206.5 │ 最大    212.1 │ avg/次 0.041864 ms
+    Hutool    : 中位    401.3 ms │ 均值    400.5 │ 最小    394.6 │ 最大    410.0 │ avg/次 0.080106 ms
+    >>> gm-java 最快  BC慢 182.8%  Hutool慢 440.2%
+
+  SM2 验签               │ 5000 次/轮
+    gm-java   : 中位    238.6 ms │ 均值    239.3 │ 最小    234.6 │ 最大    244.4 │ avg/次 0.047869 ms
+    BC(reuse) : 中位    228.4 ms │ 均值    229.9 │ 最小    224.3 │ 最大    238.4 │ avg/次 0.045978 ms
+    Hutool    : 中位    229.2 ms │ 均值    230.5 │ 最小    225.8 │ 最大    235.2 │ avg/次 0.046106 ms
+    >>> BC 最快  gm-java慢 4.5%  Hutool慢 0.4%

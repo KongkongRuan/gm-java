@@ -1,0 +1,26 @@
+# baseline-v2 SM2 sign/verify focused | 2026-07-16 11:40:42 | JDK 25.0.3 | post-Step0
+
+╔══ SM2 签名/验签 ══╗
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by com.yxj.gm.util.JNI.NativeLoader in an unnamed module (file:/D:/java/project/github/gm-java/target/classes/)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+    预热 gm-sign      5000 次 ... 92.661 ms
+    预热 gm-vrfy      5000 次 ... 272.794 ms
+    预热 BC-sign      5000 次 ... 274.002 ms
+    预热 BC-vrfy      5000 次 ... 287.972 ms
+    预热 HT-sign      5000 次 ... 486.126 ms
+    预热 HT-vrfy      5000 次 ... 263.853 ms
+
+  SM2 签名               │ 5000 次/轮
+    gm-java   : 中位     77.0 ms │ 均值     76.6 │ 最小     73.8 │ 最大     78.3 │ avg/次 0.015311 ms
+    BC(reuse) : 中位    214.9 ms │ 均值    219.7 │ 最小    206.3 │ 最大    262.7 │ avg/次 0.043938 ms
+    Hutool    : 中位    409.7 ms │ 均值    410.8 │ 最小    403.0 │ 最大    417.7 │ avg/次 0.082152 ms
+    >>> gm-java 最快  BC慢 179.1%  Hutool慢 432.1%
+
+  SM2 验签               │ 5000 次/轮
+    gm-java   : 中位    268.3 ms │ 均值    270.4 │ 最小    267.2 │ 最大    279.3 │ avg/次 0.054088 ms
+    BC(reuse) : 中位    224.0 ms │ 均值    225.4 │ 最小    219.7 │ 最大    239.3 │ avg/次 0.045090 ms
+    Hutool    : 中位    233.9 ms │ 均值    233.9 │ 最小    228.6 │ 最大    243.7 │ avg/次 0.046782 ms
+    >>> BC 最快  gm-java慢 19.7%  Hutool慢 4.4%

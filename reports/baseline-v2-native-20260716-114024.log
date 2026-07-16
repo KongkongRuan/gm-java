@@ -1,0 +1,9 @@
+# baseline-v2 native micro | 2026-07-16 11:40:24 | gcc 14.2.0 | post-Step0 (wnaf fix)
+Building native Montgomery differential test ...
+PASS: wNAF reconstruction (12 edge + 10000 random scalars, w=7/6)
+PASS: Montgomery differential (1000100 cases plus alias checks)
+PASS: Shamir differential (128 generated public keys, generic/bmi2/bmi2_adx)
+BENCH: generic 17.48 ns/op, bmi2 17.85 ns/op, bmi2_adx 17.98 ns/op
+BENCH: Shamir 50.69 us/op
+BENCH: felem_inv 4275.50 ns/op, jac_to_affine 4466.88 ns/op
+BENCH: first-call=76.63 us, key cache warm=49.83 us, forced-miss=58.05 us, rotate-2=60.96 us, rotate-10=64.99 us, rotate-50=65.45 us, rotate-100=65.51 us
