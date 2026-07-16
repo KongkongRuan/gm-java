@@ -180,7 +180,7 @@ jobs:
           path: src/main/resources/native/linux-${{ matrix.arch }}/*
           if-no-files-found: error
 
-  # ==================== 自动提交产物到仓库（以 Pull Request 方式绕过 main 分支保护）====================
+  # ==================== 自动提交产物到仓库（RELEASE_TOKEN 直接推送 main，绕过分支保护）====================
   commit-native:
     needs: [build-windows, build-linux-x64, build-macos, build-linux-cross]
     runs-on: ubuntu-latest
@@ -188,12 +188,12 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # 使用 RELEASE_TOKEN 可以绕过 main 分支保护；未配置时回退到 GITHUB_TOKEN
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           ref: ${{ github.ref }}
 
       - name: Download all artifacts
@@ -226,9 +226,7 @@ jobs:
           cp -v native-artifacts/native-macos-x86_64/* src/main/resources/native/macos-x86_64/ || true
           cp -v native-artifacts/native-macos-aarch64/* src/main/resources/native/macos-aarch64/ || true
 
-      - name: Commit and create Pull Request
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push to main
         run: |
           set -e
           git config user.name "github-actions[bot]"
@@ -238,12 +236,7 @@ jobs:
             echo "No changes to commit."
             exit 0
           fi
-          BRANCH="auto-update-native-libraries-${{ github.run_id }}"
-          git checkout -b "$BRANCH"
           git commit -m "chore: update native libraries [skip ci]"
-          git push origin "$BRANCH"
-          gh pr create \
-            --base "${{ github.ref_name }}" \
-            --head "$BRANCH" \
-            --fill
-          echo "Pull request created: $BRANCH -> ${{ github.ref_name }}"
+          # 构建期间 main 可能有新提交，先 rebase 再推，避免非快进失败
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin HEAD:"${{ github.ref_name }}"
