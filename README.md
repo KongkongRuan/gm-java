@@ -22,7 +22,7 @@ GM-JAVA 是一套用 JAVA 开发的支持国密算法的加解密工具包。
 <dependency>
     <groupId>io.github.kongkongruan</groupId>
     <artifactId>gm-java</artifactId>
-    <version>3.2.3</version>
+    <version>3.2.4</version>
 </dependency>
 ```
 
@@ -36,7 +36,7 @@ GM-JAVA 是一套用 JAVA 开发的支持国密算法的加解密工具包。
 <dependency>
     <groupId>io.github.kongkongruan</groupId>
     <artifactId>gm-java</artifactId>
-    <version>3.2.3</version>
+    <version>3.2.4</version>
 </dependency>
 ```
 
