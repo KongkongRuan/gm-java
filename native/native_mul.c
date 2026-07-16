@@ -41,12 +41,6 @@ typedef signed   __int128 int128_t;
 #define GM_TARGET_BMI2_ADX
 #endif
 
-/* Default to the real BMI2+ADX implementation on ADX-capable CPUs.
- * Define GM_USE_PLACEHOLDER_BMI2_ADX to keep the old __int128 placeholder. */
-#if !defined(GM_USE_REAL_BMI2_ADX) && !defined(GM_USE_PLACEHOLDER_BMI2_ADX)
-#define GM_USE_REAL_BMI2_ADX 1
-#endif
-
 #if defined(__GNUC__) || defined(__clang__)
 #define ALWAYS_INLINE static inline __attribute__((always_inline))
 #define THREAD_LOCAL __thread
@@ -64,7 +58,6 @@ static void modn_mul_generic(const felem a, const felem b, felem r);
 #if GM_HAS_X86_RUNTIME_DISPATCH && HAS_INT128
 GM_TARGET_BMI2 static void mont_mul_bmi2(const felem a, const felem b, felem r);
 GM_TARGET_BMI2_ADX static void mont_mul_bmi2_adx(const felem a, const felem b, felem r);
-GM_TARGET_BMI2_ADX static void mont_mul_bmi2_adx_real(const felem a, const felem b, felem r);
 GM_TARGET_BMI2 static void modn_mul_bmi2(const felem a, const felem b, felem r);
 GM_TARGET_BMI2_ADX static void modn_mul_bmi2_adx(const felem a, const felem b, felem r);
 #endif
@@ -89,8 +82,6 @@ static void ensure_runtime_dispatch(void) {
         int has_bmi2 = (ebx & bit_BMI2) != 0;
         int has_adx = (ebx & bit_ADX) != 0;
         if (has_bmi2 && has_adx) {
-            /* mont_mul_bmi2_adx_real has a correctness bug; use the verified
-             * __int128 placeholder until it is fixed. */
             g_mont_mul_impl = mont_mul_bmi2_adx;
             g_modn_mul_impl = modn_mul_bmi2_adx;
         } else if (has_bmi2) {
@@ -222,156 +213,6 @@ DEFINE_MONT_MUL(mont_mul_generic, )
 #if GM_HAS_X86_RUNTIME_DISPATCH
 DEFINE_MONT_MUL(mont_mul_bmi2, GM_TARGET_BMI2)
 DEFINE_MONT_MUL(mont_mul_bmi2_adx, GM_TARGET_BMI2_ADX)
-
-/* Real BMI2+ADX Montgomery multiplication.
- *
- * Uses _mulx_u64 for carry-less 64x64->128 multiply and separate
- * _addcarry_u64 (CF / adcx) and _addcarryx_u64 (OF / adox) chains.
- * The structure mirrors the generic CIOS loop but avoids __int128
- * in the hot inner addition chains so the compiler emits the
- * BMI2/ADX instructions directly.
- *
- * Implementation notes:
- * - Keep all working limbs in scalar uint64_t variables so they stay in registers.
- * - Use a 64-bit running "carry" plus a 1-bit "extra" overflow accumulator.
- *   The true carry to the next limb can be up to 2^64+2; we store carry_low in
- *   "carry" and the overflow bit in "extra".  The overflow is folded into the
- *   next limb's high-part addition, matching the mathematical recurrence.
- */
-GM_TARGET_BMI2_ADX static void mont_mul_bmi2_adx_real(const felem a, const felem b, felem r) {
-    uint64_t z[4] = {0, 0, 0, 0};
-    uint128_t c1 = 0;
-    uint64_t lo, hi;
-
-    for (int i = 0; i < 4; i++) {
-        uint64_t ai = a[i];
-        uint64_t T[4];
-        uint128_t carry;
-
-        /* ---------- Step 1: T = ai * b + z (CF chain via adcx) ---------- */
-        carry = 0;
-
-        const uint64_t zero = 0;
-
-        __asm__ volatile (
-            "test %b0, %b0\n\t"      /* clear CF and OF */
-            "mulx %3, %0, %1\n\t"    /* %0=lo, %1=hi = ai*b[0] */
-            "adcx %4, %0\n\t"        /* lo += z[0] + CF */
-            "adox %5, %0\n\t"        /* lo += carry + OF */
-            "adcx %6, %1\n\t"        /* hi += CF */
-            "adox %6, %1"             /* hi += OF */
-            : "=&r"(lo), "=&r"(hi)
-            : "d"(ai), "r"(b[0]), "r"(z[0]), "r"((uint64_t)carry), "r"(zero)
-            : "cc");
-        T[0] = lo;
-        carry = (carry >> 64) + hi;
-
-        __asm__ volatile (
-            "test %b0, %b0\n\t"
-            "mulx %3, %0, %1\n\t"
-            "adcx %4, %0\n\t"
-            "adox %5, %0\n\t"
-            "adcx %6, %1\n\t"
-            "adox %6, %1"
-            : "=&r"(lo), "=&r"(hi)
-            : "d"(ai), "r"(b[1]), "r"(z[1]), "r"((uint64_t)carry), "r"(zero)
-            : "cc");
-        T[1] = lo;
-        carry = (carry >> 64) + hi;
-
-        __asm__ volatile (
-            "test %b0, %b0\n\t"
-            "mulx %3, %0, %1\n\t"
-            "adcx %4, %0\n\t"
-            "adox %5, %0\n\t"
-            "adcx %6, %1\n\t"
-            "adox %6, %1"
-            : "=&r"(lo), "=&r"(hi)
-            : "d"(ai), "r"(b[2]), "r"(z[2]), "r"((uint64_t)carry), "r"(zero)
-            : "cc");
-        T[2] = lo;
-        carry = (carry >> 64) + hi;
-
-        __asm__ volatile (
-            "test %b0, %b0\n\t"
-            "mulx %3, %0, %1\n\t"
-            "adcx %4, %0\n\t"
-            "adox %5, %0\n\t"
-            "adcx %6, %1\n\t"
-            "adox %6, %1"
-            : "=&r"(lo), "=&r"(hi)
-            : "d"(ai), "r"(b[3]), "r"(z[3]), "r"((uint64_t)carry), "r"(zero)
-            : "cc");
-        T[3] = lo;
-        carry = (carry >> 64) + hi;
-
-        c1 += carry;
-
-        /* ---------- Step 2: reduce with m = T[0], p' = 1 (OF chain via adox) ---------- */
-        uint64_t m = T[0];
-        /* m*p0 + T[0] = m*2^64, so the new low limb is 0 and the carry to position 1 is m. */
-        carry = m;
-
-        __asm__ volatile (
-            "test %b0, %b0\n\t"      /* clear CF and OF */
-            "mulx %3, %0, %1\n\t"    /* %0=lo, %1=hi = m*P64[1] */
-            "adox %4, %0\n\t"        /* lo += T[1] + OF */
-            "adox %5, %0\n\t"        /* lo += carry + OF */
-            "adox %6, %1"             /* hi += OF */
-            : "=&r"(lo), "=&r"(hi)
-            : "d"(m), "r"(P64[1]), "r"(T[1]), "r"((uint64_t)carry), "r"(zero), "r"(zero)
-            : "cc");
-        T[1] = lo;
-        carry = (carry >> 64) + hi;
-
-        __asm__ volatile (
-            "test %b0, %b0\n\t"
-            "mulx %3, %0, %1\n\t"
-            "adox %4, %0\n\t"
-            "adox %5, %0\n\t"
-            "adox %6, %1"
-            : "=&r"(lo), "=&r"(hi)
-            : "d"(m), "r"(P64[2]), "r"(T[2]), "r"((uint64_t)carry), "r"(zero)
-            : "cc");
-        T[2] = lo;
-        carry = (carry >> 64) + hi;
-
-        __asm__ volatile (
-            "test %b0, %b0\n\t"
-            "mulx %3, %0, %1\n\t"
-            "adox %4, %0\n\t"
-            "adox %5, %0\n\t"
-            "adox %6, %1"
-            : "=&r"(lo), "=&r"(hi)
-            : "d"(m), "r"(P64[3]), "r"(T[3]), "r"((uint64_t)carry), "r"(zero)
-            : "cc");
-        T[3] = lo;
-        carry = (carry >> 64) + hi;
-
-        c1 += carry;
-
-        /* ---------- Step 3: shift right one limb ---------- */
-        z[0] = T[1];
-        z[1] = T[2];
-        z[2] = T[3];
-        z[3] = (uint64_t)c1;
-        c1 = c1 >> 64;
-    }
-
-    /* conditional subtraction: if z >= p, z -= p */
-    uint64_t d[4];
-    int128_t bw = (int128_t)z[0] - P64[0]; d[0]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z[1] - P64[1];         d[1]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z[2] - P64[2];         d[2]=(uint64_t)bw; bw>>=64;
-    bw += (int128_t)z[3] - P64[3];         d[3]=(uint64_t)bw; bw>>=64;
-    bw += (uint64_t)c1;
-
-    uint64_t mask = (uint64_t)((int64_t)bw >> 63);
-    r[0] = (z[0] & mask) | (d[0] & ~mask);
-    r[1] = (z[1] & mask) | (d[1] & ~mask);
-    r[2] = (z[2] & mask) | (d[2] & ~mask);
-    r[3] = (z[3] & mask) | (d[3] & ~mask);
-}
 #endif
 #undef DEFINE_MONT_MUL
 #else
@@ -683,6 +524,8 @@ static int wnaf_encode(const uint32_t *k, int w, int *wnaf, int max_len) {
 #define WNAF_BASE_SIZE 32
 #define WNAF_FIELD_W   6
 #define WNAF_FIELD_SIZE 16
+#define WNAF_VERIFY_W    6
+#define WNAF_VERIFY_SIZE 16
 #define MAX_TABLE      256
 
 /* table[i] = {x, y} in Montgomery form, affine */
@@ -742,7 +585,7 @@ static void ensure_base_table(void) {
  * Memory per thread: ~16 * 64 B = 1 KB. */
 static THREAD_LOCAL struct {
     uint32_t px[8], py[8];
-    affine_pt tbl[WNAF_FIELD_SIZE];
+    affine_pt tbl[WNAF_VERIFY_SIZE];
     int valid;
 } g_pcache;
 
@@ -799,23 +642,20 @@ static void field_point_mul(const uint32_t *px32, const uint32_t *py32,
 static void shamir_mul(const uint32_t *s, const uint32_t *px32, const uint32_t *py32,
                         const uint32_t *t, uint32_t *rx, uint32_t *ry) {
     ensure_base_table();
-    affine_pt pTbl[WNAF_FIELD_SIZE];
     int cache_hit = g_pcache.valid &&
                     memcmp(g_pcache.px, px32, 32) == 0 &&
                     memcmp(g_pcache.py, py32, 32) == 0;
-    if (cache_hit) {
-        memcpy(pTbl, g_pcache.tbl, sizeof(g_pcache.tbl));
-    } else {
+    if (!cache_hit) {
         felem px, py_; u32_to_mont(px32, px); u32_to_mont(py32, py_);
-        build_table(px, py_, pTbl, WNAF_FIELD_SIZE);
+        build_table(px, py_, g_pcache.tbl, WNAF_VERIFY_SIZE);
         memcpy(g_pcache.px, px32, 32);
         memcpy(g_pcache.py, py32, 32);
-        memcpy(g_pcache.tbl, pTbl, sizeof(g_pcache.tbl));
         g_pcache.valid = 1;
     }
+    const affine_pt *pTbl = g_pcache.tbl;
     int wS[258], wT[258];
     int lenS = wnaf_encode(s, WNAF_BASE_W, wS, 258);
-    int lenT = wnaf_encode(t, WNAF_FIELD_W, wT, 258);
+    int lenT = wnaf_encode(t, WNAF_VERIFY_W, wT, 258);
     int maxLen = lenS > lenT ? lenS : lenT;
     if (maxLen == 0) { memset(rx,0,32); memset(ry,0,32); return; }
     felem AX={0},AY={0},AZ={0}, BX,BY,BZ, tmpY;

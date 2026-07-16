@@ -18,7 +18,9 @@ import org.bouncycastle.crypto.*;
 import org.bouncycastle.crypto.engines.SM4Engine;
 import org.bouncycastle.crypto.generators.ECKeyPairGenerator;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
+import org.bouncycastle.crypto.modes.SICBlockCipher;
 import org.bouncycastle.crypto.params.*;
+import org.bouncycastle.crypto.signers.PlainDSAEncoding;
 import org.bouncycastle.crypto.signers.SM2Signer;
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPrivateKey;
 import org.bouncycastle.jcajce.provider.asymmetric.ec.BCECPublicKey;
@@ -48,6 +50,17 @@ public class BenchmarkComparison {
             SM2_PARAMS.getCurve(), SM2_PARAMS.getG(), SM2_PARAMS.getN(), SM2_PARAMS.getH());
 
     private static final List<BenchmarkResult> RESULTS = new ArrayList<BenchmarkResult>();
+    private static final String BC_SM2_BENCHMARK_MODE =
+            "lightweight engine/signer 预初始化后复用（签名使用 raw64 编码）";
+
+    static double elapsedMillis(long startNanos) {
+        return (System.nanoTime() - startNanos) / 1_000_000.0;
+    }
+
+    public static String gmSm4ParallelLabel() {
+        boolean enabled = Boolean.parseBoolean(System.getProperty("gm.sm4.parallel", "true"));
+        return enabled ? "gm并行配置=开启" : "gm并行配置=关闭";
+    }
 
     public static void main(String[] args) throws Exception {
         int sm2Warmup = 500, sm2Rounds = 200, sm2Sets = 5;
@@ -135,6 +148,8 @@ public class BenchmarkComparison {
         System.out.println("  OS：" + System.getProperty("os.name") + " " + System.getProperty("os.arch"));
         System.out.println("  CPUs：" + Runtime.getRuntime().availableProcessors());
         System.out.println("  Nat256：" + (Nat256Native.isAvailable() ? "JNI" : "Java"));
+        System.out.println("  BC SM2：" + BC_SM2_BENCHMARK_MODE);
+        System.out.println("  SM4：" + gmSm4ParallelLabel());
         System.out.println("  参数：SM2(warmup=" + sm2Warmup + ", rounds=" + sm2Rounds + ", sets=" + sm2Sets + "), " +
                 "SM3(warmup=" + sm3Warmup + ", rounds=" + sm3Rounds + ", sets=" + sm3Sets + "), " +
                 "SM4(warmup=" + sm4Warmup + ", rounds=" + sm4Rounds + ", sets=" + sm4Sets + ", dataMBs=" + Arrays.toString(sm4DataMBs) + ")");
@@ -217,6 +232,8 @@ public class BenchmarkComparison {
           .append(System.getProperty("os.arch")).append("\n");
         md.append("- **CPUs**：").append(Runtime.getRuntime().availableProcessors()).append("\n");
         md.append("- **Nat256**：").append(Nat256Native.isAvailable() ? "JNI" : "Java").append("\n");
+        md.append("- **BC SM2**：").append(BC_SM2_BENCHMARK_MODE).append("\n");
+        md.append("- **SM4**：").append(gmSm4ParallelLabel()).append("\n");
         md.append("- **参数**：\n");
         md.append("  - SM2: warmup=").append(sm2Warmup).append(", rounds=").append(sm2Rounds).append(", sets=").append(sm2Sets).append("\n");
         md.append("  - SM3: warmup=").append(sm3Warmup).append(", rounds=").append(sm3Rounds).append(", sets=").append(sm3Sets).append("\n");
@@ -225,22 +242,24 @@ public class BenchmarkComparison {
         md.append("\n");
 
         md.append("## SM2 测试结果\n\n");
-        md.append("| 操作 | gm-java (ms) | BC (ms) | Hutool (ms) | 优胜者 |\n");
+        md.append("> 每个数值是一轮（").append(sm2Rounds).append(" 次操作）的总耗时，单位为毫秒。\n\n");
+        md.append("| 操作 | gm-java (ms/轮) | BC 预初始化复用 (ms/轮) | Hutool (ms/轮) | 优胜者 |\n");
         md.append("|------|-------------:|--------:|------------:|--------|\n");
         for (BenchmarkResult r : RESULTS) {
             if ("SM2".equals(r.category)) {
-                md.append(String.format(Locale.US, "| %s | %.2f | %.2f | %.2f | %s |%n",
+                md.append(String.format(Locale.US, "| %s | %.3f | %.3f | %.3f | %s |%n",
                         r.name, r.gm, r.bc, r.ht, r.winner));
             }
         }
         md.append("\n");
 
         md.append("## SM3 测试结果\n\n");
-        md.append("| 数据大小 | gm-java (ms) | BC (ms) | Hutool (ms) | 优胜者 |\n");
+        md.append("> 每个数值是一轮（").append(sm3Rounds).append(" 次操作）的总耗时，单位为毫秒。\n\n");
+        md.append("| 数据大小 | gm-java (ms/轮) | BC (ms/轮) | Hutool (ms/轮) | 优胜者 |\n");
         md.append("|----------|-------------:|--------:|------------:|--------|\n");
         for (BenchmarkResult r : RESULTS) {
             if ("SM3".equals(r.category)) {
-                md.append(String.format(Locale.US, "| %s | %.2f | %.2f | %.2f | %s |%n",
+                md.append(String.format(Locale.US, "| %s | %.3f | %.3f | %.3f | %s |%n",
                         r.name, r.gm, r.bc, r.ht, r.winner));
             }
         }
@@ -362,8 +381,8 @@ public class BenchmarkComparison {
     static HutoolSm4Support initHutoolSm4(byte[] key, byte[] iv) {
         try {
             return new HutoolSm4Support(
-                    SmUtil.sm4(key),
-                    new SM4(cn.hutool.crypto.Mode.CBC, cn.hutool.crypto.Padding.PKCS5Padding, key, iv),
+                    new SM4(cn.hutool.crypto.Mode.ECB, cn.hutool.crypto.Padding.NoPadding, key),
+                    new SM4(cn.hutool.crypto.Mode.CBC, cn.hutool.crypto.Padding.NoPadding, key, iv),
                     new SM4(cn.hutool.crypto.Mode.CTR, cn.hutool.crypto.Padding.NoPadding, key, iv),
                     null
             );
@@ -404,27 +423,27 @@ public class BenchmarkComparison {
         ECKeyPairGenerator bcGen = new ECKeyPairGenerator();
         bcGen.init(new ECKeyGenerationParameters(SM2_DOMAIN, new SecureRandom()));
 
-        long t0 = System.currentTimeMillis();
+        long t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) SM2KeyPairGenerate.generateSM2KeyPair();
-        System.out.printf("    预热 gm-java      %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
+        System.out.printf("    预热 gm-java      %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) bcGen.generateKeyPair();
-        System.out.printf("    预热 BC           %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
+        System.out.printf("    预热 BC           %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) SmUtil.sm2();
-        System.out.printf("    预热 Hutool       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        System.out.printf("    预热 Hutool       %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
 
         double[] gm = new double[sets], bc = new double[sets], ht = new double[sets];
         for (int s = 0; s < sets; s++) {
-            t0 = System.currentTimeMillis();
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) SM2KeyPairGenerate.generateSM2KeyPair();
-            gm[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
+            gm[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) bcGen.generateKeyPair();
-            bc[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
+            bc[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) SmUtil.sm2();
-            ht[s] = System.currentTimeMillis() - t0;
+            ht[s] = elapsedMillis(t0);
         }
         printResult("SM2", "SM2 密钥生成", rounds, gm, bc, ht, sets);
     }
@@ -442,54 +461,55 @@ public class BenchmarkComparison {
         AsymmetricCipherKeyPair bcKp = genBCKeyPair();
         ECPublicKeyParameters bcPub = (ECPublicKeyParameters) bcKp.getPublic();
         ECPrivateKeyParameters bcPri = (ECPrivateKeyParameters) bcKp.getPrivate();
+        BcSm2CipherSession bcCipher = new BcSm2CipherSession(bcPub, bcPri);
 
         SM2 htSm2 = SmUtil.sm2();
 
         byte[] gmEnc = gmCipher.SM2CipherEncrypt(msg, gmPub);
-        byte[] bcEnc = bcEncrypt(msg, bcPub);
+        byte[] bcEnc = bcCipher.encrypt(msg);
 
-        long t0 = System.currentTimeMillis();
+        long t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) gmCipher.SM2CipherEncrypt(msg, gmPub);
-        System.out.printf("    预热 gm-enc       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
+        System.out.printf("    预热 gm-enc       %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) gmCipher.SM2CipherDecrypt(gmEnc, gmPri);
-        System.out.printf("    预热 gm-dec       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) bcEncrypt(msg, bcPub);
-        System.out.printf("    预热 BC-enc       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) bcDecrypt(bcEnc, bcPri);
-        System.out.printf("    预热 BC-dec       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        System.out.printf("    预热 gm-dec       %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
+        for (int i = 0; i < warmup; i++) bcCipher.encrypt(msg);
+        System.out.printf("    预热 BC-enc       %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
+        for (int i = 0; i < warmup; i++) bcCipher.decrypt(bcEnc);
+        System.out.printf("    预热 BC-dec       %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
         byte[] htEnc = htSm2.encrypt(msg);
-        t0 = System.currentTimeMillis();
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) htSm2.encrypt(msg);
-        System.out.printf("    预热 HT-enc       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
+        System.out.printf("    预热 HT-enc       %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) htSm2.decrypt(htEnc, KeyType.PrivateKey);
-        System.out.printf("    预热 HT-dec       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        System.out.printf("    预热 HT-dec       %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
 
         double[] gmE = new double[sets], bcE = new double[sets], htE = new double[sets];
         double[] gmD = new double[sets], bcD = new double[sets], htD = new double[sets];
         for (int s = 0; s < sets; s++) {
-            t0 = System.currentTimeMillis();
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) gmCipher.SM2CipherEncrypt(msg, gmPub);
-            gmE[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) bcEncrypt(msg, bcPub);
-            bcE[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
+            gmE[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
+            for (int i = 0; i < rounds; i++) bcCipher.encrypt(msg);
+            bcE[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) htSm2.encrypt(msg);
-            htE[s] = System.currentTimeMillis() - t0;
+            htE[s] = elapsedMillis(t0);
 
-            t0 = System.currentTimeMillis();
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) gmCipher.SM2CipherDecrypt(gmEnc, gmPri);
-            gmD[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) bcDecrypt(bcEnc, bcPri);
-            bcD[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
+            gmD[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
+            for (int i = 0; i < rounds; i++) bcCipher.decrypt(bcEnc);
+            bcD[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) htSm2.decrypt(htEnc, KeyType.PrivateKey);
-            htD[s] = System.currentTimeMillis() - t0;
+            htD[s] = elapsedMillis(t0);
         }
         printResult("SM2", "SM2 加密", rounds, gmE, bcE, htE, sets);
         printResult("SM2", "SM2 解密", rounds, gmD, bcD, htD, sets);
@@ -508,54 +528,55 @@ public class BenchmarkComparison {
         AsymmetricCipherKeyPair bcKp = genBCKeyPair();
         ECPublicKeyParameters bcPub = (ECPublicKeyParameters) bcKp.getPublic();
         ECPrivateKeyParameters bcPri = (ECPrivateKeyParameters) bcKp.getPrivate();
+        BcSm2SignerSession bcSigner = new BcSm2SignerSession(bcPri, bcPub);
 
         SM2 htSm2 = SmUtil.sm2();
         byte[] gmSig = gmSigner.signature(msg, null, gmPri, gmPub);
-        byte[] bcSig = bcSign(msg, bcPri);
+        byte[] bcSig = bcSigner.sign(msg);
 
-        long t0 = System.currentTimeMillis();
+        long t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) gmSigner.signature(msg, null, gmPri, gmPub);
-        System.out.printf("    预热 gm-sign      %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
+        System.out.printf("    预热 gm-sign      %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) gmSigner.verify(msg, null, gmSig, gmPub);
-        System.out.printf("    预热 gm-vrfy      %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) bcSign(msg, bcPri);
-        System.out.printf("    预热 BC-sign      %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) bcVerify(msg, bcSig, bcPub);
-        System.out.printf("    预热 BC-vrfy      %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        System.out.printf("    预热 gm-vrfy      %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
+        for (int i = 0; i < warmup; i++) bcSigner.sign(msg);
+        System.out.printf("    预热 BC-sign      %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
+        for (int i = 0; i < warmup; i++) bcSigner.verify(msg, bcSig);
+        System.out.printf("    预热 BC-vrfy      %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
 
         byte[] htSig = htSm2.sign(msg);
-        t0 = System.currentTimeMillis();
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) htSm2.sign(msg);
-        System.out.printf("    预热 HT-sign      %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
+        System.out.printf("    预热 HT-sign      %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) htSm2.verify(msg, htSig);
-        System.out.printf("    预热 HT-vrfy      %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        System.out.printf("    预热 HT-vrfy      %d 次 ... %.3f ms%n", warmup, elapsedMillis(t0));
 
         double[] gmS = new double[sets], bcS = new double[sets], htS = new double[sets];
         double[] gmV = new double[sets], bcV = new double[sets], htV = new double[sets];
         for (int s = 0; s < sets; s++) {
-            t0 = System.currentTimeMillis();
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) gmSigner.signature(msg, null, gmPri, gmPub);
-            gmS[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) bcSign(msg, bcPri);
-            bcS[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
+            gmS[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
+            for (int i = 0; i < rounds; i++) bcSigner.sign(msg);
+            bcS[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) htSm2.sign(msg);
-            htS[s] = System.currentTimeMillis() - t0;
+            htS[s] = elapsedMillis(t0);
 
-            t0 = System.currentTimeMillis();
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) gmSigner.verify(msg, null, gmSig, gmPub);
-            gmV[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) bcVerify(msg, bcSig, bcPub);
-            bcV[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
+            gmV[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
+            for (int i = 0; i < rounds; i++) bcSigner.verify(msg, bcSig);
+            bcV[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) htSm2.verify(msg, htSig);
-            htV[s] = System.currentTimeMillis() - t0;
+            htV[s] = elapsedMillis(t0);
         }
         printResult("SM2", "SM2 签名", rounds, gmS, bcS, htS, sets);
         printResult("SM2", "SM2 验签", rounds, gmV, bcV, htV, sets);
@@ -583,27 +604,27 @@ public class BenchmarkComparison {
 
     static void benchSM3Size(String label, byte[] data, int warmup, int rounds, int sets,
                              org.bouncycastle.crypto.digests.SM3Digest bcDigest) {
-        long t0 = System.currentTimeMillis();
+        long t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) { SM3Digest d = new SM3Digest(); d.update(data); d.doFinal(); }
-        System.out.printf("    预热 gm-%s       %d 次 ... %d ms%n", label, warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
+        System.out.printf("    预热 gm-%s       %d 次 ... %.3f ms%n", label, warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) { bcDigest.reset(); bcDigest.update(data, 0, data.length); byte[] o = new byte[32]; bcDigest.doFinal(o, 0); }
-        System.out.printf("    预热 BC-%s       %d 次 ... %d ms%n", label, warmup, System.currentTimeMillis() - t0);
-        t0 = System.currentTimeMillis();
+        System.out.printf("    预热 BC-%s       %d 次 ... %.3f ms%n", label, warmup, elapsedMillis(t0));
+        t0 = System.nanoTime();
         for (int i = 0; i < warmup; i++) cn.hutool.crypto.digest.SM3.create().digest(data);
-        System.out.printf("    预热 HT-%s       %d 次 ... %d ms%n", label, warmup, System.currentTimeMillis() - t0);
+        System.out.printf("    预热 HT-%s       %d 次 ... %.3f ms%n", label, warmup, elapsedMillis(t0));
 
         double[] gm = new double[sets], bc = new double[sets], ht = new double[sets];
         for (int s = 0; s < sets; s++) {
-            t0 = System.currentTimeMillis();
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) { SM3Digest d = new SM3Digest(); d.update(data); d.doFinal(); }
-            gm[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
+            gm[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) { bcDigest.reset(); bcDigest.update(data, 0, data.length); byte[] o = new byte[32]; bcDigest.doFinal(o, 0); }
-            bc[s] = System.currentTimeMillis() - t0;
-            t0 = System.currentTimeMillis();
+            bc[s] = elapsedMillis(t0);
+            t0 = System.nanoTime();
             for (int i = 0; i < rounds; i++) cn.hutool.crypto.digest.SM3.create().digest(data);
-            ht[s] = System.currentTimeMillis() - t0;
+            ht[s] = elapsedMillis(t0);
         }
         printResult("SM3", "SM3 (" + label + ")", rounds, gm, bc, ht, sets);
     }
@@ -630,14 +651,14 @@ public class BenchmarkComparison {
             byte[] data = new byte[dataMB * 1024 * 1024];
             new SecureRandom().nextBytes(data);
 
-            SM4Cipher gmSm4Ecb = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.ECB);
-            SM4Cipher gmSm4Cbc = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.CBC);
-            SM4Cipher gmSm4Ctr = new SM4Cipher(PaddingEnum.Pkcs7, ModeEnum.CTR);
+            SM4Cipher gmSm4Ecb = new SM4Cipher(PaddingEnum.NoPadding, ModeEnum.ECB);
+            SM4Cipher gmSm4Cbc = new SM4Cipher(PaddingEnum.NoPadding, ModeEnum.CBC);
+            SM4Cipher gmSm4Ctr = new SM4Cipher(PaddingEnum.NoPadding, ModeEnum.CTR);
 
             HutoolSm4Support hutoolSm4 = initHutoolSm4(key, iv);
 
-            benchSM4Mode("SM4-ECB", gmSm4Ecb, key, data, iv, hutoolSm4.ecb, actualWarmup, actualRounds, sets, dataMB, true, hutoolSm4.unavailableReason);
-            benchSM4Mode("SM4-CBC", gmSm4Cbc, key, data, iv, hutoolSm4.cbc, actualWarmup, actualRounds, sets, dataMB, true, hutoolSm4.unavailableReason);
+            benchSM4Mode("SM4-ECB", ModeEnum.ECB, gmSm4Ecb, key, data, iv, hutoolSm4.ecb, actualWarmup, actualRounds, sets, dataMB, true, hutoolSm4.unavailableReason);
+            benchSM4Mode("SM4-CBC", ModeEnum.CBC, gmSm4Cbc, key, data, iv, hutoolSm4.cbc, actualWarmup, actualRounds, sets, dataMB, true, hutoolSm4.unavailableReason);
             benchSM4CTR(gmSm4Ctr, key, data, iv, hutoolSm4.ctr, actualWarmup, actualRounds, sets, dataMB, hutoolSm4.unavailableReason);
         }
     }
@@ -646,14 +667,19 @@ public class BenchmarkComparison {
         benchSM4(warmup, rounds, sets, new int[] { dataMB });
     }
 
-    static void benchSM4Mode(String name, SM4Cipher gmSm4, byte[] key, byte[] data, byte[] iv,
+    static void benchSM4Mode(String name, ModeEnum mode, SM4Cipher gmSm4, byte[] key, byte[] data, byte[] iv,
                               SM4 htSm4, int warmup, int rounds, int sets, int dataMB, boolean testDecrypt,
                               String htUnavailableReason) {
+        byte[] gmEnc = gmSm4.cipherEncrypt(key, data, iv);
+        byte[] bcEnc = bcSM4Encrypt(data, key, iv, mode);
+        byte[] htEnc = htSm4 != null ? htSm4.encrypt(data) : null;
+        validateSm4Interoperability(name, mode, gmSm4, htSm4, key, iv, data, gmEnc, bcEnc, htEnc);
+
         long t0 = System.currentTimeMillis();
         for (int i = 0; i < warmup; i++) gmSm4.cipherEncrypt(key, data, iv);
         System.out.printf("    预热 gm-%s       %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
         t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) bcSM4Encrypt(data, key);
+        for (int i = 0; i < warmup; i++) bcSM4Encrypt(data, key, iv, mode);
         System.out.printf("    预热 BC-%s       %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
         if (htSm4 != null) {
             t0 = System.currentTimeMillis();
@@ -663,9 +689,19 @@ public class BenchmarkComparison {
             System.out.printf("    跳过 HT-%s       %s%n", name.substring(4), "当前 JDK/Provider 组合不兼容");
         }
 
-        byte[] gmEnc = gmSm4.cipherEncrypt(key, data, iv);
-        byte[] bcEnc = bcSM4Encrypt(data, key);
-        byte[] htEnc = htSm4 != null ? htSm4.encrypt(data) : null;
+        if (testDecrypt) {
+            t0 = System.currentTimeMillis();
+            for (int i = 0; i < warmup; i++) gmSm4.cipherDecrypt(key, gmEnc, iv);
+            System.out.printf("    预热 gm-%s-dec   %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
+            t0 = System.currentTimeMillis();
+            for (int i = 0; i < warmup; i++) bcSM4Decrypt(bcEnc, key, iv, mode);
+            System.out.printf("    预热 BC-%s-dec   %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
+            if (htSm4 != null) {
+                t0 = System.currentTimeMillis();
+                for (int i = 0; i < warmup; i++) htSm4.decrypt(htEnc);
+                System.out.printf("    预热 HT-%s-dec   %d 次 ... %d ms%n", name.substring(4), warmup, System.currentTimeMillis() - t0);
+            }
+        }
 
         double[] gmE = new double[sets], bcE = new double[sets], htE = new double[sets];
         if (htSm4 == null) {
@@ -676,7 +712,7 @@ public class BenchmarkComparison {
             for (int i = 0; i < rounds; i++) gmSm4.cipherEncrypt(key, data, iv);
             gmE[s] = System.currentTimeMillis() - t0;
             t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) bcSM4Encrypt(data, key);
+            for (int i = 0; i < rounds; i++) bcSM4Encrypt(data, key, iv, mode);
             bcE[s] = System.currentTimeMillis() - t0;
             if (htSm4 != null) {
                 t0 = System.currentTimeMillis();
@@ -696,7 +732,7 @@ public class BenchmarkComparison {
                 for (int i = 0; i < rounds; i++) gmSm4.cipherDecrypt(key, gmEnc, iv);
                 gmD[s] = System.currentTimeMillis() - t0;
                 t0 = System.currentTimeMillis();
-                for (int i = 0; i < rounds; i++) bcSM4Decrypt(bcEnc, key);
+                for (int i = 0; i < rounds; i++) bcSM4Decrypt(bcEnc, key, iv, mode);
                 bcD[s] = System.currentTimeMillis() - t0;
                 if (htSm4 != null) {
                     t0 = System.currentTimeMillis();
@@ -710,11 +746,17 @@ public class BenchmarkComparison {
 
     static void benchSM4CTR(SM4Cipher gmSm4, byte[] key, byte[] data, byte[] iv, SM4 htCtr,
                              int warmup, int rounds, int sets, int dataMB, String htUnavailableReason) {
+        byte[] gmEnc = gmSm4.cipherEncrypt(key, data, iv);
+        byte[] bcEnc = bcSM4CtrEncrypt(data, key, iv);
+        byte[] htEnc = htCtr != null ? htCtr.encrypt(data) : null;
+        validateSm4Interoperability("SM4-CTR", ModeEnum.CTR, gmSm4, htCtr,
+                key, iv, data, gmEnc, bcEnc, htEnc);
+
         long t0 = System.currentTimeMillis();
         for (int i = 0; i < warmup; i++) gmSm4.cipherEncrypt(key, data, iv);
         System.out.printf("    预热 gm-CTR       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
         t0 = System.currentTimeMillis();
-        for (int i = 0; i < warmup; i++) bcSM4Encrypt(data, key);
+        for (int i = 0; i < warmup; i++) bcSM4CtrEncrypt(data, key, iv);
         System.out.printf("    预热 BC-CTR       %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
         if (htCtr != null) {
             t0 = System.currentTimeMillis();
@@ -724,7 +766,18 @@ public class BenchmarkComparison {
             System.out.printf("    跳过 HT-CTR       %s%n", "当前 JDK/Provider 组合不兼容");
         }
 
-        byte[] gmEnc = gmSm4.cipherEncrypt(key, data, iv);
+        t0 = System.currentTimeMillis();
+        for (int i = 0; i < warmup; i++) gmSm4.cipherDecrypt(key, gmEnc, iv);
+        System.out.printf("    预热 gm-CTR-dec   %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        t0 = System.currentTimeMillis();
+        for (int i = 0; i < warmup; i++) bcSM4CtrDecrypt(bcEnc, key, iv);
+        System.out.printf("    预热 BC-CTR-dec   %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        if (htCtr != null) {
+            t0 = System.currentTimeMillis();
+            for (int i = 0; i < warmup; i++) htCtr.decrypt(htEnc);
+            System.out.printf("    预热 HT-CTR-dec   %d 次 ... %d ms%n", warmup, System.currentTimeMillis() - t0);
+        }
+
         double[] gmE = new double[sets], bcE = new double[sets], htE = new double[sets];
         double[] gmD = new double[sets], bcD = new double[sets], htD = new double[sets];
         if (htCtr == null) {
@@ -736,7 +789,7 @@ public class BenchmarkComparison {
             for (int i = 0; i < rounds; i++) gmSm4.cipherEncrypt(key, data, iv);
             gmE[s] = System.currentTimeMillis() - t0;
             t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) bcSM4Encrypt(data, key);
+            for (int i = 0; i < rounds; i++) bcSM4CtrEncrypt(data, key, iv);
             bcE[s] = System.currentTimeMillis() - t0;
             if (htCtr != null) {
                 t0 = System.currentTimeMillis();
@@ -748,20 +801,77 @@ public class BenchmarkComparison {
             for (int i = 0; i < rounds; i++) gmSm4.cipherDecrypt(key, gmEnc, iv);
             gmD[s] = System.currentTimeMillis() - t0;
             t0 = System.currentTimeMillis();
-            for (int i = 0; i < rounds; i++) bcSM4Decrypt(bcSM4Encrypt(data, key), key);
+            for (int i = 0; i < rounds; i++) bcSM4CtrDecrypt(bcEnc, key, iv);
             bcD[s] = System.currentTimeMillis() - t0;
             if (htCtr != null) {
                 t0 = System.currentTimeMillis();
-                for (int i = 0; i < rounds; i++) htCtr.decrypt(htCtr.encrypt(data));
+                for (int i = 0; i < rounds; i++) htCtr.decrypt(htEnc);
                 htD[s] = System.currentTimeMillis() - t0;
             }
         }
-        printResultMB("SM4", "SM4-CTR 加密 [gm多线程]", rounds, gmE, bcE, htE, sets, dataMB, htUnavailableReason);
-        printResultMB("SM4", "SM4-CTR 解密 [gm多线程]", rounds, gmD, bcD, htD, sets, dataMB, htUnavailableReason);
+        String parallelLabel = gmSm4ParallelLabel();
+        printResultMB("SM4", "SM4-CTR 加密 [" + parallelLabel + "]", rounds, gmE, bcE, htE, sets, dataMB, htUnavailableReason);
+        printResultMB("SM4", "SM4-CTR 解密 [" + parallelLabel + "]", rounds, gmD, bcD, htD, sets, dataMB, htUnavailableReason);
     }
 
     // ==================== BC helpers ====================
-    static AsymmetricCipherKeyPair genBCKeyPair() {
+    public static final class BcSm2CipherSession {
+        private final SM2Engine encryptor;
+        private final SM2Engine decryptor;
+
+        public BcSm2CipherSession(ECPublicKeyParameters publicKey,
+                                  ECPrivateKeyParameters privateKey) {
+            encryptor = new SM2Engine(SM2Engine.Mode.C1C3C2);
+            encryptor.init(true, new ParametersWithRandom(publicKey, new SecureRandom()));
+            decryptor = new SM2Engine(SM2Engine.Mode.C1C3C2);
+            decryptor.init(false, privateKey);
+        }
+
+        public byte[] encrypt(byte[] message) {
+            try {
+                return encryptor.processBlock(message, 0, message.length);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public byte[] decrypt(byte[] ciphertext) {
+            try {
+                return decryptor.processBlock(ciphertext, 0, ciphertext.length);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public static final class BcSm2SignerSession {
+        private final SM2Signer signer;
+        private final SM2Signer verifier;
+
+        public BcSm2SignerSession(ECPrivateKeyParameters privateKey,
+                                  ECPublicKeyParameters publicKey) {
+            signer = new SM2Signer(PlainDSAEncoding.INSTANCE);
+            signer.init(true, new ParametersWithRandom(privateKey, new SecureRandom()));
+            verifier = new SM2Signer(PlainDSAEncoding.INSTANCE);
+            verifier.init(false, publicKey);
+        }
+
+        public byte[] sign(byte[] message) {
+            try {
+                signer.update(message, 0, message.length);
+                return signer.generateSignature();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        public boolean verify(byte[] message, byte[] signature) {
+            verifier.update(message, 0, message.length);
+            return verifier.verifySignature(signature);
+        }
+    }
+
+    public static AsymmetricCipherKeyPair genBCKeyPair() {
         ECKeyPairGenerator gen = new ECKeyPairGenerator();
         gen.init(new ECKeyGenerationParameters(SM2_DOMAIN, new SecureRandom()));
         return gen.generateKeyPair();
@@ -799,27 +909,81 @@ public class BenchmarkComparison {
         return signer.verifySignature(sig);
     }
 
-    static byte[] bcSM4Encrypt(byte[] data, byte[] key) {
-        SM4Engine engine = new SM4Engine();
-        engine.init(true, new KeyParameter(key));
-        int blockSize = engine.getBlockSize();
-        int blocks = (data.length + blockSize - 1) / blockSize;
-        byte[] out = new byte[blocks * blockSize];
+    public static byte[] bcSM4Encrypt(byte[] data, byte[] key, byte[] iv, ModeEnum mode) {
+        return bcSM4Process(data, key, iv, mode, true);
+    }
+
+    public static byte[] bcSM4Decrypt(byte[] data, byte[] key, byte[] iv, ModeEnum mode) {
+        return bcSM4Process(data, key, iv, mode, false);
+    }
+
+    private static byte[] bcSM4Process(byte[] data, byte[] key, byte[] iv, ModeEnum mode,
+                                       boolean forEncryption) {
+        if (mode == ModeEnum.CTR) {
+            return bcSM4CtrProcess(data, key, iv, forEncryption);
+        }
+
+        BlockCipher cipher;
+        CipherParameters parameters;
+        if (mode == ModeEnum.ECB) {
+            cipher = new SM4Engine();
+            parameters = new KeyParameter(key);
+        } else if (mode == ModeEnum.CBC) {
+            cipher = new CBCBlockCipher(new SM4Engine());
+            parameters = new ParametersWithIV(new KeyParameter(key), iv);
+        } else {
+            throw new IllegalArgumentException("不支持的 BC SM4 基准模式: " + mode);
+        }
+
+        cipher.init(forEncryption, parameters);
+        int blockSize = cipher.getBlockSize();
+        if (data.length % blockSize != 0) {
+            throw new IllegalArgumentException("SM4 NoPadding 输入长度必须是 16 的倍数");
+        }
+        byte[] out = new byte[data.length];
         for (int i = 0; i < data.length / blockSize; i++) {
-            engine.processBlock(data, i * blockSize, out, i * blockSize);
+            cipher.processBlock(data, i * blockSize, out, i * blockSize);
         }
         return out;
     }
 
-    static byte[] bcSM4Decrypt(byte[] data, byte[] key) {
-        SM4Engine engine = new SM4Engine();
-        engine.init(false, new KeyParameter(key));
-        int blockSize = engine.getBlockSize();
+    static byte[] bcSM4CtrEncrypt(byte[] data, byte[] key, byte[] iv) {
+        return bcSM4CtrProcess(data, key, iv, true);
+    }
+
+    static byte[] bcSM4CtrDecrypt(byte[] data, byte[] key, byte[] iv) {
+        return bcSM4CtrProcess(data, key, iv, false);
+    }
+
+    private static byte[] bcSM4CtrProcess(byte[] data, byte[] key, byte[] iv, boolean forEncryption) {
+        SICBlockCipher cipher = new SICBlockCipher(new SM4Engine());
+        cipher.init(forEncryption, new ParametersWithIV(new KeyParameter(key), iv));
         byte[] out = new byte[data.length];
-        for (int i = 0; i < data.length / blockSize; i++) {
-            engine.processBlock(data, i * blockSize, out, i * blockSize);
-        }
+        cipher.processBytes(data, 0, data.length, out, 0);
         return out;
+    }
+
+    static void validateSm4Interoperability(String name, ModeEnum mode, SM4Cipher gmSm4, SM4 htSm4,
+                                             byte[] key, byte[] iv, byte[] plain,
+                                             byte[] gmCiphertext, byte[] bcCiphertext, byte[] htCiphertext) {
+        requireSameBytes(name + " gm/BC 密文", gmCiphertext, bcCiphertext);
+        requireSameBytes(name + " gm 解 BC 密文", plain, gmSm4.cipherDecrypt(key, bcCiphertext, iv));
+        requireSameBytes(name + " BC 解 gm 密文", plain, bcSM4Decrypt(gmCiphertext, key, iv, mode));
+
+        if (htSm4 != null) {
+            requireSameBytes(name + " gm/Hutool 密文", gmCiphertext, htCiphertext);
+            requireSameBytes(name + " gm 解 Hutool 密文", plain, gmSm4.cipherDecrypt(key, htCiphertext, iv));
+            requireSameBytes(name + " Hutool 解 gm 密文", plain, htSm4.decrypt(gmCiphertext));
+        }
+
+        System.out.printf("    互操作校验 %-7s gm/BC%s%n", name.substring(4),
+                htSm4 == null ? "" : "/Hutool");
+    }
+
+    private static void requireSameBytes(String operation, byte[] expected, byte[] actual) {
+        if (!Arrays.equals(expected, actual)) {
+            throw new IllegalStateException(operation + "结果不一致");
+        }
     }
 
     // ==================== 输出格式化 ====================
@@ -831,11 +995,13 @@ public class BenchmarkComparison {
         double gmMax = gm[sets-1], bcMax = bc[sets-1], htMax = ht[sets-1];
 
         System.out.printf("%n  %-20s │ %d 次/轮%n", name, rounds);
-        System.out.printf("    gm-java   : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ avg/次 %.3f ms%n",
+        System.out.printf("    gm-java   : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ avg/次 %.6f ms%n",
                 gmMed, gmAvg, gmMin, gmMax, gmAvg/rounds);
-        System.out.printf("    BC        : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ avg/次 %.3f ms%n",
+        String bcLabel = "SM2".equals(category) ? "BC(reuse)" : "BC";
+        System.out.printf("    %-10s: 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ avg/次 %.6f ms%n",
+                bcLabel,
                 bcMed, bcAvg, bcMin, bcMax, bcAvg/rounds);
-        System.out.printf("    Hutool    : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ avg/次 %.3f ms%n",
+        System.out.printf("    Hutool    : 中位 %8.1f ms │ 均值 %8.1f │ 最小 %8.1f │ 最大 %8.1f │ avg/次 %.6f ms%n",
                 htMed, htAvg, htMin, htMax, htAvg/rounds);
 
         String winner = computeWinner(gmMed, bcMed, htMed, true);
@@ -886,7 +1052,8 @@ public class BenchmarkComparison {
         if (pctHt > 0) System.out.printf("  Hutool慢 %.1f%%", pctHt);
         System.out.println();
 
-        RESULTS.add(new BenchmarkResult(category, name, gmMBs, bcMBs, htMBs, "MB/s", winner, htUnavailableReason));
+        String resultName = name + " (" + dataMB + "MB)";
+        RESULTS.add(new BenchmarkResult(category, resultName, gmMBs, bcMBs, htMBs, "MB/s", winner, htUnavailableReason));
     }
 
     static String computeWinner(double gmMed, double bcMed, double htMed, boolean htAvailable) {

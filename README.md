@@ -103,6 +103,12 @@ boolean b = signature.verify(msg.getBytes(), null, signature1, keyPair.getPublic
 System.out.println("SM2验签结果：" + b);
 ```
 
+#### SM2 输入与性能配置
+
+- `SM2Signature` 的签名值使用固定 64 字节裸格式 `r || s`，私钥和公钥分别使用固定 32 字节、64 字节编码。公钥还必须是规范编码的 SM2 曲线点。验签遇到空值、错误长度、非法公钥点、越界 `r/s` 或超过 8191 字节的 ID 时返回 `false`；签名参数不合法时抛出 `IllegalArgumentException`。
+- SM2 签名和验签默认启用单条目的线程本地 ZA 缓存。同一工作线程反复使用相同 ID 和公钥时可省去 ZA 重算；缓存保存调用参数的内容快照，调用方修改原数组不会复用旧结果。
+- 如需禁用 ZA 缓存，在 JVM 启动时添加 `-Dgm.sm2.zaCache=false`。该参数在 `SM2Signature` 类初始化时读取。
+
 ### 制作 SM2 证书
 
 ```java

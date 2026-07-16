@@ -2,7 +2,15 @@
 
 ## 未发布
 
-暂无未发布内容
+- **SM2 验签输入校验前移**：`verify`、`verifyInt`、`verifyFull` 和 `verifyBatch` 在 ZA/SM3/JNI 之前统一拒绝空值、错误长度、非规范或不在曲线上的公钥点、超过 8191 字节的 ID，以及不满足 `1 <= r,s < n` 的签名分量；非法验签输入统一返回 `false`
+- **SM2 签名参数契约明确化**：消息不能为空，私钥必须是满足 `1 <= d <= n-2` 的 32 字节值，公钥必须是 64 字节规范 SM2 曲线点；非法签名参数抛出 `IllegalArgumentException`
+- **SM2 ZA 线程本地缓存**：默认缓存当前线程最近一次 ID/公钥对应的 ZA，重复验签可减少摘要预计算；可通过 JVM 参数 `-Dgm.sm2.zaCache=false` 关闭
+- **SM2 JNI 回退行为统一**：`verifyInt`、`verifyFull`、`verifyBatch` 遇到 native 调用异常时标记 native 不可用并回退到 Java 实现
+- **SM2 native 热路径优化**：验签命中线程本地公钥预计算缓存后直接引用缓存表，移除每次约 1 KB 的表复制；清理错误且未启用的 ADX 实验实现，Windows x64 DLL 已按最终源码重建
+- **SM2 native 差分测试**：新增 `native/native_mul_test.c` 和 `native/test-native.bat`，覆盖 generic/BMI2/BMI2+ADX Montgomery 路径、别名输入和 Shamir 双标量乘法
+- **SM2 批量验签抗退化**：混合批次只将通过输入校验的条目打包送入 JNI，非法条目直接返回 `false`，不再因单个坏条目让整个批次退回逐条验签
+- **性能基准口径修正**：SM2/SM3 改用纳秒计时，避免毫秒计时精度不足；BC SM2 lightweight engine/signer 改为计时前初始化并复用，签名使用与 gm-java 相同的 raw64 编码；SM4 ECB/CBC/CTR 统一为 NoPadding、真实工作模式和等长输入，解密计时不再包含加密
+- **交叉正确性覆盖增强**：新增 SM4 ECB/CBC/CTR 与 BC 的密文一致性及交叉解密测试，并补充 SM2 固定向量、签名分量/私钥边界、空消息批量验签、Java 回退、缓存数组变更和线程隔离测试
 
 ## 3.2.3 更新内容
 - **SM4 内部并行化支持用户显式关闭**：新增 JVM 参数 `-Dgm.sm4.parallel=false`，关闭后 ECB/CTR/CBC 解密/GCM-GCTR 等可并行模式强制走单线程路径，内部线程池也不会被创建；适用于业务层自行管理线程池、容器或 Serverless 等线程敏感场景

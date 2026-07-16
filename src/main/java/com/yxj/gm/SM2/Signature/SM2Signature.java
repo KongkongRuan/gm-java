@@ -8,6 +8,7 @@ import com.yxj.gm.util.SM2Util;
 
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 /**
  * SM2 签名/验签
@@ -20,14 +21,137 @@ import java.security.SecureRandom;
 public class SM2Signature {
 
     private static final boolean DEBUG = Boolean.getBoolean("gm.debug");
+    private static final boolean ZA_CACHE_ENABLED =
+            Boolean.parseBoolean(System.getProperty("gm.sm2.zaCache", "true"));
+
+    private static final int SIGNATURE_LENGTH = 64;
+    private static final int PUBLIC_KEY_LENGTH = 64;
+    private static final int SCALAR_LENGTH = 32;
+    private static final int MAX_ID_LENGTH = 0xFFFF >>> 3;
 
     private static final BigInteger TWO = BigInteger.valueOf(2);
     private static final BigInteger N_MINUS_2 = SM2Constant.getBigN().subtract(TWO);
+    private static final byte[] ORDER_BYTES = SM2Util.toFixedBytes(SM2Constant.getBigN(), SCALAR_LENGTH);
+    private static final byte[] PRIVATE_KEY_MAX_BYTES = SM2Util.toFixedBytes(N_MINUS_2, SCALAR_LENGTH);
     private static final ThreadLocal<SecureRandom> SECURE_RANDOM = ThreadLocal.withInitial(SecureRandom::new);
 
     private static final ThreadLocal<byte[]> cachedPriKey = new ThreadLocal<>();
     private static final ThreadLocal<BigInteger> cachedDaInverse = new ThreadLocal<>();
     private static final ThreadLocal<byte[]> cachedDaInvBytes = new ThreadLocal<>();
+    private static final ThreadLocal<ZaCacheEntry> cachedZa = new ThreadLocal<>();
+    private static final ThreadLocal<PublicKeyValidationEntry> cachedPublicKeyValidation = new ThreadLocal<>();
+
+    private static final class PublicKeyValidationEntry {
+        private final byte[] pubKey;
+        private final boolean valid;
+
+        private PublicKeyValidationEntry(byte[] pubKey, boolean valid) {
+            this.pubKey = pubKey.clone();
+            this.valid = valid;
+        }
+    }
+
+    private static final class ZaCacheEntry {
+        private final byte[] id;
+        private final byte[] pubKey;
+        private final byte[] za;
+
+        private ZaCacheEntry(byte[] id, byte[] pubKey, byte[] za) {
+            this.id = id == null ? null : id.clone();
+            this.pubKey = pubKey.clone();
+            this.za = za;
+        }
+
+        private boolean matches(byte[] candidateId, byte[] candidatePubKey) {
+            return (id == null ? candidateId == null : Arrays.equals(id, candidateId))
+                    && Arrays.equals(pubKey, candidatePubKey);
+        }
+    }
+
+    private static byte[] initZa(byte[] id, byte[] pubKey) {
+        if (!ZA_CACHE_ENABLED) {
+            return SM2Util.initZa(id, pubKey);
+        }
+
+        ZaCacheEntry entry = cachedZa.get();
+        if (entry != null && entry.matches(id, pubKey)) {
+            return entry.za;
+        }
+
+        byte[] za = SM2Util.initZa(id, pubKey);
+        cachedZa.set(new ZaCacheEntry(id, pubKey, za));
+        return za;
+    }
+
+    private static boolean isValidVerifyInput(byte[] msg, byte[] id, byte[] signature, byte[] pubKey) {
+        return msg != null
+                && (id == null || id.length <= MAX_ID_LENGTH)
+                && signature != null
+                && signature.length == SIGNATURE_LENGTH
+                && pubKey != null
+                && pubKey.length == PUBLIC_KEY_LENGTH
+                && isInRange(signature, 0, ORDER_BYTES, false)
+                && isInRange(signature, SCALAR_LENGTH, ORDER_BYTES, false)
+                && isValidPublicKey(pubKey);
+    }
+
+    private static boolean isValidPublicKey(byte[] pubKey) {
+        PublicKeyValidationEntry entry = cachedPublicKeyValidation.get();
+        if (entry != null && Arrays.equals(entry.pubKey, pubKey)) {
+            return entry.valid;
+        }
+
+        byte[] x = Arrays.copyOfRange(pubKey, 0, SCALAR_LENGTH);
+        byte[] y = Arrays.copyOfRange(pubKey, SCALAR_LENGTH, PUBLIC_KEY_LENGTH);
+        boolean valid = SM2Util.checkPubKey(new byte[][]{x, y});
+        cachedPublicKeyValidation.set(new PublicKeyValidationEntry(pubKey, valid));
+        return valid;
+    }
+
+    private static void validateSigningInput(byte[] msg, byte[] id, byte[] priKey, byte[] pubKey) {
+        validateSigningInput(msg, id, priKey);
+        if (pubKey == null || pubKey.length != PUBLIC_KEY_LENGTH) {
+            throw new IllegalArgumentException("SM2 public key must be exactly 64 bytes");
+        }
+        if (!isValidPublicKey(pubKey)) {
+            throw new IllegalArgumentException("SM2 public key must be a canonical point on the SM2 curve");
+        }
+    }
+
+    private static void validateSigningInput(byte[] msg, byte[] id, byte[] priKey) {
+        if (msg == null) {
+            throw new IllegalArgumentException("SM2 message must not be null");
+        }
+        if (id != null && id.length > MAX_ID_LENGTH) {
+            throw new IllegalArgumentException("SM2 ID must not exceed 8191 bytes");
+        }
+        if (priKey == null || priKey.length != SCALAR_LENGTH) {
+            throw new IllegalArgumentException("SM2 private key must be exactly 32 bytes");
+        }
+        if (!isInRange(priKey, 0, PRIVATE_KEY_MAX_BYTES, true)) {
+            throw new IllegalArgumentException("SM2 private key must satisfy 1 <= d <= n - 2");
+        }
+    }
+
+    /** Checks a fixed-width unsigned integer without allocating a BigInteger. */
+    private static boolean isInRange(byte[] valueBytes, int offset,
+                                     byte[] upperBound, boolean upperInclusive) {
+        int nonZero = 0;
+        int comparison = 0;
+        for (int i = 0; i < SCALAR_LENGTH; i++) {
+            int value = valueBytes[offset + i] & 0xFF;
+            nonZero |= value;
+            if (comparison == 0) {
+                int bound = upperBound[i] & 0xFF;
+                if (value < bound) {
+                    comparison = -1;
+                } else if (value > bound) {
+                    comparison = 1;
+                }
+            }
+        }
+        return nonZero != 0 && (comparison < 0 || (upperInclusive && comparison == 0));
+    }
 
     private byte[][] internalSignature(byte[] msg, byte[] dA, byte[] Za) {
         SM3Digest sm3Digest = new SM3Digest();
@@ -92,7 +216,7 @@ public class SM2Signature {
         return result;
     }
 
-    private boolean internalVerify(byte[] M, byte[][] rs, byte[] Za, byte[] pubKey) {
+    private boolean internalVerify(byte[] M, byte[] r, byte[] s, byte[] Za, byte[] pubKey) {
         SM3Digest sm3Digest = new SM3Digest();
         sm3Digest.update(Za);
         sm3Digest.update(M);
@@ -100,15 +224,15 @@ public class SM2Signature {
 
         if (Nat256Native.isAvailable()) {
             try {
-                return Nat256Native.nativeVerifyCore(e, rs[0], rs[1], pubKey);
+                return Nat256Native.nativeVerifyCore(e, r, s, pubKey);
             } catch (Throwable t) {
                 Nat256Native.markUnavailable();
             }
         }
 
         BigInteger bigE = new BigInteger(1, e);
-        BigInteger bigR = new BigInteger(1, rs[0]);
-        BigInteger bigS = new BigInteger(1, rs[1]);
+        BigInteger bigR = new BigInteger(1, r);
+        BigInteger bigS = new BigInteger(1, s);
         BigInteger bigN = SM2Constant.getBigN();
         BigInteger bigT = bigR.add(bigS).mod(bigN);
         if (bigT.equals(BigInteger.ZERO)) {
@@ -131,8 +255,9 @@ public class SM2Signature {
      * 签名（传入公钥避免额外的标量乘法）
      */
     public byte[] signature(byte[] msg, byte[] id, byte[] priKey, byte[] pubKey) {
+        validateSigningInput(msg, id, priKey, pubKey);
         long t = DEBUG ? System.nanoTime() : 0L;
-        byte[] za = SM2Util.initZa(id, pubKey);
+        byte[] za = initZa(id, pubKey);
         byte[][] bytes = internalSignature(msg, priKey, za);
         byte[] temp = new byte[bytes[0].length + bytes[1].length];
         System.arraycopy(bytes[0], 0, temp, 0, bytes[0].length);
@@ -145,6 +270,7 @@ public class SM2Signature {
      * 签名（向后兼容，从私钥推导公钥）
      */
     public byte[] signature(byte[] msg, byte[] id, byte[] priKey) {
+        validateSigningInput(msg, id, priKey);
         byte[] pub = SM2Util.generatePubKeyByPriKey(priKey);
         return signature(msg, id, priKey, pub);
     }
@@ -154,13 +280,16 @@ public class SM2Signature {
     }
 
     public boolean verify(byte[] msg, byte[] id, byte[] signature, byte[] pubKey) {
+        if (!isValidVerifyInput(msg, id, signature, pubKey)) {
+            return false;
+        }
         long t = DEBUG ? System.nanoTime() : 0L;
-        byte[] Za = SM2Util.initZa(id, pubKey);
+        byte[] Za = initZa(id, pubKey);
         byte[] r = new byte[32];
         byte[] s = new byte[32];
         System.arraycopy(signature, 0, r, 0, 32);
         System.arraycopy(signature, 32, s, 0, 32);
-        boolean ok = internalVerify(msg, new byte[][]{r, s}, Za, pubKey);
+        boolean ok = internalVerify(msg, r, s, Za, pubKey);
         if (DEBUG) System.err.printf("[SM2 VERIFY] %.2f ms%n", (System.nanoTime() - t) / 1e6);
         return ok;
     }
@@ -170,10 +299,13 @@ public class SM2Signature {
      * 用于 A/B 测试 int[] 边界是否比 byte[] 更快。
      */
     public boolean verifyInt(byte[] msg, byte[] id, byte[] signature, byte[] pubKey) {
+        if (!isValidVerifyInput(msg, id, signature, pubKey)) {
+            return false;
+        }
         if (!Nat256Native.isAvailable()) {
             return verify(msg, id, signature, pubKey);
         }
-        byte[] Za = SM2Util.initZa(id, pubKey);
+        byte[] Za = initZa(id, pubKey);
         SM3Digest sm3Digest = new SM3Digest();
         sm3Digest.update(Za);
         sm3Digest.update(msg);
@@ -182,63 +314,116 @@ public class SM2Signature {
         byte[] s = new byte[32];
         System.arraycopy(signature, 0, r, 0, 32);
         System.arraycopy(signature, 32, s, 0, 32);
-        return Nat256Native.nativeVerifyCoreInt(
-                beBytesToLeInt8(e, 0),
-                beBytesToLeInt8(r, 0),
-                beBytesToLeInt8(s, 0),
-                beBytesToLeInt8(pubKey, 0),
-                beBytesToLeInt8(pubKey, 32));
+        try {
+            return Nat256Native.nativeVerifyCoreInt(
+                    beBytesToLeInt8(e, 0),
+                    beBytesToLeInt8(r, 0),
+                    beBytesToLeInt8(s, 0),
+                    beBytesToLeInt8(pubKey, 0),
+                    beBytesToLeInt8(pubKey, 32));
+        } catch (Throwable t) {
+            Nat256Native.markUnavailable();
+            return internalVerify(msg, r, s, Za, pubKey);
+        }
     }
 
     /**
      * 全 native 验签：Java 只算 Za，C 端完成 SM3(Za||msg) + Shamir + compare。
      */
     public boolean verifyFull(byte[] msg, byte[] id, byte[] signature, byte[] pubKey) {
+        if (!isValidVerifyInput(msg, id, signature, pubKey)) {
+            return false;
+        }
         if (!Nat256Native.isAvailable()) {
             return verify(msg, id, signature, pubKey);
         }
-        byte[] Za = SM2Util.initZa(id, pubKey);
+        byte[] Za = initZa(id, pubKey);
         byte[] r = new byte[32];
         byte[] s = new byte[32];
         System.arraycopy(signature, 0, r, 0, 32);
         System.arraycopy(signature, 32, s, 0, 32);
-        return Nat256Native.nativeVerifyFull(Za, msg, msg.length, r, s, pubKey);
+        try {
+            return Nat256Native.nativeVerifyFull(Za, msg, msg.length, r, s, pubKey);
+        } catch (Throwable t) {
+            Nat256Native.markUnavailable();
+            return internalVerify(msg, r, s, Za, pubKey);
+        }
     }
 
     /**
      * 批量验签：n 个签名一次 JNI 往返，减少边界切换和线程本地缓存抖动。
      */
     public boolean[] verifyBatch(byte[][] msgs, byte[][] sigs, byte[][] pubKeys, byte[] id) {
-        int n = msgs.length;
+        int n = msgs == null ? 0 : msgs.length;
+        boolean[] out = new boolean[n];
+        if (msgs == null || sigs == null || pubKeys == null
+                || sigs.length != n || pubKeys.length != n
+                || (id != null && id.length > MAX_ID_LENGTH)) {
+            return out;
+        }
+        if (n == 0) {
+            return out;
+        }
+
         if (!Nat256Native.isAvailable()) {
-            boolean[] out = new boolean[n];
             for (int i = 0; i < n; i++) {
                 out[i] = verify(msgs[i], id, sigs[i], pubKeys[i]);
             }
             return out;
         }
-        byte[][] zas = new byte[n][];
+
+        int[] validIndexes = new int[n];
+        int validCount = 0;
+        for (int i = 0; i < n; i++) {
+            if (isValidVerifyInput(msgs[i], id, sigs[i], pubKeys[i])) {
+                validIndexes[validCount++] = i;
+            }
+        }
+        if (validCount == 0 || validCount > Integer.MAX_VALUE / SIGNATURE_LENGTH) {
+            return out;
+        }
+
+        byte[][] zas = new byte[validCount][];
         int totalMsgLen = 0;
-        for (int i = 0; i < n; i++) {
-            zas[i] = SM2Util.initZa(id, pubKeys[i]);
-            totalMsgLen += msgs[i].length;
+        for (int i = 0; i < validCount; i++) {
+            int sourceIndex = validIndexes[i];
+            if (msgs[sourceIndex].length > Integer.MAX_VALUE - totalMsgLen) {
+                return out;
+            }
+            zas[i] = initZa(id, pubKeys[sourceIndex]);
+            totalMsgLen += msgs[sourceIndex].length;
         }
-        byte[] zaFlat = new byte[n * 32];
-        byte[] msgFlat = new byte[totalMsgLen];
-        int[] msgLens = new int[n];
-        byte[] rsFlat = new byte[n * 64];
-        byte[] pubFlat = new byte[n * 64];
-        boolean[] out = new boolean[n];
+        byte[] zaFlat = new byte[validCount * 32];
+        // Keep the JNI array backing store non-empty even when every message is empty.
+        byte[] msgFlat = new byte[Math.max(totalMsgLen, 1)];
+        int[] msgLens = new int[validCount];
+        byte[] rsFlat = new byte[validCount * 64];
+        byte[] pubFlat = new byte[validCount * 64];
         int msgOff = 0;
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < validCount; i++) {
+            int sourceIndex = validIndexes[i];
             System.arraycopy(zas[i], 0, zaFlat, i * 32, 32);
-            System.arraycopy(msgs[i], 0, msgFlat, msgOff, msgs[i].length);
-            msgLens[i] = msgs[i].length;
-            msgOff += msgs[i].length;
-            System.arraycopy(sigs[i], 0, rsFlat, i * 64, 64);
-            System.arraycopy(pubKeys[i], 0, pubFlat, i * 64, 64);
+            System.arraycopy(msgs[sourceIndex], 0, msgFlat, msgOff, msgs[sourceIndex].length);
+            msgLens[i] = msgs[sourceIndex].length;
+            msgOff += msgs[sourceIndex].length;
+            System.arraycopy(sigs[sourceIndex], 0, rsFlat, i * 64, 64);
+            System.arraycopy(pubKeys[sourceIndex], 0, pubFlat, i * 64, 64);
         }
-        Nat256Native.nativeVerifyBatch(zaFlat, msgFlat, msgLens, rsFlat, pubFlat, n, out);
+        boolean[] nativeOut = new boolean[validCount];
+        try {
+            Nat256Native.nativeVerifyBatch(
+                    zaFlat, msgFlat, msgLens, rsFlat, pubFlat, validCount, nativeOut);
+            for (int i = 0; i < validCount; i++) {
+                out[validIndexes[i]] = nativeOut[i];
+            }
+        } catch (Throwable t) {
+            Nat256Native.markUnavailable();
+            for (int i = 0; i < validCount; i++) {
+                int sourceIndex = validIndexes[i];
+                out[sourceIndex] = verify(
+                        msgs[sourceIndex], id, sigs[sourceIndex], pubKeys[sourceIndex]);
+            }
+        }
         return out;
     }
 

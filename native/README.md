@@ -4,16 +4,20 @@
 
 ## 性能对比（SM2 各操作，200 次/轮中位数）
 
+以下数据来自 Windows x64、JDK 25、BC 1.84。BC lightweight engine/signer 在计时前初始化并复用，签名统一使用 raw64 编码，完整记录见 `reports/summary-20260714-133248.md`。
+
+> 本轮只重建并验证了仓库内置的 Windows x64 DLL。其他平台可使用同一 `native_mul.c` 构建，但发布前仍需由多平台 CI 重建并验证对应 `.so` / `.dylib`。
+
 | 操作 | gm-java | BC | Hutool | gm vs BC |
 |------|---------|-----|--------|----------|
-| 密钥生成 | **6ms** | 16ms | 33ms | **gm 快 167%** |
-| 加密 | **31ms** | 45ms | 46ms | **gm 快 45%** |
-| 解密 | **23ms** | 33ms | 34ms | **gm 快 43%** |
-| 签名 | **7ms** | 37ms | 34ms | **gm 快 429%** |
-| 验签 | 28ms | **20ms** | **19ms** | gm 慢 40% |
+| 密钥生成 | **3.1ms** | 9.8ms | 14.2ms | **gm 快 68%** |
+| 加密 | **15.5ms** | 28.5ms | 27.2ms | **gm 快 46%** |
+| 解密 | **12.0ms** | 19.6ms | 18.7ms | **gm 快 39%** |
+| 签名 | **3.1ms** | 8.7ms | 16.9ms | **gm 快 64%** |
+| 验签 | 10.7ms | **9.2ms** | 9.8ms | gm 慢 16.2% |
 
-> 密钥生成、加密、解密、签名 gm-java 全面超越 BC。本原生库仅加速 SM2，SM3/SM4 为纯 Java 实现。
-> 验签仍慢于 BC ~40%，原因：SM2 曲线 a≠0 且 p≡2(mod 3)，不支持 GLV 自同态；BC 的 JIT C2 编译器对纯 Java 域运算优化极致（自动向量化、常量折叠），在 Shamir 双标量乘法中与 C 实现性能接近。
+> 密钥生成、加密、解密、签名均快于 BC。本原生库仅加速 SM2，SM3/SM4 为纯 Java 实现。
+> 7 轮、每轮 5000 次的聚焦基准中，JDK 25 下 gm-java 验签约 53.6 us/op，BC 预初始化复用约 46.6 us/op，gm-java 慢约 15.1%。小轮次完整报告与聚焦微基准的百分比会受样本规模和系统抖动影响。
 
 ## 核心优化技术
 
@@ -25,7 +29,7 @@
 | **加法链求逆** | 297S + 17M（vs 费马逐位 256S + 222M），单次求逆 7.5μs |
 | **完整 SM2 操作在 C 中完成** | nativeKeyGen / nativeSignCore / nativeVerifyCore，消除所有 BigInteger 开销 |
 | **mod-n Montgomery 算术** | 签名 r,s 计算全部在 C 中完成，使用 Montgomery CIOS 乘法 mod 曲线阶 n |
-| **wNAF w=7/6** | 基点 w=7（32项预表），变基 w=6（16项），减少主循环非零位 |
+| **wNAF w=7/6** | 基点 w=7（32 项预表），变基 w=6（16 项）；同公钥验签直接引用线程本地预计算表，不再复制约 1 KB 数据 |
 | **批量仿射化** | Montgomery trick 批量模逆，n 个点只需 1 次求逆 |
 
 **容错**：JNI 加载失败或调用异常时，自动回退到纯 Java 实现。
@@ -129,11 +133,23 @@ mvn compile test-compile
 mvn exec:java -Dexec.mainClass="com.yxj.gm.BenchmarkComparison" -Dexec.classpathScope=test
 ```
 
+Windows x64 原生差分测试：
+
+```bat
+set JAVA_HOME=C:\Program Files\Java\jdk-21
+native\test-native.bat 1000000 5000000
+```
+
+该测试会比较 generic、BMI2、BMI2+ADX 三条 Montgomery 路径，并对 Shamir 双标量乘法做差分校验。
+
 ## 关于 SM2 验签性能
 
-SM2 验签需要计算 Shamir 双标量乘法 [s]G + [t]P，涉及约 258 次倍点和 80 次加点（~3700 次域乘法）。
-BC 的 JIT C2 编译器对纯 Java long 算术优化极致（自动向量化、寄存器分配、常量折叠），
-在这种密集循环中达到接近 C 的性能。SM2 曲线参数 a ≠ 0 且 p ≡ 2 (mod 3)，
-不支持 GLV/GLS 自同态分解（secp256k1 支持因为 a=0 且 p ≡ 1 mod 3），
-因此无法将 256 位标量分解为两个 128 位标量来减少循环次数。
-进一步优化方向：x86-64 BMI2/ADX 汇编优化 Montgomery 乘法内循环。
+SM2 验签需要计算 Shamir 双标量乘法 `[s]G + [t]P`，主要成本在 native 域运算。当前机器上最终 `7/6` 窗口的原生微基准为：同公钥热路径约 52.1 us，强制公钥缓存失效约 61.1 us，包含基点表和公钥表构建的首次调用约 78.3 us。
+
+本轮同时验证并否决了几条负优化：
+
+- `8/7` 窗口的同公钥热收益仅约 0.37%，但首次调用慢约 19.2%，轮换公钥慢约 2.7%-7.4%，因此保持 `7/6`。
+- 修正后的显式 `adcx/adox` Montgomery 实现虽然通过差分测试，但比编译器生成的 BMI2 + `__int128` 路径慢约 8.8%-10%，因此未启用。
+- 强制内联完整 CIOS 和绕过函数指针的实验也均产生回退，最终代码已移除这些实验路径。
+
+BC 的 HotSpot C2 路径在双标量乘法上仍更快。SM2 曲线参数 `a != 0` 且 `p ≡ 2 (mod 3)`，不能直接采用 secp256k1 常见的 GLV 分解；后续若继续追求明显提升，应优先评估经过形式化验证的整段点运算汇编或多签名批处理，而不是继续扩大单签预计算窗口。

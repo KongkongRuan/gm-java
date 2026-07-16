@@ -1,5 +1,6 @@
 package com.yxj.gm.correctness;
 
+import com.yxj.gm.BenchmarkComparison;
 import com.yxj.gm.SM2.Cipher.SM2Cipher;
 import com.yxj.gm.SM2.Key.SM2KeyPairGenerate;
 import com.yxj.gm.SM2.Signature.SM2Signature;
@@ -10,12 +11,15 @@ import com.yxj.gm.SM4.dto.AEADExecution;
 import com.yxj.gm.enums.ModeEnum;
 import com.yxj.gm.enums.PaddingEnum;
 import org.bouncycastle.crypto.BufferedBlockCipher;
+import org.bouncycastle.crypto.AsymmetricCipherKeyPair;
 import org.bouncycastle.crypto.engines.SM4Engine;
 import org.bouncycastle.crypto.macs.HMac;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
 import org.bouncycastle.crypto.modes.SICBlockCipher;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
+import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
+import org.bouncycastle.crypto.params.ECPublicKeyParameters;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.encoders.Hex;
 import org.junit.Test;
@@ -188,6 +192,58 @@ public class CorrectnessTest {
         assertArrayEquals("SM4-CTR 与 BouncyCastle 加密结果不一致", bcCtrCipher, gmCtrCipher);
     }
 
+    @Test
+    public void testBenchmarkSm4ModesMatchBouncyCastleAndCrossDecrypt() {
+        byte[] key = sequence(16, 0x10);
+        byte[] iv = sequence(16, 0x40);
+        byte[] plaintext = sequence(64, 0x70);
+
+        byte[] ecbCiphertext = verifyBenchmarkMode(ModeEnum.ECB, key, iv, plaintext);
+        byte[] cbcCiphertext = verifyBenchmarkMode(ModeEnum.CBC, key, iv, plaintext);
+        byte[] ctrCiphertext = verifyBenchmarkMode(ModeEnum.CTR, key, iv, plaintext);
+
+        assertFalse("CBC 基准不能退化为 ECB", Arrays.equals(ecbCiphertext, cbcCiphertext));
+        assertFalse("CTR 基准不能退化为 ECB", Arrays.equals(ecbCiphertext, ctrCiphertext));
+    }
+
+    @Test
+    public void testBenchmarkSm4ParallelLabelReflectsSystemProperty() {
+        String oldValue = System.getProperty("gm.sm4.parallel");
+        try {
+            System.setProperty("gm.sm4.parallel", "false");
+            assertEquals("gm并行配置=关闭", BenchmarkComparison.gmSm4ParallelLabel());
+            System.setProperty("gm.sm4.parallel", "true");
+            assertEquals("gm并行配置=开启", BenchmarkComparison.gmSm4ParallelLabel());
+        } finally {
+            if (oldValue == null) {
+                System.clearProperty("gm.sm4.parallel");
+            } else {
+                System.setProperty("gm.sm4.parallel", oldValue);
+            }
+        }
+    }
+
+    private static byte[] verifyBenchmarkMode(ModeEnum mode, byte[] key, byte[] iv, byte[] plaintext) {
+        SM4Cipher gmCipher = new SM4Cipher(PaddingEnum.NoPadding, mode);
+        byte[] gmCiphertext = gmCipher.cipherEncrypt(key, plaintext, iv);
+        byte[] bcCiphertext = BenchmarkComparison.bcSM4Encrypt(plaintext, key, iv, mode);
+
+        assertArrayEquals(mode + " gm/BC 密文不一致", bcCiphertext, gmCiphertext);
+        assertArrayEquals(mode + " gm 无法解密 BC 密文", plaintext,
+                gmCipher.cipherDecrypt(key, bcCiphertext, iv));
+        assertArrayEquals(mode + " BC 无法解密 gm 密文", plaintext,
+                BenchmarkComparison.bcSM4Decrypt(gmCiphertext, key, iv, mode));
+        return gmCiphertext;
+    }
+
+    private static byte[] sequence(int length, int start) {
+        byte[] result = new byte[length];
+        for (int i = 0; i < length; i++) {
+            result[i] = (byte) (start + i);
+        }
+        return result;
+    }
+
     private static byte[] bcCipher(boolean encrypt, org.bouncycastle.crypto.BlockCipher mode, byte[] key,
                                    byte[] iv, byte[] input) throws Exception {
         BufferedBlockCipher cipher = new BufferedBlockCipher(mode);
@@ -249,6 +305,34 @@ public class CorrectnessTest {
         boolean ok = signer.verify(msg, null, sig, pub);
 
         assertTrue("SM2 带公钥签名验签失败", ok);
+    }
+
+    @Test
+    public void testBouncyCastleSm2SessionsCanBeReused() {
+        AsymmetricCipherKeyPair keyPair = BenchmarkComparison.genBCKeyPair();
+        ECPublicKeyParameters publicKey = (ECPublicKeyParameters) keyPair.getPublic();
+        ECPrivateKeyParameters privateKey = (ECPrivateKeyParameters) keyPair.getPrivate();
+        BenchmarkComparison.BcSm2CipherSession cipher =
+                new BenchmarkComparison.BcSm2CipherSession(publicKey, privateKey);
+        BenchmarkComparison.BcSm2SignerSession signer =
+                new BenchmarkComparison.BcSm2SignerSession(privateKey, publicKey);
+
+        for (int i = 0; i < 8; i++) {
+            byte[] message = randomBytes(17 + i);
+            byte[] ciphertext = cipher.encrypt(message);
+            assertArrayEquals("复用 BC SM2Engine 解密失败", message, cipher.decrypt(ciphertext));
+            assertArrayEquals("BC SM2Engine 重复解密后状态未复位", message, cipher.decrypt(ciphertext));
+
+            byte[] signature = signer.sign(message);
+            assertEquals("BC 基准签名应使用与 gm-java 一致的 raw64 编码", 64, signature.length);
+            assertTrue("复用 BC SM2Signer 验签失败", signer.verify(message, signature));
+            assertTrue("BC SM2Signer 重复验签后状态未复位", signer.verify(message, signature));
+
+            byte[] tampered = message.clone();
+            tampered[0] ^= 1;
+            assertFalse("BC SM2Signer 应拒绝篡改消息", signer.verify(tampered, signature));
+            assertTrue("BC SM2Signer 失败验签后状态未复位", signer.verify(message, signature));
+        }
     }
 
     // ==================== HMAC-SM3 正确性 ====================
