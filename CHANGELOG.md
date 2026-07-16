@@ -2,7 +2,7 @@
 
 ## 未发布
 
-暂无未发布内容
+- **全平台 native 库统一重建**：3.2.4 发布时 Linux/macOS（含 aarch64/loongarch64/mips64）平台的 `nat256mul` 库误打包为优化前旧构建，缺少 SM2 验签项目坐标优化（native 热路径约 10%）与 wNAF 编码进位修复；Windows 平台与纯 Java 回退路径不受影响。使用 3.2.4 的 Linux/macOS 用户请直接升级至 3.2.5
 
 ## 3.2.4 更新内容
 - **SM2 验签输入校验前移**：`verify`、`verifyInt`、`verifyFull` 和 `verifyBatch` 在 ZA/SM3/JNI 之前统一拒绝空值、错误长度、非规范或不在曲线上的公钥点、超过 8191 字节的 ID，以及不满足 `1 <= r,s < n` 的签名分量；非法验签输入统一返回 `false`
