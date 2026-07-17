@@ -26,7 +26,7 @@ GM-JAVA 是一套用 JAVA 开发的支持国密算法的加解密工具包。
 </dependency>
 ```
 
-- 下载源码编译之后引入或者直接下载 gm-java-3.2.2.jar 引入
+- 下载源码编译之后引入，或者从 Maven 中央仓库直接下载对应版本的 `gm-java-<version>.jar` 引入
 
 ### Netty TLS 功能（可选依赖）
 
