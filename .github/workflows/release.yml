@@ -118,4 +118,7 @@ jobs:
         run: |
           gh release create "v${{ inputs.version }}" \
             --title "v${{ inputs.version }}" \
-            --notes-file release-notes.md
+            --notes-file release-notes.md \
+            target/gm-java-${{ inputs.version }}.jar \
+            target/gm-java-${{ inputs.version }}-sources.jar \
+            target/gm-java-${{ inputs.version }}-javadoc.jar
