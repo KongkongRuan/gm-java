@@ -341,7 +341,7 @@ System.out.println("客户端随机数：" + Hex.toHexString(tlsClient.getRandom
 
 ## 性能对比（vs Bouncy Castle / Hutool）
 
-下表为同一台机器（Intel Core Ultra 7 265K，20 核）、同一 JDK（OpenJDK 25.0.1）下 gm-java、Bouncy Castle、Hutool 三方的实测对比，gm-java 在所有算法分类上均为最快。测试代码为 `src/test/java/com/yxj/gm/BenchmarkComparison.java`，完整原始报告见 `reports/benchmark-comparison-20260716-143938-JDK25.log`（对应提交 `4fa4018`）。
+下表为同一台机器（Intel Core Ultra 7 265K，20 核）、同一 JDK（OpenJDK 25.0.1）下 gm-java、Bouncy Castle、Hutool 三方的实测对比，gm-java 在所有算法分类上均为最快。测试代码为 `src/test/java/com/yxj/gm/BenchmarkComparison.java`，完整原始报告见 `reports/benchmark-comparison-20260717-101730-JDK25.log`（对应提交 `4038f94`）。
 
 对比口径：BC 的 SM2 使用 lightweight engine/signer 预初始化后复用，签名采用与 gm-java 相同的 64 字节裸编码；SM4 中 gm-java 的内部多线程为默认开启状态（ECB/CTR/CBC 解密等可并行模式在 ≥4 KB 数据时自动启用，可用 `-Dgm.sm4.parallel=false` 关闭）。
 
@@ -349,33 +349,33 @@ System.out.println("客户端随机数：" + Hex.toHexString(tlsClient.getRandom
 
 | 操作 | gm-java | BC（复用） | Hutool | gm-java 领先 |
 |------|--------:|----------:|-------:|--------------|
-| 密钥生成 | 15.5 µs | 52.4 µs | 85.5 µs | BC 慢 204%，Hutool 慢 437% |
-| 加密 | 77.9 µs | 139.7 µs | 144.3 µs | BC 慢 80%，Hutool 慢 71% |
-| 解密 | 60.0 µs | 120.9 µs | 119.9 µs | BC 慢 83%，Hutool 慢 69% |
-| 签名 | 15.9 µs | 43.5 µs | 88.3 µs | BC 慢 174%，Hutool 慢 430% |
-| 验签 | 47.3 µs | 50.6 µs | 49.5 µs | BC 慢 11%，Hutool 慢 5% |
+| 密钥生成 | 15.4 µs | 48.1 µs | 73.6 µs | BC 慢 178%，Hutool 慢 387% |
+| 加密 | 78.6 µs | 157.3 µs | 155.2 µs | BC 慢 70%，Hutool 慢 92% |
+| 解密 | 59.6 µs | 109.6 µs | 112.2 µs | BC 慢 67%，Hutool 慢 82% |
+| 签名 | 15.8 µs | 47.6 µs | 85.7 µs | BC 慢 192%，Hutool 慢 432% |
+| 验签 | 19.0 µs | 52.8 µs | 51.7 µs | BC 慢 146%，Hutool 慢 159% |
 
 ### SM3（单次哈希平均耗时，越低越好）
 
 | 数据量 | gm-java | BC | Hutool | gm-java 领先 |
 |--------|--------:|---:|-------:|--------------|
-| 16 B | 0.240 µs | 0.243 µs | 0.523 µs | BC 慢 3%，Hutool 慢 123% |
-| 1 KB | 3.3 µs | 3.3 µs | 3.5 µs | BC 慢 3%，Hutool 慢 8% |
-| 64 KB | 189 µs | 193 µs | 194 µs | BC 慢 1.4%，Hutool 慢 3% |
-| 1 MB | 2.99 ms | 3.06 ms | 3.05 ms | BC 慢 3%，Hutool 慢 2% |
+| 16 B | 0.235 µs | 0.238 µs | 0.520 µs | BC 慢 1.1%，Hutool 慢 117% |
+| 1 KB | 3.3 µs | 3.3 µs | 3.5 µs | BC 慢 1.8%，Hutool 慢 8.4% |
+| 64 KB | 194 µs | 200 µs | 200 µs | BC 慢 3.1%，Hutool 慢 3.4% |
+| 1 MB | 3.07 ms | 3.15 ms | 3.17 ms | BC 慢 2.4%，Hutool 慢 3.3% |
 
 ### SM4（吞吐，越高越好；10 MB 数据，1 MB/20 MB 趋势一致）
 
 | 模式 | gm-java | BC | Hutool | gm-java 领先 |
 |------|--------:|---:|-------:|--------------|
-| ECB 加密 | 1667 MB/s | 135 MB/s | 136 MB/s | 约 12 倍 |
-| ECB 解密 | 1639 MB/s | 134 MB/s | 134 MB/s | 约 12 倍 |
-| CBC 加密 | 196 MB/s | 118 MB/s | 118 MB/s | 约 1.7 倍 |
-| CBC 解密 | 1539 MB/s | 122 MB/s | 122 MB/s | 约 13 倍 |
-| CTR 加密 | 1818 MB/s | 117 MB/s | 122 MB/s | 约 15 倍 |
-| CTR 解密 | 1852 MB/s | 116 MB/s | 123 MB/s | 约 15 倍 |
+| ECB 加密 | 1695 MB/s | 132 MB/s | 133 MB/s | 约 13 倍 |
+| ECB 解密 | 1695 MB/s | 132 MB/s | 133 MB/s | 约 13 倍 |
+| CBC 加密 | 194 MB/s | 118 MB/s | 118 MB/s | 约 1.6 倍 |
+| CBC 解密 | 1667 MB/s | 120 MB/s | 121 MB/s | 约 14 倍 |
+| CTR 加密 | 1961 MB/s | 114 MB/s | 119 MB/s | 约 17 倍 |
+| CTR 解密 | 2041 MB/s | 114 MB/s | 119 MB/s | 约 18 倍 |
 
-> SM2 的领先来自 native 域运算加速（Montgomery/wNAF/Jacobian 项目坐标验签）与线程本地缓存；SM4 的大倍数主要来自内部并行与 native 加速路径，CBC 加密为串行模式，体现的是单线程实现差距；SM3 三方同属一个量级，gm-java 各尺寸均小幅领先。不同机器/JDK 下绝对值会变化，建议以本机复测为准。
+> SM2 的领先来自 native 域运算加速（Montgomery/热公钥 comb/wNAF/Jacobian 项目坐标验签）与线程本地缓存；SM4 的大倍数主要来自内部并行与 native 加速路径，CBC 加密为串行模式，体现的是单线程实现差距；SM3 三方同属一个量级，gm-java 各尺寸均小幅领先。不同机器/JDK 下绝对值会变化，建议以本机复测为准。
 
 ## 更新日志
 
