@@ -544,6 +544,18 @@ static int wnaf_encode(const uint32_t *k, int w, int *wnaf, int max_len) {
 #define WNAF_VERIFY_SIZE 16
 #define MAX_TABLE      256
 
+/* Comb parameters, shared by the fixed-base G table (Section 13) and the
+ * per-pubkey verify comb table cached below in g_pcache. Defined here so
+ * the cache declaration can use COMB_SIZE. */
+#define COMB_D 32
+#define COMB_T 8
+#define COMB_SIZE 255
+
+/* Verify-side adaptive comb promotion: after this many consecutive
+ * verifies of the same cached public key, the per-key comb table is built
+ * once and subsequent verifies of that key use the comb path. */
+#define GM_COMB_PROMOTE_THRESHOLD 4
+
 /* table[i] = {x, y} in Montgomery form, affine */
 typedef struct { felem x, y; } affine_pt;
 
@@ -598,12 +610,37 @@ static void ensure_base_table(void) {
 /* Thread-local cache for the variable-base P table used in verify.
  * Real-world verifiers often see the same public key repeatedly;
  * this saves rebuilding the 16-entry WNAF table on every call.
- * Memory per thread: ~16 * 64 B = 1 KB. */
+ * Memory per thread: ~16 * 64 B = 1 KB for the wNAF table; the comb
+ * table below (~16 KB) is only populated once a key is promoted. */
 static THREAD_LOCAL struct {
     uint32_t px[8], py[8];
     affine_pt tbl[WNAF_VERIFY_SIZE];
     int valid;
+    /* Adaptive comb promotion (verify hot path). hits counts consecutive
+     * verifies of (px,py) via the verify entries; comb holds the 255-entry
+     * comb table once built. comb_valid == 1 implies comb belongs to
+     * (px,py). Single-entry semantics: a key change resets both. */
+    unsigned hits;
+    int comb_valid;
+    affine_pt comb[COMB_SIZE];
 } g_pcache;
+
+/* Single-entry pubkey wNAF cache admission, shared by shamir_mul_jac and
+ * the verify entries. Rebuilds the 16-entry wNAF table on key change and
+ * resets the comb promotion state (single-entry semantics). */
+static void pcache_ensure(const uint32_t *px32, const uint32_t *py32) {
+    int cache_hit = g_pcache.valid &&
+                    memcmp(g_pcache.px, px32, 32) == 0 &&
+                    memcmp(g_pcache.py, py32, 32) == 0;
+    if (cache_hit) return;
+    felem px, py_; u32_to_mont(px32, px); u32_to_mont(py32, py_);
+    build_table(px, py_, g_pcache.tbl, WNAF_VERIFY_SIZE);
+    memcpy(g_pcache.px, px32, 32);
+    memcpy(g_pcache.py, py32, 32);
+    g_pcache.valid = 1;
+    g_pcache.hits = 0;
+    g_pcache.comb_valid = 0;
+}
 
 /* ================================================================
  * Section 9 — Scalar multiply (all in Montgomery domain)
@@ -660,16 +697,7 @@ static void field_point_mul(const uint32_t *px32, const uint32_t *py32,
 static void shamir_mul_jac(const uint32_t *s, const uint32_t *px32, const uint32_t *py32,
                            const uint32_t *t, felem AX, felem AY, felem AZ) {
     ensure_base_table();
-    int cache_hit = g_pcache.valid &&
-                    memcmp(g_pcache.px, px32, 32) == 0 &&
-                    memcmp(g_pcache.py, py32, 32) == 0;
-    if (!cache_hit) {
-        felem px, py_; u32_to_mont(px32, px); u32_to_mont(py32, py_);
-        build_table(px, py_, g_pcache.tbl, WNAF_VERIFY_SIZE);
-        memcpy(g_pcache.px, px32, 32);
-        memcpy(g_pcache.py, py32, 32);
-        g_pcache.valid = 1;
-    }
+    pcache_ensure(px32, py32);
     const affine_pt *pTbl = g_pcache.tbl;
     int wS[258], wT[258];
     int lenS = wnaf_encode(s, WNAF_BASE_W, wS, 258);
@@ -1032,17 +1060,20 @@ static inline void from_mont_n(const felem a, felem r) { felem one={1,0,0,0}; mo
  * Pre-computes 255-entry table. Scalar multiply uses only
  * 32 doublings + ≤32 additions vs wNAF's 256 doublings + ~37 additions.
  * ================================================================ */
-#define COMB_D 32
-#define COMB_T 8
-#define COMB_SIZE 255
+/* COMB_D / COMB_T / COMB_SIZE are defined in Section 8 (needed by the
+ * per-pubkey comb cache declaration there). */
 
 static volatile int g_comb_ready = 0;
 static affine_pt g_comb_table[COMB_SIZE];
 
-static void build_comb_table(void) {
-    ensure_base_table();
+/* Generalized comb table construction for an arbitrary base point
+ * (bx, by) in Montgomery affine form: out[b-1] = sum of B_i over the set
+ * bits i of b, where B_i = 2^(COMB_D*i) * B. The integer coefficient of
+ * each entry depends only on b (not on B), so any base with prime-order n
+ * yields the same non-degenerate entries as the G table. */
+static void build_comb_table_for(const felem bx, const felem by, affine_pt *out) {
     felem Gx[COMB_T], Gy[COMB_T], Gz[COMB_T];
-    felem_copy(Gx[0], g_gx_mont); felem_copy(Gy[0], g_gy_mont); felem_copy(Gz[0], MONT_ONE);
+    felem_copy(Gx[0], bx); felem_copy(Gy[0], by); felem_copy(Gz[0], MONT_ONE);
     for (int i = 1; i < COMB_T; i++) {
         felem_copy(Gx[i],Gx[i-1]); felem_copy(Gy[i],Gy[i-1]); felem_copy(Gz[i],Gz[i-1]);
         for (int d = 0; d < COMB_D; d++) {
@@ -1074,7 +1105,12 @@ static void build_comb_table(void) {
                           tJX[stride+j-1][0],tJY[stride+j-1][0],tJZ[stride+j-1][0]);
         }
     }
-    batch_to_affine(tJX, tJY, tJZ, COMB_SIZE, g_comb_table);
+    batch_to_affine(tJX, tJY, tJZ, COMB_SIZE, out);
+}
+
+static void build_comb_table(void) {
+    ensure_base_table();
+    build_comb_table_for(g_gx_mont, g_gy_mont, g_comb_table);
 }
 
 static void ensure_comb_table(void) {
@@ -1086,10 +1122,15 @@ static void ensure_comb_table(void) {
     g_comb_ready = 1;
 }
 
-static void comb_fixed_base_mul(const uint32_t *k, uint32_t *rx, uint32_t *ry) {
-    ensure_comb_table();
-    felem AX={0},AY={0},AZ={0}, BX,BY,BZ, py;
+/* Projective-output comb mul against an arbitrary comb table: same
+ * 32-doubling schedule as the fixed-base mul, but returns Montgomery
+ * Jacobian (X,Y,Z) WITHOUT the final jac_to_affine. A never-started
+ * accumulator (k == 0) yields Z == 0 (point at infinity). */
+static void comb_mul_projective(const affine_pt *tbl, const uint32_t *k,
+                                felem AX, felem AY, felem AZ) {
+    felem BX,BY,BZ;
     int started = 0;
+    memset(AX,0,32); memset(AY,0,32); memset(AZ,0,32);
     for (int j = COMB_D - 1; j >= 0; j--) {
         if (started) {
             jac_double(AX,AY,AZ, BX,BY,BZ);
@@ -1100,18 +1141,24 @@ static void comb_fixed_base_mul(const uint32_t *k, uint32_t *rx, uint32_t *ry) {
             idx |= ((k[t] >> j) & 1) << t;
         if (idx) {
             if (!started) {
-                felem_copy(AX, g_comb_table[idx-1].x);
-                felem_copy(AY, g_comb_table[idx-1].y);
+                felem_copy(AX, tbl[idx-1].x);
+                felem_copy(AY, tbl[idx-1].y);
                 felem_copy(AZ, MONT_ONE);
                 started = 1;
             } else {
-                felem_copy(py, g_comb_table[idx-1].y);
-                jac_add_mixed(AX,AY,AZ, g_comb_table[idx-1].x, py, BX,BY,BZ);
+                jac_add_mixed(AX,AY,AZ, tbl[idx-1].x, tbl[idx-1].y, BX,BY,BZ);
                 felem_copy(AX,BX); felem_copy(AY,BY); felem_copy(AZ,BZ);
             }
         }
     }
-    if (!started) { memset(rx,0,32); memset(ry,0,32); return; }
+}
+
+static void comb_fixed_base_mul(const uint32_t *k, uint32_t *rx, uint32_t *ry) {
+    ensure_comb_table();
+    felem AX,AY,AZ;
+    comb_mul_projective(g_comb_table, k, AX, AY, AZ);
+    /* jac_to_affine maps Z == 0 (k == 0) to (0,0), matching the old
+     * never-started early return. */
     felem rxm,rym;
     jac_to_affine(AX,AY,AZ, rxm,rym);
     mont_to_u32(rxm,rx); mont_to_u32(rym,ry);
@@ -1245,10 +1292,41 @@ static int verify_jac_x(const felem X, const felem Z,
     return lhs[0]==X[0] && lhs[1]==X[1] && lhs[2]==X[2] && lhs[3]==X[3];
 }
 
-/* Verification core: e[32], r[32], s[32], pubXY[64] → 0/1 */
-static int verify_core_impl(const jbyte *e32, const jbyte *r32,
-                             const jbyte *s32, const jbyte *pubXY64) {
-    uint32_t e_u[8], r_u[8], s_u[8], px_u[8], py_u[8];
+/* Adaptive comb promotion for the verify entries. Counts consecutive
+ * verifies of the cached key; on reaching GM_COMB_PROMOTE_THRESHOLD the
+ * per-key comb table is built once. Returns 1 when the comb table is
+ * valid for (px32,py32) (caller uses the comb path), 0 for wNAF. */
+static int verify_track_key(const uint32_t *px32, const uint32_t *py32) {
+    pcache_ensure(px32, py32);
+    g_pcache.hits++;
+    if (!g_pcache.comb_valid && g_pcache.hits >= GM_COMB_PROMOTE_THRESHOLD) {
+        felem px, py_; u32_to_mont(px32, px); u32_to_mont(py32, py_);
+        build_comb_table_for(px, py_, g_pcache.comb);
+        g_pcache.comb_valid = 1;
+    }
+    return g_pcache.comb_valid;
+}
+
+/* Comb-path point tail shared by the verify entries: [s]G via the
+ * fixed-base comb table + [t]P via the per-key comb table, combined with
+ * one jac_add (absorbs Z == 0 operands). Caller must have ensured
+ * g_pcache.comb is valid for the key. */
+static void verify_comb_mul(const uint32_t *s_u, const uint32_t *t_u,
+                            felem AX, felem AY, felem AZ) {
+    felem X1,Y1,Z1, X2,Y2,Z2;
+    ensure_comb_table();
+    comb_mul_projective(g_comb_table, s_u, X1, Y1, Z1);
+    comb_mul_projective(g_pcache.comb, t_u, X2, Y2, Z2);
+    jac_add(X1,Y1,Z1, X2,Y2,Z2, AX,AY,AZ);
+}
+
+/* Shared verify front-end: decode byte arrays, t = (r + s) mod n with the
+ * t == 0 early rejection. Returns 0 (reject) or 1 (proceed). */
+static int verify_decode(const jbyte *e32, const jbyte *r32, const jbyte *s32,
+                         const jbyte *pubXY64, uint32_t *s_u, uint32_t *t_u,
+                         uint32_t *px_u, uint32_t *py_u,
+                         felem e_f, felem r_check) {
+    uint32_t e_u[8], r_u[8];
     be_to_u32(e32, e_u); be_to_u32(r32, r_u); be_to_u32(s32, s_u);
     be_to_u32(pubXY64, px_u); be_to_u32(pubXY64+32, py_u);
 
@@ -1257,12 +1335,63 @@ static int verify_core_impl(const jbyte *e32, const jbyte *r32,
     modn_add(r_f, s_f, t_f);
     if (felem_is_zero(t_f)) return 0;
 
-    uint32_t t_u[8]; u64_to_u32(t_f, t_u);
+    u64_to_u32(t_f, t_u);
+    u32_to_u64(e_u, e_f); u32_to_u64(r_u, r_check);
+    return 1;
+}
+
+/* Verification core: e[32], r[32], s[32], pubXY[64] → 0/1.
+ * Adaptive: cold keys use the interleaved-wNAF Shamir path; a key seen
+ * GM_COMB_PROMOTE_THRESHOLD verifies in a row is promoted to the comb
+ * path (32 doublings + <=32 additions per mul instead of 256 shared
+ * doublings). Production JNI entries route here. */
+static int verify_core_impl(const jbyte *e32, const jbyte *r32,
+                             const jbyte *s32, const jbyte *pubXY64) {
+    uint32_t s_u[8], t_u[8], px_u[8], py_u[8];
+    felem e_f, r_check;
+    if (!verify_decode(e32, r32, s32, pubXY64, s_u, t_u, px_u, py_u,
+                       e_f, r_check)) return 0;
+
+    felem AX, AY, AZ;
+    if (verify_track_key(px_u, py_u))
+        verify_comb_mul(s_u, t_u, AX, AY, AZ);
+    else
+        shamir_mul_jac(s_u, px_u, py_u, t_u, AX, AY, AZ);
+
+    return verify_jac_x(AX, AZ, e_f, r_check);
+}
+
+/* Test/benchmark-visible forced-path variants of the verify core.
+ * verify_core_wnaf is the pre-promotion behavior (interleaved-wNAF Shamir
+ * oracle); verify_core_comb forces the comb path, building the per-key
+ * comb table when missing and ignoring the promotion threshold. */
+static int verify_core_wnaf(const jbyte *e32, const jbyte *r32,
+                            const jbyte *s32, const jbyte *pubXY64) {
+    uint32_t s_u[8], t_u[8], px_u[8], py_u[8];
+    felem e_f, r_check;
+    if (!verify_decode(e32, r32, s32, pubXY64, s_u, t_u, px_u, py_u,
+                       e_f, r_check)) return 0;
+
     felem AX, AY, AZ;
     shamir_mul_jac(s_u, px_u, py_u, t_u, AX, AY, AZ);
+    return verify_jac_x(AX, AZ, e_f, r_check);
+}
 
+static int verify_core_comb(const jbyte *e32, const jbyte *r32,
+                            const jbyte *s32, const jbyte *pubXY64) {
+    uint32_t s_u[8], t_u[8], px_u[8], py_u[8];
     felem e_f, r_check;
-    u32_to_u64(e_u, e_f); u32_to_u64(r_u, r_check);
+    if (!verify_decode(e32, r32, s32, pubXY64, s_u, t_u, px_u, py_u,
+                       e_f, r_check)) return 0;
+
+    pcache_ensure(px_u, py_u);
+    if (!g_pcache.comb_valid) {
+        felem px, py_; u32_to_mont(px_u, px); u32_to_mont(py_u, py_);
+        build_comb_table_for(px, py_, g_pcache.comb);
+        g_pcache.comb_valid = 1;
+    }
+    felem AX, AY, AZ;
+    verify_comb_mul(s_u, t_u, AX, AY, AZ);
     return verify_jac_x(AX, AZ, e_f, r_check);
 }
 
@@ -1472,7 +1601,10 @@ static int verify_core_int_impl(const uint32_t *e, const uint32_t *r,
     uint32_t t_u[8];
     u64_to_u32(t_f, t_u);
     felem AX, AY, AZ;
-    shamir_mul_jac(s, px, py, t_u, AX, AY, AZ);
+    if (verify_track_key(px, py))
+        verify_comb_mul(s, t_u, AX, AY, AZ);
+    else
+        shamir_mul_jac(s, px, py, t_u, AX, AY, AZ);
 
     felem e_f, r_check;
     u32_to_u64(e, e_f);
